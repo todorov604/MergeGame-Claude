@@ -1,16 +1,16 @@
 ﻿id,category,use,priority,status,usage,license,file,target_size,actual_size,fit,nine_slice,animation,notes
-chip_clean_ca_lv01,芯片图标,Clean 家族 Ca 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002101.png,256×256,182×182,scale,n/a,static,
-chip_clean_ca_lv02,芯片图标,Clean 家族 Ca 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002102.png,256×256,182×182,scale,n/a,static,
-chip_clean_ca_lv03,芯片图标,Clean 家族 Ca 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002103.png,256×256,182×182,scale,n/a,static,
-chip_clean_ca_lv04,芯片图标,Clean 家族 Ca 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002104.png,256×256,182×182,scale,n/a,static,
-chip_clean_ca_lv05,芯片图标,Clean 家族 Ca 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002105.png,256×256,182×182,scale,n/a,static,
-chip_clean_ca_lv06,芯片图标,Clean 家族 Ca 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002106.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv01,芯片图标,Clean 家族 Cb 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002201.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv02,芯片图标,Clean 家族 Cb 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002202.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv03,芯片图标,Clean 家族 Cb 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002203.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv04,芯片图标,Clean 家族 Cb 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002204.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv05,芯片图标,Clean 家族 Cb 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002205.png,256×256,182×182,scale,n/a,static,
-chip_clean_cb_lv06,芯片图标,Clean 家族 Cb 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002206.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv01,芯片图标,Clean 家族 Ca 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002101.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_ca_lv02,芯片图标,Clean 家族 Ca 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002102.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_ca_lv03,芯片图标,Clean 家族 Ca 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002103.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_ca_lv04,芯片图标,Clean 家族 Ca 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002104.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_ca_lv05,芯片图标,Clean 家族 Ca 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002105.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_ca_lv06,芯片图标,Clean 家族 Ca 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002106.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv01,芯片图标,Clean 家族 Cb 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002201.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv02,芯片图标,Clean 家族 Cb 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002202.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv03,芯片图标,Clean 家族 Cb 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002203.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv04,芯片图标,Clean 家族 Cb 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002204.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv05,芯片图标,Clean 家族 Cb 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002205.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
+chip_clean_cb_lv06,芯片图标,Clean 家族 Cb 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002206.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考
 box_clean_c_lv01,生成器箱,Clean 生成器 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_20001001.png,256×256,182×182,scale,n/a,static,暂用家具系列 20001 第 1 件占位
 box_clean_c_lv02,生成器箱,Clean 生成器 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_20001002.png,256×256,182×182,scale,n/a,static,暂用家具系列 20001 第 2 件占位
 box_safe_x,特殊箱,保险箱,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 / PIL,E:\MergeGame-Claude\01_icon\HotelManor_icon\剩余图标\box_safe_x.png,256×256,256×256,scale,n/a,static,v4 开源占位：Twemoji CC-BY 4.0

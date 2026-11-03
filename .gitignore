@@ -1,0 +1,5 @@
+# PSD 设计原稿（单文件超过 GitHub 100MB 限制，不入库）
+*.psd
+
+# Claude Code 工作区数据（worktree / 会话，仅本机使用）
+.claude/

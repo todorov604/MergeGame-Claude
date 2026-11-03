@@ -6,4 +6,9 @@
 4. **第一周只做三步**：manifest + schema validator → core sim/event evaluator → 静态 board view。
 5. **红线**：`REFERENCE_ONLY` 资源（原游戏 icon/UI/PSD 导出/角色）禁止打包、禁止出片；`PLACEHOLDER` 必须显式允许；`TODO`（音频）出片前阻断。
 
+## 环境（本机）
+
+- Godot 4.7.2：`E:\Program Files\Godot\Godot_v4.7.2.exe`（4.7.2.stable.official）
+- FFmpeg / ffprobe 9.0：已在 PATH（winget Gyan.FFmpeg）
+
 当前版本：主文档 v0.18 / 资源 v7 / M0 规格 2026-11-03。

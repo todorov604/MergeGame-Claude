@@ -1,0 +1,75 @@
+﻿id,category,use,priority,status,usage,license,file,target_size,actual_size,fit,nine_slice,animation,notes
+chip_clean_ca_lv01,芯片图标,Clean 家族 Ca 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002101.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv02,芯片图标,Clean 家族 Ca 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002102.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv03,芯片图标,Clean 家族 Ca 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002103.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv04,芯片图标,Clean 家族 Ca 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002104.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv05,芯片图标,Clean 家族 Ca 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002105.png,256×256,182×182,scale,n/a,static,
+chip_clean_ca_lv06,芯片图标,Clean 家族 Ca 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002106.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv01,芯片图标,Clean 家族 Cb 链 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002201.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv02,芯片图标,Clean 家族 Cb 链 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002202.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv03,芯片图标,Clean 家族 Cb 链 3 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002203.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv04,芯片图标,Clean 家族 Cb 链 4 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002204.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv05,芯片图标,Clean 家族 Cb 链 5 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002205.png,256×256,182×182,scale,n/a,static,
+chip_clean_cb_lv06,芯片图标,Clean 家族 Cb 链 6 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_10002206.png,256×256,182×182,scale,n/a,static,
+box_clean_c_lv01,生成器箱,Clean 生成器 1 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_20001001.png,256×256,182×182,scale,n/a,static,暂用家具系列 20001 第 1 件占位
+box_clean_c_lv02,生成器箱,Clean 生成器 2 级,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\棋子icon\icon_20001002.png,256×256,182×182,scale,n/a,static,暂用家具系列 20001 第 2 件占位
+box_safe_x,特殊箱,保险箱,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 / PIL,E:\HotelManor_icon\剩余图标\box_safe_x.png,256×256,256×256,scale,n/a,static,v4 开源占位：Twemoji CC-BY 4.0
+box_energe_w,特殊箱,能量箱,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 / PIL,E:\HotelManor_icon\剩余图标\box_energe_w.png,256×256,256×256,scale,n/a,static,v4 开源占位：Twemoji CC-BY 4.0
+box_treasure_y,特殊箱,宝箱,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 / PIL,E:\HotelManor_icon\剩余图标\box_treasure_y.png,256×256,256×256,scale,n/a,static,v4 开源占位：Twemoji CC-BY 4.0
+token_coin,特殊件,金币,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\token_coin.png,256×256,256×256,scale,n/a,static,v6 来自 PSD icon_90000001（金币）
+obstacle_web,障碍,网,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\obstacle_web.png,256×256,140×140,scale,n/a,static,v6 来自 PSD 常态/box1/蜘蛛网；语义确认为网
+obstacle_bubble,障碍,泡泡,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_btn_bubble.png,256×256,140×140,scale,n/a,static,
+obstacle_lock,障碍,锁格,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_1x1.png,256×256,140×140,scale,n/a,static,
+board_bg,棋盘,主背景,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_bg_01_bottom.png,1080×1920,1080×1536,crop/fill,n/a,static,另叠加 main_bg_01_top.png（1080×400）
+board_frame,棋盘,棋盘边框,P0,占位（可用）,PLACEHOLDER,PIL 生成,E:\HotelManor_icon\剩余图标\board_frame.png,1080×1400,983×1263,9-slice/scale,TBD,static,v4 生成占位（按 PSD 风格/PIL）
+slot_empty,棋盘,空格,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_checkerboard_bg.png,96×96,94×94,9-slice/scale,TBD,static,94×94，需放大/9 宫格
+slot_locked,棋盘,锁格底,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_1x1.png,96×96,140×140,9-slice/scale,TBD,static,
+ui_topbar,UI,顶栏,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_money_bg.png,1080×120,68×66,compose/9-slice,n/a,static,需与 main_bar_level / main_bar_level_bg / main_money_bg 组合
+ui_order_card,UI,订单卡,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_frame_message.png,600×200,120×180,9-slice,TBD,static,
+ui_order_card_done,UI,订单卡完成态,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_frame_message.png,600×200,120×180,9-slice,TBD,static,订单框 + main_icon_finish 对号叠加
+ui_button_primary,UI,主按钮,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_btn1.png,300×100,156×174,9-slice,TBD,static,
+ui_button_secondary,UI,次按钮,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_btn_cabinet.png,300×100,144×180,9-slice,TBD,static,另有 common_main_btn_shop.png 可作商店按钮
+ui_icon_star,UI,星星图标,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 / PIL,E:\HotelManor_icon\剩余图标\ui_icon_star.png,64×64,128×128,scale,n/a,static,v4 开源占位：Twemoji CC-BY 4.0
+ui_icon_coin,UI,金币图标,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\ui_icon_coin.png,64×64,128×128,scale,n/a,static,v6 来自 PSD icon_90000001（金币）
+ui_icon_energy,UI,能量图标,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\ui_icon_energy.png,64×64,128×128,scale,n/a,static,v6 来自 PSD icon_90000002（闪电）
+ui_exp_bar,UI,经验条,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_frame_process1.png,800×40,92×92,9-slice,TBD,static,
+ui_level_badge,UI,等级徽章,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_bar_level.png,120×120,98×84,scale,n/a,static,
+ui_progress_bar,UI,进度条,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_frame_process1.png,800×40,92×92,9-slice,TBD,static,
+ui_popup_levelup,UI,升级弹窗,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_frame_bubble1.png,800×600,144×144,9-slice,TBD,static,
+ui_level_complete,UI,过关横幅,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 + PIL,E:\HotelManor_icon\剩余图标\ui_level_complete.png,1080×600,1080×600,9-slice,TBD,static,v4 生成占位（Twemoji + PIL）
+ui_level_intro,UI,关卡开场,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 + PIL,E:\HotelManor_icon\剩余图标\ui_level_intro.png,1080×1920,1080×1920,9-slice,TBD,static,v4 生成占位（Twemoji + PIL）
+char_order_01_idle,角色,订单小人 1 待机,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\char_order_01_idle.png,512×512,373×370,scale,n/a,idle/done static,v4 纯角色（无订单 UI）；完成态由 main_icon_finish 叠加
+char_order_01_done,角色,订单小人 1 完成,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\char_order_01_done.png,512×512,373×370,scale,n/a,idle/done static,v4 纯角色（无订单 UI）；完成态由 main_icon_finish 叠加
+char_order_02_idle,角色,订单小人 2 待机,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\char_order_02_idle.png,512×512,373×524,scale,n/a,idle/done static,v4 纯角色（无订单 UI）；完成态由 main_icon_finish 叠加
+char_order_02_done,角色,订单小人 2 完成,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\char_order_02_done.png,512×512,373×524,scale,n/a,idle/done static,v4 纯角色（无订单 UI）；完成态由 main_icon_finish 叠加
+ui_order_complete_badge,UI,订单完成绿框,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\ui_order_complete_badge.png,512×128,346×166,scale,n/a,static,v6 来自 PSD 订单/已完成/btn（绿色药丸+对号）
+ui_coin_reward_popup,UI,金币+5 弹出,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\ui_coin_reward_popup.png,256×128,256×128,9-slice,TBD,static,v6 来自 PSD 金币 + PIL +5
+ui_board_full_toast,UI,棋盘已满大字提示,P0,占位（可用）,PLACEHOLDER,PIL 生成,E:\HotelManor_icon\剩余图标\ui_board_full_toast.png,512×128,512×128,9-slice,TBD,static,v4 生成占位（Twemoji + PIL）
+ui_select_frame,UI,选中黄框/合成提示,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_frame_s.png,256×256,160×164,9-slice,TBD,static,
+fx_merge_spark,特效,合并火花,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_merge_spark.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_star_fly,特效,星星飞行,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_star_fly.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_firework,特效,烟花,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_firework.png,512×512,512×512,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_confetti,特效,彩带,P1,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_confetti.png,512×512,512×512,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_bubble_pop,特效,破泡,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_bubble_pop.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_web_break,特效,破网,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\fx_web_break.png,256×256,140×140,scale,n/a,static（序列帧待定）,v6 来自 PSD 蜘蛛网（静态占位）
+fx_level_transition,特效,过关转场,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_level_transition.png,1920×1080,1080×1920,scale,n/a,static（序列帧待定）,v4 生成占位（Twemoji + PIL）
+fx_item_fly_to_char,特效,物品飞向小人,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_item_fly_to_char.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_char_leave,特效,小人消失,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_char_leave.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+fx_char_next,特效,新小人出现,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0,E:\HotelManor_icon\剩余图标\fx_char_next.png,256×256,256×256,scale,n/a,static（序列帧待定）,v4 开源占位：Twemoji CC-BY 4.0
+font_zh,字体,中文字体,P0,可用,PRODUCTION,Noto Sans OFL 1.1,E:\HotelManor_icon\剩余图标\font_zh.otf,按需,—,n/a,n/a,static,v4 Noto Sans OFL 1.1
+font_en,字体,英文字体,P0,可用,PRODUCTION,Noto Sans OFL 1.1,E:\HotelManor_icon\剩余图标\font_en.ttf,按需,—,n/a,n/a,static,v4 Noto Sans OFL 1.1
+cta_app_icon,CTA,App 图标,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 + PIL,E:\HotelManor_icon\剩余图标\cta_app_icon.png,512×512,512×512,scale,n/a,static,v4 生成占位（Twemoji + PIL）
+cta_endcard_bg,CTA,Endcard 背景,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 + PIL,E:\HotelManor_icon\剩余图标\cta_endcard_bg.png,1080×1920,1080×1920,scale,n/a,static,v4 生成占位（Twemoji + PIL）
+cta_play_button,CTA,Play 按钮,P0,占位（可用）,PLACEHOLDER,Twemoji CC-BY 4.0 + PIL,E:\HotelManor_icon\剩余图标\cta_play_button.png,400×120,400×120,scale,n/a,static,v4 生成占位（Twemoji + PIL）
+audio_bgm,音频,BGM,P2,未补,TODO,未补,,按需,—,n/a,n/a,static,首期暂缓；音频未补（非图标；可后续用 Freesound/自录替换）
+audio_merge,音频,合并音效,P2,未补,TODO,未补,,按需,—,n/a,n/a,static,首期暂缓；音频未补（非图标；可后续用 Freesound/自录替换）
+audio_click,音频,点击音效,P2,未补,TODO,未补,,按需,—,n/a,n/a,static,首期暂缓；音频未补（非图标；可后续用 Freesound/自录替换）
+audio_star,音频,星星音效,P2,未补,TODO,未补,,按需,—,n/a,n/a,static,首期暂缓；音频未补（非图标；可后续用 Freesound/自录替换）
+audio_levelup,音频,升级音效,P2,未补,TODO,未补,,按需,—,n/a,n/a,static,首期暂缓；音频未补（非图标；可后续用 Freesound/自录替换）
+ui_energy_timer,UI,能量倒计时,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_icon_countdown.png,52×52,52×52,scale,n/a,static,对应 main_icon_countdown
+obstacle_ice,障碍,冰冻覆盖,P0,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\剩余图标\obstacle_ice.png,140×140,140×140,scale,n/a,static,v6 来自 PSD 冻结/冰块（单块）
+obstacle_lock_1x7,障碍,横向 1×7 锁,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_1x7.png,980×140,980×140,scale,n/a,static,对应 common_main_icon_lock_1x7
+obstacle_lock_2x2,障碍,2×2 锁,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_2x2.png,280×280,280×280,scale,n/a,static,对应 common_main_icon_lock_2x2
+obstacle_lock_2x3,障碍,2×3 锁,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_2x3.png,420×280,420×280,scale,n/a,static,对应 common_main_icon_lock_2x3
+obstacle_lock_2x4,障碍,2×4 锁,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\common_main_icon_lock_2x4.png,560×280,560×280,scale,n/a,static,对应 common_main_icon_lock_2x4
+ui_exclamation,UI,提示感叹号,P1,参考图（禁止打包）,REFERENCE_ONLY,© 原游戏/项目方；仅参考，禁止打包,E:\HotelManor_icon\界面切图\main_icon_exclamation1.png,52×52,52×52,scale,n/a,static,对应 main_icon_exclamation1/2/3

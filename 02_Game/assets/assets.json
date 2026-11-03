@@ -1,0 +1,161 @@
+{
+	"version": 1,
+	"manifest_version": 7,
+	"manifest_path": "E:/MergeGame-Claude/.claude/worktrees/godot-m0-week1-49d974/00_design/resource_manifest.json",
+	"assets": [
+		{
+			"id": "board_frame",
+			"usage": "PLACEHOLDER",
+			"license": "PIL 生成",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\board_frame.png",
+			"file": "res://assets/board_frame.png"
+		},
+		{
+			"id": "box_energe_w",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 / PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\box_energe_w.png",
+			"file": "res://assets/box_energe_w.png"
+		},
+		{
+			"id": "box_safe_x",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 / PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\box_safe_x.png",
+			"file": "res://assets/box_safe_x.png"
+		},
+		{
+			"id": "box_treasure_y",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 / PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\box_treasure_y.png",
+			"file": "res://assets/box_treasure_y.png"
+		},
+		{
+			"id": "cta_app_icon",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 + PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\cta_app_icon.png",
+			"file": "res://assets/cta_app_icon.png"
+		},
+		{
+			"id": "cta_endcard_bg",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 + PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\cta_endcard_bg.png",
+			"file": "res://assets/cta_endcard_bg.png"
+		},
+		{
+			"id": "cta_play_button",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 + PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\cta_play_button.png",
+			"file": "res://assets/cta_play_button.png"
+		},
+		{
+			"id": "font_en",
+			"usage": "PRODUCTION",
+			"license": "Noto Sans OFL 1.1",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\font_en.ttf",
+			"file": "res://assets/font_en.ttf"
+		},
+		{
+			"id": "font_zh",
+			"usage": "PRODUCTION",
+			"license": "Noto Sans OFL 1.1",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\font_zh.otf",
+			"file": "res://assets/font_zh.otf"
+		},
+		{
+			"id": "fx_bubble_pop",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_bubble_pop.png",
+			"file": "res://assets/fx_bubble_pop.png"
+		},
+		{
+			"id": "fx_char_leave",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_char_leave.png",
+			"file": "res://assets/fx_char_leave.png"
+		},
+		{
+			"id": "fx_char_next",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_char_next.png",
+			"file": "res://assets/fx_char_next.png"
+		},
+		{
+			"id": "fx_confetti",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_confetti.png",
+			"file": "res://assets/fx_confetti.png"
+		},
+		{
+			"id": "fx_firework",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_firework.png",
+			"file": "res://assets/fx_firework.png"
+		},
+		{
+			"id": "fx_item_fly_to_char",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_item_fly_to_char.png",
+			"file": "res://assets/fx_item_fly_to_char.png"
+		},
+		{
+			"id": "fx_level_transition",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_level_transition.png",
+			"file": "res://assets/fx_level_transition.png"
+		},
+		{
+			"id": "fx_merge_spark",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_merge_spark.png",
+			"file": "res://assets/fx_merge_spark.png"
+		},
+		{
+			"id": "fx_star_fly",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\fx_star_fly.png",
+			"file": "res://assets/fx_star_fly.png"
+		},
+		{
+			"id": "ui_board_full_toast",
+			"usage": "PLACEHOLDER",
+			"license": "PIL 生成",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\ui_board_full_toast.png",
+			"file": "res://assets/ui_board_full_toast.png"
+		},
+		{
+			"id": "ui_icon_star",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 / PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\ui_icon_star.png",
+			"file": "res://assets/ui_icon_star.png"
+		},
+		{
+			"id": "ui_level_complete",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 + PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\ui_level_complete.png",
+			"file": "res://assets/ui_level_complete.png"
+		},
+		{
+			"id": "ui_level_intro",
+			"usage": "PLACEHOLDER",
+			"license": "Twemoji CC-BY 4.0 + PIL",
+			"source": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\ui_level_intro.png",
+			"file": "res://assets/ui_level_intro.png"
+		}
+	]
+}

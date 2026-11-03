@@ -1,0 +1,127 @@
+{
+  "version": 2,
+  "meta": {
+    "title": "Merge Ad 30s",
+    "resolution": [1080, 1920],
+    "fps": 60,
+    "locale": "zh",
+    "seed": 12345
+  },
+  "locales": {
+    "zh": {
+      "hook.question": "你能合出来吗？",
+      "cta.play": "立即游玩",
+      "board.full": "棋盘已满",
+      "order.done": "完成",
+      "level.complete": "过关"
+    },
+    "en": {
+      "hook.question": "Can you merge?",
+      "cta.play": "Play now",
+      "board.full": "Board is full",
+      "order.done": "Complete",
+      "level.complete": "Level Complete"
+    }
+  },
+  "hud": {
+    "level": 2,
+    "energy": 88,
+    "energyTickSeconds": 120,
+    "energyTickMode": "decrement",
+    "coin": 9,
+    "star": 0,
+    "exp": 0
+  },
+  "entities": {
+    "CleanSet_Ca": {"kind": "chip", "family": "Clean", "chain": "a", "maxLevel": 10},
+    "CleanSet_Cb": {"kind": "chip", "family": "Clean", "chain": "b", "maxLevel": 11},
+    "CleanBox_C": {"kind": "generator", "maxLevel": 3},
+    "SafeBox_X": {"kind": "special"},
+    "char_01": {"kind": "character"},
+    "char_02": {"kind": "character"}
+  },
+  "generators": {
+    "CleanBox_C": {
+      "charges": 10,
+      "cooldown": 0,
+      "outputs": [
+        {"entity": "CleanSet_Ca", "weight": 60},
+        {"entity": "CleanSet_Cb", "weight": 40}
+      ],
+      "rareOutputs": [
+        {"entity": "CleanSet_Ca", "level": 2, "weight": 5, "directOrder": true}
+      ]
+    }
+  },
+  "characters": {
+    "char_01": {"idle": "theme/char_01_idle.png", "done": "theme/char_01_done.png"},
+    "char_02": {"idle": "theme/char_02_idle.png", "done": "theme/char_02_done.png"}
+  },
+  "levels": [
+    {
+      "id": "level_1",
+      "next": "level_2",
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {"x": 2, "y": 3, "entity": "CleanSet_Missing", "level": 1},
+          {"x": 9, "y": 3, "entity": "CleanBox_C", "level": 1},
+          {"x": 4, "y": 3, "entity": "CleanSet_Ca", "level": 1},
+          {"x": 5, "y": 5, "entity": "CleanSet_Cb", "level": 1}
+        ]
+      },
+      "obstacles": [
+        {"slot": [0, 0], "type": "lock"},
+        {"slot": [1, 2], "type": "web"},
+        {"slot": [6, 8], "type": "bubble"}
+      ],
+      "orders": [
+        {
+          "id": "order_1",
+          "character": "char_01",
+          "mission": [{"entity": "CleanSet_Ca", "level": 2}],
+          "star": 1,
+          "coin": 5
+        }
+      ]
+    },
+    {
+      "id": "level_2",
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {"x": 2, "y": 4, "entity": "CleanSet_Cb", "level": 1},
+          {"x": 3, "y": 4, "entity": "CleanBox_C", "level": 1},
+          {"x": 4, "y": 4, "entity": "CleanSet_Cb", "level": 1}
+        ]
+      },
+      "obstacles": [],
+      "orders": [
+        {
+          "id": "order_2",
+          "character": "char_02",
+          "mission": [{"entity": "CleanSet_Cb", "level": 2}],
+          "star": 1,
+          "coin": 5
+        }
+      ]
+    }
+  ],
+  "timeline": [
+    {"id": "e1", "channel": "sim", "type": "tap", "at": 3.0, "payload": {"target": {"slot": [3, 3]}}},
+    {"id": "e2", "channel": "sim", "type": "merge", "at": {"after": "e1", "offset": 1.0}, "duration": 0.3, "payload": {"from": [2, 3], "to": [4, 3]}},
+    {"id": "e3", "channel": "view", "type": "text", "at": {"after": "e1", "offset": 0.2}, "duration": 2.0, "payload": {"text_key": "hook.question"}},
+    {"id": "e4", "channel": "sim", "type": "deliver", "at": 8.0},
+    {"id": "e5", "channel": "sim", "type": "order_claim", "at": 10.0, "payload": {"order": "order_1"}},
+    {"id": "e6", "channel": "sim", "type": "level_next", "at": 12.0, "payload": {}},
+    {"id": "e7", "channel": "sim", "type": "merge", "at": {"after": "missing_event", "offset": 1.0}, "duration": 0.3, "payload": {"from": [2, 4], "to": [4, 4]}},
+    {"id": "e8", "channel": "sim", "type": "deliver", "at": 18.0, "payload": {"order": "order_2"}},
+    {"id": "e9", "channel": "sim", "type": "order_claim", "at": 20.0, "payload": {"order": "order_2"}},
+    {"id": "e10", "channel": "view", "type": "levelup", "at": 22.0, "duration": 1.5, "payload": {"level": 3}},
+    {"id": "e11", "channel": "view", "type": "cta", "at": 28.0, "duration": 2.0, "payload": {"text_key": "cta.play"}},
+    {"id": "e2", "channel": "sim", "type": "merge", "at": 5.0, "payload": {"from": [2, 3], "to": [4, 3]}},
+    {"id": "e12", "channel": "sim", "type": "wait", "at": 29.0, "payload": {"duration": 1.0}}
+  ]
+}

@@ -116,6 +116,12 @@ render_once() {
 	if [ "$recorded_frames" != "$FRAMES" ]; then
 		echo "WARN Godot 摘要帧数=${recorded_frames:-?}，与文件数 $count 不一致；以文件序列为准" >&2
 	fi
+	# 每次录制后立即扫描本次日志；$log_file 会被下一次录制覆盖，不能延后扫描。
+	if grep -q "SCRIPT ERROR" "$log_file"; then
+		echo "检测到 SCRIPT ERROR，出片失败（日志: $log_file）" >&2
+		grep -n "SCRIPT ERROR" "$log_file" >&2 || true
+		exit 1
+	fi
 	local record_ts=$(( $(date +%s) - start_ts ))
 	echo "录制完成：$count 帧，用时 ${record_ts}s"
 

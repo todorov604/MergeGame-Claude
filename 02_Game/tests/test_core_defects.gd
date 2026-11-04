@@ -86,9 +86,11 @@ func _test_d3_generator_levels(r) -> void:
 		},
 	}
 
+	# 本用例只验证 rareOutputs 的等级夹取，不验证 directOrder 门控：
+	# v0.20 起 directOrder 缺省为 true，未传订单会不进池，因此显式声明 false 保持无条件稀有。
 	var engine = GeneratorEngine.new()
 	engine.setup({"G": {"charges": 3, "cooldown": 0, "rareOutputs": [
-		{"entity": "Ca", "level": 11, "weight": 1, "directOrder": true},
+		{"entity": "Ca", "level": 11, "weight": 1, "directOrder": false},
 	]}})
 	var board = BoardState.new()
 	board.setup(1, 2)
@@ -101,7 +103,7 @@ func _test_d3_generator_levels(r) -> void:
 
 	var engine_b = GeneratorEngine.new()
 	engine_b.setup({"G": {"charges": 3, "cooldown": 0, "rareOutputs": [
-		{"entity": "B", "level": 5, "weight": 1},
+		{"entity": "B", "level": 5, "weight": 1, "directOrder": false},
 	]}})
 	var board_b = BoardState.new()
 	board_b.setup(1, 2)

@@ -166,6 +166,8 @@ func _build_views() -> void:
 	_error_label.add_theme_font_size_override("font_size", 28)
 	_error_label.add_theme_color_override("font_color", Color("#ff6b6b"))
 	add_child(_error_label)
+	# 出片模式不显示运行期错误标签，避免错误文字入镜；错误仍经 push_error 写入日志/终端。
+	_error_label.visible = not _render_mode
 
 
 # ---------------------------------------------------------------------------

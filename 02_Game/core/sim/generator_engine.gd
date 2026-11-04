@@ -18,7 +18,8 @@ func reset() -> void:
 
 
 ## 点击生成器。返回 {"ok", "message", "board_full", "entity", "level", "direct_order"}。
-func tap(project_data: Dictionary, board, slot: Array, at_time: float, rng) -> Dictionary:
+## orders：调用方传入的订单字典数组（含 mission，可能含 state），用于 rareOutputs 的 directOrder 门控。
+func tap(project_data: Dictionary, board, slot: Array, at_time: float, rng, orders: Array = []) -> Dictionary:
 	# 1) 坐标
 	var coords: Array = _parse_coords(slot)
 	if coords.is_empty():
@@ -68,10 +69,10 @@ func tap(project_data: Dictionary, board, slot: Array, at_time: float, rng) -> D
 	if empty.is_empty():
 		return _failure("棋盘已满", true)
 
-	# 8) 权重表：先 outputs（按数组顺序），再 rareOutputs
+	# 8) 权重表：先 outputs（按数组顺序），再 rareOutputs（按 directOrder 门控）
 	var table: Array = []
-	var total := _collect_entries(table, generator.get("outputs"), false)
-	total += _collect_entries(table, generator.get("rareOutputs"), true)
+	var total := _collect_entries(table, generator.get("outputs"), false, orders)
+	total += _collect_entries(table, generator.get("rareOutputs"), true, orders)
 	if total <= 0.0:
 		return _failure("产出表为空")
 
@@ -103,7 +104,9 @@ func tap(project_data: Dictionary, board, slot: Array, at_time: float, rng) -> D
 
 
 ## outputs 与 rareOutputs 共用：weight 必须是 >0 的数字；返回加入的总权重。
-func _collect_entries(target: Array, items_v: Variant, is_rare: bool) -> float:
+## rareOutputs 的 directOrder 缺省 true：为 true 时仅当 orders 中存在未完成订单
+## 需要该 entity+level 才加入权重表；为 false 时无条件加入。
+func _collect_entries(target: Array, items_v: Variant, is_rare: bool, orders: Array) -> float:
 	var added := 0.0
 	if typeof(items_v) != TYPE_ARRAY:
 		return added
@@ -127,9 +130,12 @@ func _collect_entries(target: Array, items_v: Variant, is_rare: bool) -> float:
 			level = int(level_v)
 		var direct_order := false
 		if is_rare:
+			direct_order = true
 			var direct_v: Variant = item.get("directOrder")
 			if typeof(direct_v) == TYPE_BOOL:
 				direct_order = bool(direct_v)
+			if direct_order and not _order_needs(orders, String(entity_v), level):
+				continue
 		target.append({
 			"entity": String(entity_v),
 			"level": level,
@@ -138,6 +144,33 @@ func _collect_entries(target: Array, items_v: Variant, is_rare: bool) -> float:
 		})
 		added += weight
 	return added
+
+
+## orders 中是否存在“未完成订单”（state != "claimed"，state 缺失也视为未完成）
+## 且其 mission 需要完全相同的 entity+level。
+func _order_needs(orders: Array, entity: String, level: int) -> bool:
+	for order_v in orders:
+		if typeof(order_v) != TYPE_DICTIONARY:
+			continue
+		var order: Dictionary = order_v
+		var state_v: Variant = order.get("state")
+		if typeof(state_v) == TYPE_STRING and String(state_v) == "claimed":
+			continue
+		var mission_v: Variant = order.get("mission")
+		if typeof(mission_v) != TYPE_ARRAY:
+			continue
+		var mission: Array = mission_v
+		for need_v in mission:
+			if typeof(need_v) != TYPE_DICTIONARY:
+				continue
+			var need: Dictionary = need_v
+			var need_entity_v: Variant = need.get("entity")
+			if typeof(need_entity_v) != TYPE_STRING or String(need_entity_v) != entity:
+				continue
+			var need_level_v: Variant = need.get("level")
+			if _is_int_like(need_level_v) and int(need_level_v) == level:
+				return true
+	return false
 
 
 func _entity_max_level(project_data: Dictionary, entity_id: String) -> int:

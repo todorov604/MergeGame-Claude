@@ -110,8 +110,9 @@ func validate_manifest(manifest) -> void:
 			if usage_v != STATUS_TO_USAGE[status_v]:
 				add_error(path + ".status", "status 与 usage 不一致: %s / %s" % [status_v, str(usage_v)])
 
-		# M9 非 TODO 必须有真实文件
-		if typeof(usage_v) == TYPE_STRING and usage_v != "TODO":
+		# M9 仅对会打包的 PLACEHOLDER/PRODUCTION 校验文件存在性；
+		# REFERENCE_ONLY/TODO 不进入工程（内嵌快照只保留溯源路径，干净副本中不存在）。
+		if typeof(usage_v) == TYPE_STRING and (usage_v == "PLACEHOLDER" or usage_v == "PRODUCTION"):
 			var file_v: Variant = entry.get("file")
 			if not _is_non_empty_string(file_v):
 				add_error(path + ".file", "file 为空")

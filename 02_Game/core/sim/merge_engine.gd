@@ -2,9 +2,13 @@ extends RefCounted
 
 ## 合成规则（M0 冻结规格 §1 / §3.4）：同 entity + 同 level -> level+1。
 ## M0 明确允许不相邻合并，相邻性不在本层检查；board 由调用方传入。
+## v0.20 §2.1.9：只有 kind=chip 可合成，其余 kind 返回 SIM_NOT_MERGEABLE。
+
+const MERGEABLE_KIND := "chip"
 
 ## 从 from 合并到 to；返回 {"ok", "message", "entity", "level"}。
-func merge(board, from: Array, to: Array, max_level: int) -> Dictionary:
+## kind 必传（由调用方从实体定义读取）：只有 "chip" 可合成，避免缺省值绕过 §2.1.9 门禁。
+func merge(board, from: Array, to: Array, max_level: int, kind: String) -> Dictionary:
 	var from_xy: Array = _parse_coords(from)
 	var to_xy: Array = _parse_coords(to)
 	if from_xy.is_empty() or to_xy.is_empty():
@@ -31,6 +35,10 @@ func merge(board, from: Array, to: Array, max_level: int) -> Dictionary:
 	var to_entity: Variant = to_cell.get("entity")
 	if from_entity != to_entity:
 		return _failure("实体不同")
+	# v0.20 §2.1.9：kind 门禁放在输入合法性判定之后，保留空格/实体不同等更精确的文案；
+	# 仍在任何棋盘变更之前返回，失败零状态变化。
+	if kind != MERGEABLE_KIND:
+		return _failure("SIM_NOT_MERGEABLE: kind=%s 不可合成" % kind)
 	var from_level := int(from_cell.get("level", 0))
 	var to_level := int(to_cell.get("level", 0))
 	if from_level != to_level:

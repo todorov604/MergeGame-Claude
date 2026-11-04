@@ -15,10 +15,19 @@ godot --path 02_Game res://editor/timeline_editor.tscn   # 时间轴编辑器
 ## 校验 / 模拟 / 测试
 
 ```bash
-godot --headless --path 02_Game -s res://tests/run_tests.gd        # 366 checks
+godot --headless --path 02_Game -s res://tests/run_tests.gd        # 499 checks
 godot --headless --path 02_Game -s res://tools/validate.gd -- --allow-placeholders
 godot --headless --path 02_Game -s res://tools/simulate.gd         # 确定性双跑
 ```
+
+## 自包含 / 免导入
+
+- 本目录可单独复制运行，不依赖同级 `00_design`：manifest 快照内嵌在 `data/manifest_index.json`，测试与校验读取该快照（`simulate` 走 SimRunner，不依赖 manifest）。
+- 测试 / 校验 / 模拟**不需要先执行 `--import`**。无 `.godot` 导入缓存时，资源加载回退为运行时解码（纹理 `Image.load_from_file` + `ImageTexture`，字体 `FontFile.load_dynamic_font`）；有缓存时优先使用导入资源，保持出片与既有 `framemd5` 基线一致。
+- 若手动执行 `--import`，新增的 `*.uid` 已被 `.gitignore` 忽略；该命令不再是验收前置。
+- 重新生成资源与内嵌快照（开发期，需显式指定源 manifest）：
+  `REPO_ROOT=$(git rev-parse --show-toplevel)`
+  `godot --headless --path 02_Game -s res://tools/sync_assets.gd -- --manifest "$REPO_ROOT/00_design/resource_manifest.json"`
 
 > 样例主题 `pet_shop` 引用了 PLACEHOLDER 的 `board_frame`/`ui_icon_star`，所以样例校验需要显式 `--allow-placeholders`；不带该参数时会被资源守卫判 FAIL。
 
@@ -47,7 +56,7 @@ bash 02_Game/tools/render.sh --keep-frames   # 保留 PNG 序列
 
 ## 资源策略
 
-`assets/assets.json` 由 `tools/sync_assets.gd` 按 `00_design/resource_manifest.json` 生成：只复制 PLACEHOLDER / PRODUCTION（22 项）；REFERENCE_ONLY（47 项）与 TODO（5 项）不进入工程。运行时统一经 `AssetLoader` 守卫，PLACEHOLDER 需 `allow_placeholders=true`。角色、棋盘、订单卡均为自绘占位，替换正式美术时按资源 ID 接入，不改逻辑。
+`assets/assets.json` 由 `tools/sync_assets.gd` 按源 `resource_manifest.json` 生成：只复制 PLACEHOLDER / PRODUCTION（22 项）；REFERENCE_ONLY（47 项）与 TODO（5 项）不进入工程。同一工具同时生成内嵌快照 `data/manifest_index.json`（74 条；打包资源指向 `res://assets/…`，其余保留无盘符的溯源路径），使工程在无 `00_design` 的干净副本中也能完成校验与测试。运行时统一经 `AssetLoader` 守卫，PLACEHOLDER 需 `allow_placeholders=true`。角色、棋盘、订单卡均为自绘占位，替换正式美术时按资源 ID 接入，不改逻辑。
 
 ## 编辑器（时间轴）
 

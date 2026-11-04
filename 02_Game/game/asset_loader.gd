@@ -88,12 +88,68 @@ func _load_asset(id: String, kind: String) -> Dictionary:
 	if file.is_empty() or not FileAccess.file_exists(file):
 		return _result(false, kind, usage, license, "缺图: %s" % file)
 
-	var loaded: Resource = ResourceLoader.load(file)
+	# 混合策略：有导入缓存（.godot）时优先用 ResourceLoader，保持出片纹理/字体与既有基线一致；
+	# 干净副本无导入缓存时回退到原始文件读取（纹理 Image.load_from_file，字体 FontFile.load_dynamic_font）。
+	var loaded: Resource = null
+	if kind == "texture":
+		loaded = _load_texture(file)
+	elif kind == "font":
+		loaded = _load_font(file)
 	if kind == "texture" and loaded is Texture2D:
 		return _result(true, kind, usage, license, "", loaded)
 	if kind == "font" and loaded is Font:
 		return _result(true, kind, usage, license, "", loaded)
 	return _result(false, kind, usage, license, "资源类型不符: %s" % file)
+
+
+## 纹理：导入缓存真实存在时优先 ResourceLoader；否则从原始 PNG 解码为 ImageTexture。
+func _load_texture(file: String) -> Texture2D:
+	if _has_import_cache(file):
+		var cached: Resource = ResourceLoader.load(file)
+		if cached is Texture2D:
+			return cached
+		push_warning("导入缓存存在但纹理加载失败，回退运行时解码: %s" % file)
+	var image: Image = Image.load_from_file(ProjectSettings.globalize_path(file))
+	if image == null or image.is_empty():
+		return null
+	return ImageTexture.create_from_image(image)
+
+
+## 字体：导入缓存真实存在时优先 ResourceLoader；否则用 FontFile 直接加载动态字体文件。
+func _load_font(file: String) -> Font:
+	if _has_import_cache(file):
+		var cached: Resource = ResourceLoader.load(file)
+		if cached is Font:
+			return cached
+		push_warning("导入缓存存在但字体加载失败，回退运行时加载: %s" % file)
+	var font := FontFile.new()
+	var font_error: Error = font.load_dynamic_font(ProjectSettings.globalize_path(file))
+	if font_error == OK:
+		return font
+	return null
+
+
+## 读取 <file>.import 的 path= 行，确认导入缓存文件真实存在。
+## 干净副本（无 .godot）里 ResourceLoader.exists 仍会返回 true，直接 load 会打印错误；
+## 必须先看 .import 指向的缓存文件是否存在，再决定是否走 ResourceLoader。
+func _has_import_cache(file: String) -> bool:
+	var import_path := file + ".import"
+	if not FileAccess.file_exists(import_path):
+		return false
+	var text := FileAccess.get_file_as_string(import_path)
+	if text.is_empty():
+		return false
+	var cache_path := ""
+	for line_v in text.split("\n"):
+		var line := String(line_v).strip_edges()
+		if line.begins_with("path="):
+			cache_path = line.substr("path=".length()).strip_edges()
+			break
+	if cache_path.length() >= 2 and cache_path.begins_with("\"") and cache_path.ends_with("\""):
+		cache_path = cache_path.substr(1, cache_path.length() - 2)
+	if cache_path.is_empty():
+		return false
+	return FileAccess.file_exists(cache_path)
 
 
 func _result(ok_flag: bool, kind: String, usage: String, license: String, error: String, payload: Resource = null) -> Dictionary:

@@ -125,7 +125,7 @@ func _apply_tap(state, payload: Dictionary, at: float) -> Dictionary:
 		return _fail("目标不是生成器")
 
 	var tap_result: Dictionary = state.generators.tap(
-		state.project_data, state.board, slot, at, state.rng)
+		state.project_data, state.board, slot, at, state.rng, state.orders.orders)
 	var message := _string_or_empty(tap_result.get("message"))
 	if bool(tap_result.get("board_full", false)):
 		message = "棋盘已满"
@@ -138,13 +138,17 @@ func _apply_merge(state, payload: Dictionary) -> Dictionary:
 	if from.is_empty() or to.is_empty():
 		return _fail("merge 缺少 from/to")
 
+	var kind := ""
 	var max_level := 10
 	var from_cell: Dictionary = state.board.get_cell(int(from[0]), int(from[1]))
 	if not from_cell.is_empty():
 		var entity_def := _entity_def(state.project_data, _string_or_empty(from_cell.get("entity")))
-		max_level = _int_like_or(entity_def.get("maxLevel"), 10)
+		kind = _string_or_empty(entity_def.get("kind"))
+		var entity_max := _int_like_or(entity_def.get("maxLevel"), 10)
+		if entity_max > 0:
+			max_level = mini(10, entity_max)
 
-	var merge_result: Dictionary = _merge_engine.merge(state.board, from, to, max_level)
+	var merge_result: Dictionary = _merge_engine.merge(state.board, from, to, max_level, kind)
 	return {
 		"ok": bool(merge_result.get("ok", false)),
 		"message": _string_or_empty(merge_result.get("message")),

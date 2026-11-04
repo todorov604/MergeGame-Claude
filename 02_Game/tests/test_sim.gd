@@ -60,7 +60,7 @@ func _test_merge(r) -> void:
 	board.set_cell(2, 3, "Ca", 1)
 	board.set_cell(4, 3, "Ca", 1)
 
-	var ok: Dictionary = engine.merge(board, [2, 3], [4, 3], 10)
+	var ok: Dictionary = engine.merge(board, [2, 3], [4, 3], 10, "chip")
 	r.check(bool(ok["ok"]), "同实体同等级应可合并（允许不相邻）")
 	r.eq(int(ok["level"]), 2, "合并后等级 2")
 	r.check(not board.has_cell(2, 3), "来源格应清空")
@@ -68,24 +68,24 @@ func _test_merge(r) -> void:
 
 	board.set_cell(2, 3, "Ca", 2)
 	board.set_cell(4, 3, "Cb", 2)
-	var different: Dictionary = engine.merge(board, [2, 3], [4, 3], 10)
+	var different: Dictionary = engine.merge(board, [2, 3], [4, 3], 10, "chip")
 	r.check(not different["ok"], "不同实体应拒绝")
 	r.eq(different["message"], "实体不同", "不同实体文案")
 
 	board.set_cell(4, 3, "Ca", 3)
-	var level_diff: Dictionary = engine.merge(board, [2, 3], [4, 3], 10)
+	var level_diff: Dictionary = engine.merge(board, [2, 3], [4, 3], 10, "chip")
 	r.check(not level_diff["ok"], "不同等级应拒绝")
 	r.eq(level_diff["message"], "等级不同", "不同等级文案")
 
 	board.set_cell(2, 3, "Ca", 10)
 	board.set_cell(4, 3, "Ca", 10)
-	var capped: Dictionary = engine.merge(board, [2, 3], [4, 3], 10)
+	var capped: Dictionary = engine.merge(board, [2, 3], [4, 3], 10, "chip")
 	r.check(not capped["ok"], "10 级不可再合并")
 	r.eq(capped["message"], "达到等级上限", "上限文案")
 
 	board.set_cell(2, 3, "Ca", 1)
 	board.obstacles[board.key(4, 3)] = "web"
-	var blocked: Dictionary = engine.merge(board, [2, 3], [4, 3], 10)
+	var blocked: Dictionary = engine.merge(board, [2, 3], [4, 3], 10, "chip")
 	r.check(not blocked["ok"], "障碍格应拒绝合并")
 	r.eq(blocked["message"], "存在障碍，无法合并", "障碍文案")
 
@@ -93,7 +93,7 @@ func _test_merge(r) -> void:
 	var same = BoardState.new()
 	same.setup(7, 9)
 	same.set_cell(2, 3, "Ca", 1)
-	var same_res: Dictionary = engine.merge(same, [2, 3], [2, 3], 10)
+	var same_res: Dictionary = engine.merge(same, [2, 3], [2, 3], 10, "chip")
 	r.check(not same_res["ok"], "同格合并应拒绝")
 	r.eq(same_res["message"], "坐标非法", "同格合并文案")
 	r.check(same.has_cell(2, 3), "同格合并失败后 (2,3) 应仍有物品")
@@ -159,7 +159,14 @@ func _test_generator(r) -> void:
 	var later: Dictionary = cool.tap(data2, cb, [0, 0], 15.0, rng)
 	r.check(bool(later["ok"]), "冷却结束应可再次产出")
 
-	# 稀有产出可达（确定性搜索种子）
+	# 稀有产出可达（确定性搜索种子；rareOutputs 按 directOrder 门控，需未完成订单需要 CleanSet_Ca Lv2）
+	var orders: Array = [{
+		"id": "order_1",
+		"character": "char_01",
+		"mission": [{"entity": "CleanSet_Ca", "level": 2}],
+		"star": 1,
+		"coin": 5,
+	}]
 	var found_rare := false
 	for s in range(1000):
 		var ge = GeneratorEngine.new()
@@ -169,7 +176,7 @@ func _test_generator(r) -> void:
 		gb.set_cell(3, 3, "CleanBox_C", 1)
 		var grng = RandomNumberGenerator.new()
 		grng.seed = s
-		var res: Dictionary = ge.tap(data, gb, [3, 3], 0.0, grng)
+		var res: Dictionary = ge.tap(data, gb, [3, 3], 0.0, grng, orders)
 		if bool(res["ok"]) and int(res["level"]) == 2:
 			found_rare = true
 			break

@@ -3,7 +3,8 @@ extends SceneTree
 ## 校验入口（M0 第 1 周第 1 步）：
 ## godot --headless --script res://tools/validate.gd -- [选项]
 ##   --project X            项目 JSON（默认 res://data/projects/sample_30s.json）
-##   --manifest Y           资源 manifest（默认 <项目根>/../00_design/resource_manifest.json）
+##   --manifest Y           资源 manifest（默认 res://data/manifest_index.json 内嵌快照；
+##                          开发期可用 --manifest ../00_design/resource_manifest.json）
 ##   --assets Z             assets.json（默认 res://assets/assets.json）
 ##   --allow-placeholders   允许 PLACEHOLDER 资源
 ##   --json                 只输出 JSON 汇总
@@ -17,7 +18,7 @@ const ProjectDoc := preload("res://core/project_doc.gd")
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var project_path := "res://data/projects/sample_30s.json"
-	var manifest_path := _default_manifest_path()
+	var manifest_path := "res://data/manifest_index.json"
 	var assets_path := "res://assets/assets.json"
 	var allow_placeholders := false
 	var json_output := false
@@ -71,11 +72,6 @@ func _initialize() -> void:
 		print("结果: %s (%d errors, %d warnings)" % [status, int(result["error_count"]), int(result["warning_count"])])
 
 	quit(0 if bool(result["ok"]) else 1)
-
-
-func _default_manifest_path() -> String:
-	var root := ProjectSettings.globalize_path("res://")
-	return (root + "../00_design/resource_manifest.json").simplify_path()
 
 
 func _resolve_path(path: String) -> String:

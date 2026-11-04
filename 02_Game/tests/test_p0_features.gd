@@ -20,7 +20,7 @@ func run(r) -> void:
 	r.check(sample.load_file("res://data/projects/sample_30s.json"), "样例项目应能加载: " + str(sample.parse_error))
 	var data: Dictionary = sample.data.duplicate(true)
 
-	var manifest_path := (ProjectSettings.globalize_path("res://") + "/../00_design/resource_manifest.json").simplify_path()
+	var manifest_path := "res://data/manifest_index.json"
 	var manifest = ManifestDoc.new()
 	r.check(manifest.load_file(manifest_path), "真实 manifest 应能加载: " + str(manifest.parse_error))
 
@@ -129,7 +129,7 @@ func _check_hud(r, data: Dictionary) -> void:
 	r.eq(hud.gem_text(), "50", "gem_text 应为 50")
 
 	hud.refresh({}, 5.0)
-	r.check(true, "refresh 空快照不应崩溃")
+	r.eq(hud.coin_text(), "9", "refresh 空快照应回落到 project hud 且不崩溃")
 
 	hud.free()
 

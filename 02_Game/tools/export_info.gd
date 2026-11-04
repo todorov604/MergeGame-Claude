@@ -14,7 +14,7 @@ const DEFAULT_PROJECT := "res://data/projects/sample_30s.json"
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	var project_path := DEFAULT_PROJECT
-	var manifest_path := (ProjectSettings.globalize_path("res://") + "/../00_design/resource_manifest.json").simplify_path()
+	var manifest_path := "res://data/manifest_index.json"
 	var allow_placeholders := false
 	var i := 0
 	while i < args.size():

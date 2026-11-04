@@ -7,7 +7,8 @@ const ResourceGuard = preload("res://core/resource_guard.gd")
 
 
 func run(r) -> void:
-	var manifest_path := (ProjectSettings.globalize_path("res://") + "/../00_design/resource_manifest.json").simplify_path()
+	var manifest_path := "res://data/manifest_index.json"
+	r.check(FileAccess.file_exists(manifest_path), "内嵌 manifest 快照应存在: " + manifest_path)
 	var manifest = ManifestDoc.new()
 	r.check(manifest.load_file(manifest_path), "manifest 应能加载: " + manifest_path)
 	r.eq(manifest.resources.size(), 74, "manifest 资源数应为 74")

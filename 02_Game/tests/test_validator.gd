@@ -8,7 +8,7 @@ const Validator = preload("res://core/validator.gd")
 
 
 func run(r) -> void:
-	var manifest_path := (ProjectSettings.globalize_path("res://") + "/../00_design/resource_manifest.json").simplify_path()
+	var manifest_path := "res://data/manifest_index.json"
 	var manifest = ManifestDoc.new()
 	r.check(manifest.load_file(manifest_path), "manifest 应能加载")
 	r.eq(manifest.resources.size(), 74, "manifest 资源数应为 74")
@@ -71,12 +71,15 @@ func run(r) -> void:
 	var w2 = _validate_with(manifest, base, func(d): d["timeline"][2]["payload"]["text_key"] = "nope.key")
 	r.check(_has_warning(w2.warnings, "nope.key"), "缺失文案键应产生警告")
 
-	# 6) manifest 变异
+	# 6) manifest 变异（快照中只有 PLACEHOLDER/PRODUCTION 校验文件存在性）
+	var frame_index := _resource_index_by_id(_fresh_manifest(), "board_frame")
+	r.check(frame_index >= 0, "manifest 应包含 PLACEHOLDER 条目 board_frame")
 	var m2 = _fresh_manifest()
-	m2.resources[0]["file"] = "E:/no/such/file.png"
+	if frame_index >= 0:
+		m2.resources[frame_index]["file"] = "res://assets/no_such_board_frame.png"
 	var vmm = Validator.new()
 	vmm.validate_manifest(m2)
-	_check(r, vmm.errors, "resources[0].file", "缺图", "manifest 缺图应报错")
+	_check(r, vmm.errors, "resources[%d].file" % frame_index, "缺图", "manifest 缺图应报错")
 
 	var m3 = _fresh_manifest()
 	m3.resources[0]["usage"] = "PRODUCTION"
@@ -149,9 +152,17 @@ func _sample_dict() -> Dictionary:
 
 func _fresh_manifest():
 	var m = ManifestDoc.new()
-	var manifest_path := (ProjectSettings.globalize_path("res://") + "/../00_design/resource_manifest.json").simplify_path()
+	var manifest_path := "res://data/manifest_index.json"
 	m.load_file(manifest_path)
 	return m
+
+
+func _resource_index_by_id(manifest, resource_id: String) -> int:
+	for i in range(manifest.resources.size()):
+		var entry_v: Variant = manifest.resources[i]
+		if typeof(entry_v) == TYPE_DICTIONARY and str((entry_v as Dictionary).get("id", "")) == resource_id:
+			return i
+	return -1
 
 
 func _validate_with(manifest, base: Dictionary, mutate: Callable) -> RefCounted:

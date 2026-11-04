@@ -10,17 +10,22 @@ const TimelinePlayer := preload("res://game/timeline_player.gd")
 const BoardView := preload("res://game/board_view.gd")
 const OrderView := preload("res://game/order_view.gd")
 const ViewLayer := preload("res://game/view_layer.gd")
+const HUDView := preload("res://game/hud_view.gd")
+const ThemeDoc := preload("res://game/theme_doc.gd")
 
 const PROJECT_PATH := "res://data/projects/sample_30s.json"
 const CHANNEL_SIM := "sim"
 const CHANNEL_VIEW := "view"
 const LOOP_TAIL_SECONDS := 2.0
+const HINT_DELAY := 3.0
 
 var _project_data: Dictionary = {}
 var _player = null
 var _board_view = null
 var _order_view = null
 var _view_layer = null
+var _hud = null
+var _theme = null
 var _label: Label = null
 var _error_label: Label = null
 var _elapsed := 0.0
@@ -31,15 +36,22 @@ var _capture_mode := false
 var _capture_path := ""
 var _capture_at := 0.0
 var _claim_generation := 0
+var _project_path := PROJECT_PATH
+var _render_mode := false
+var _selection_slots: Array = []
+var _selection_at := -1.0
+var _hint_shown := false
 
 
 func _ready() -> void:
-	# 截图参数必须先解析：之后任何启动失败都能按截图约定退出，而不是挂起。
+	# 参数必须先解析：之后任何启动失败都能按截图/渲染约定退出，而不是挂起。
 	_capture_path = _capture_path_from_args()
 	_capture_at = _capture_at_from_args()
+	_project_path = _arg_value("--project", PROJECT_PATH)
+	_render_mode = _has_arg("--render")
 
 	var doc = ProjectDoc.new()
-	if not doc.load_file(PROJECT_PATH):
+	if not doc.load_file(_resolve_project_path(_project_path)):
 		_fail_start("项目加载失败: %s" % doc.parse_error)
 		return
 
@@ -50,6 +62,12 @@ func _ready() -> void:
 	var setup_ok := typeof(setup_v) == TYPE_BOOL and bool(setup_v)
 	if not setup_ok:
 		_fail_start(_first_player_error())
+		return
+
+	var theme_dir := String(_project_data.get("theme", "themes/pet_shop"))
+	_theme = ThemeDoc.new()
+	if not _theme.load_theme(theme_dir, _project_data, true):
+		_fail_start("主题加载失败: %s" % _theme.error)
 		return
 
 	_build_views()
@@ -74,9 +92,11 @@ func _process(delta: float) -> void:
 
 	if _view_layer != null:
 		_view_layer.tick(_elapsed)
+	# 3) 选中停留超过 HINT_DELAY 后提示所有可合并格（在 tick 清理过期提示之后）。
+	_maybe_show_hint()
 	_update_label(_elapsed)
 
-	# 3) 循环：duration 已含 view 事件的 duration（sample=30s），尾部再留 2s。
+	# 4) 循环：duration 已含 view 事件的 duration（sample=30s），尾部再留 2s。
 	var duration := 0.0
 	var duration_v: Variant = _player.duration
 	if typeof(duration_v) == TYPE_INT or typeof(duration_v) == TYPE_FLOAT:
@@ -97,6 +117,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_restart_demo()
 	elif key_event.keycode == KEY_SPACE:
 		_paused = not _paused
+		_refresh_hud()
 
 
 # ---------------------------------------------------------------------------
@@ -107,23 +128,35 @@ func _build_views() -> void:
 	_board_view = BoardView.new()
 	add_child(_board_view)
 	_board_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_board_view.setup(_project_data, _initial_snapshot(), [], [], true)
+	_board_view.setup(_project_data, _initial_snapshot(), [], [], true, _theme)
 
 	_order_view = OrderView.new()
 	add_child(_order_view)
 	_order_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_order_view.setup(_project_data, _initial_snapshot(), true)
+	_order_view.setup(_project_data, _initial_snapshot(), true, _theme)
 
 	_view_layer = ViewLayer.new()
 	add_child(_view_layer)
 	_view_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_view_layer.setup(_project_data, _board_view, _order_view)
+	_view_layer.setup(_project_data, _board_view, _order_view, _theme)
+
+	# HUD 最后加入，保证位于 view_layer 之上、调试标签之下。
+	_hud = HUDView.new()
+	add_child(_hud)
+	if _hud is Control:
+		var hud_control := _hud as Control
+		hud_control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hud_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hud.setup(_project_data, _theme, true)
+	_hud.refresh(_initial_snapshot(), 0.0)
 
 	_label = Label.new()
-	_label.position = Vector2(24.0, 18.0)
+	_label.position = Vector2(24.0, 128.0)
 	_label.add_theme_font_size_override("font_size", 34)
 	_label.add_theme_color_override("font_color", Color.WHITE)
 	add_child(_label)
+	# 出片模式不显示调试时间标签。
+	_label.visible = not _render_mode
 	_update_label(0.0)
 
 	_error_label = Label.new()
@@ -164,6 +197,8 @@ func _apply_sim_result(result: Dictionary, before_snapshot: Dictionary, animate:
 	var event := _event_from(result)
 	if _board_view != null:
 		_board_view.refresh(snapshot)
+	if _hud != null:
+		_hud.refresh(snapshot, _elapsed)
 
 	var log_entry := _sim_log_entry(result)
 	var ok := bool(result.get("ok", false))
@@ -171,14 +206,19 @@ func _apply_sim_result(result: Dictionary, before_snapshot: Dictionary, animate:
 	if not log_entry.is_empty():
 		ok = ok and bool(log_entry.get("ok", false))
 	var event_type := _string_field(event, "type")
+	var message := _string_field(log_entry, "message")
+	if message.is_empty():
+		message = _string_field(result, "message")
+
+	# 棋盘已满：显式 board_full 事件，或 tap 失败且消息为“棋盘已满”。
+	if _view_layer != null and _view_layer.has_method("show_board_full"):
+		if event_type == "board_full" or (event_type == "tap" and not ok and message.contains("棋盘已满")):
+			_view_layer.show_board_full()
 
 	if not ok:
 		var event_id := _string_field(event, "id")
 		if event_id.is_empty():
 			event_id = "?"
-		var message := _string_field(log_entry, "message")
-		if message.is_empty():
-			message = _string_field(result, "message")
 		if message.is_empty():
 			message = "模拟失败"
 		_show_runtime_error("事件 %s 失败: %s" % [event_id, message])
@@ -198,7 +238,7 @@ func _apply_sim_result(result: Dictionary, before_snapshot: Dictionary, animate:
 
 
 ## 选中/完成驱动：tap 选目标格；merge/drag 选目标格；deliver 标记 mission 全部格子；
-## order_claim / level_next 清空。
+## order_claim / level_next 清空。选中变化同时重置停留提示。
 func _drive_visual_state(event: Dictionary, before_snapshot: Dictionary) -> void:
 	if _board_view == null:
 		return
@@ -209,18 +249,109 @@ func _drive_visual_state(event: Dictionary, before_snapshot: Dictionary) -> void
 			var slot := _xy_from(target.get("slot"))
 			if _is_xy(slot):
 				_board_view.set_selection([slot])
+				_track_selection([slot])
 		"merge", "drag":
 			var to := _xy_from(payload.get("to"))
 			if _is_xy(to):
 				_board_view.set_selection([to])
+				_track_selection([to])
 		"deliver":
 			var order_id := _string_field(payload, "order")
 			var order_def := _find_order_definition(before_snapshot, order_id)
 			_board_view.set_completed(_mission_cells(before_snapshot, order_def))
 			_board_view.set_selection([])
+			_clear_selection_hint()
 		"order_claim", "level_next":
 			_board_view.set_completed([])
 			_board_view.set_selection([])
+			_clear_selection_hint()
+
+
+# ---------------------------------------------------------------------------
+# 选中停留提示
+# ---------------------------------------------------------------------------
+
+## 每帧检查：选中格停留满 HINT_DELAY 秒后，把同 entity+level 的全部格子交给棋盘提示。
+func _maybe_show_hint() -> void:
+	if _board_view == null or _selection_slots.is_empty() or _hint_shown:
+		return
+	if _selection_at < 0.0 or _elapsed - _selection_at < HINT_DELAY:
+		return
+	var origin := _slot_xy(_selection_slots[0])
+	var slots := _matching_entity_slots(_current_snapshot(), origin)
+	if slots.size() >= 2:
+		if _board_view.has_method("set_hint_slots"):
+			_board_view.set_hint_slots(slots)
+		_hint_shown = true
+
+
+## 新选中/切换选中：记录停留起点并清掉旧提示。
+func _track_selection(slots: Array) -> void:
+	_selection_slots = slots.duplicate()
+	_selection_at = _elapsed
+	_hint_shown = false
+	if _board_view != null and _board_view.has_method("clear_hint"):
+		_board_view.clear_hint()
+
+
+## 选中清空（deliver/order_claim/level_next/重播）：清状态并撤掉提示。
+func _clear_selection_hint() -> void:
+	_selection_slots = []
+	_selection_at = -1.0
+	_hint_shown = false
+	if _board_view != null and _board_view.has_method("clear_hint"):
+		_board_view.clear_hint()
+
+
+## 与 origin 同 entity+level 的全部格子坐标（含 origin 自身）。
+func _matching_entity_slots(snapshot: Dictionary, origin: Vector2i) -> Array:
+	var slots: Array = []
+	var board_v: Variant = snapshot.get("board")
+	if typeof(board_v) != TYPE_DICTIONARY:
+		return slots
+	var cells_v: Variant = (board_v as Dictionary).get("cells")
+	if typeof(cells_v) != TYPE_ARRAY:
+		return slots
+	var cells: Array = cells_v
+	var entity := ""
+	var level := 0
+	var found := false
+	for cell_v in cells:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_v
+		if _int_field(cell, "x") == origin.x and _int_field(cell, "y") == origin.y:
+			entity = _string_field(cell, "entity")
+			level = _int_field(cell, "level")
+			found = true
+			break
+	if not found or entity.is_empty():
+		return slots
+	for cell_v in cells:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var match_cell: Dictionary = cell_v
+		if _string_field(match_cell, "entity") != entity:
+			continue
+		if _int_field(match_cell, "level") != level:
+			continue
+		slots.append(Vector2i(_int_field(match_cell, "x"), _int_field(match_cell, "y")))
+	return slots
+
+
+func _current_snapshot() -> Dictionary:
+	if _player == null:
+		return {}
+	var snapshot_v: Variant = _player.current_snapshot()
+	if typeof(snapshot_v) == TYPE_DICTIONARY:
+		return snapshot_v as Dictionary
+	return {}
+
+
+func _refresh_hud() -> void:
+	if _hud == null:
+		return
+	_hud.refresh(_current_snapshot(), _elapsed)
 
 
 ## order_claim：token 从事件前快照中 mission 首件的格子飞向角色；动画结束后刷新 OrderView。
@@ -290,7 +421,10 @@ func _restart_demo() -> void:
 		_board_view.refresh(initial)
 		_board_view.set_selection([])
 		_board_view.set_completed([])
+	_clear_selection_hint()
 	_refresh_order_view(initial)
+	if _hud != null:
+		_hud.refresh(initial, 0.0)
 	_clear_runtime_error()
 	_update_label(0.0)
 
@@ -354,6 +488,7 @@ func _seek_silent(capture_at: float) -> void:
 	if _view_layer != null:
 		_view_layer.tick(capture_at)
 	_elapsed = capture_at
+	_refresh_hud()
 	_update_label(capture_at)
 
 
@@ -390,8 +525,30 @@ func _fail_start(message: String) -> void:
 	label.add_theme_font_size_override("font_size", 30)
 	label.add_theme_color_override("font_color", Color("#ff6b6b"))
 	add_child(label)
-	if not _capture_path.is_empty():
+	if not _capture_path.is_empty() or _render_mode:
 		get_tree().quit(1)
+
+
+func _arg_value(key: String, fallback: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size()):
+		if String(args[i]) == key and i + 1 < args.size():
+			return String(args[i + 1])
+	return fallback
+
+
+func _has_arg(key: String) -> bool:
+	var args := OS.get_cmdline_user_args()
+	for arg in args:
+		if String(arg) == key:
+			return true
+	return false
+
+
+func _resolve_project_path(path: String) -> String:
+	if path.begins_with("res://") or path.is_absolute_path():
+		return path
+	return ProjectSettings.globalize_path("res://").path_join(path).simplify_path()
 
 
 func _first_player_error() -> String:
@@ -630,6 +787,13 @@ static func _xy_from(value: Variant) -> Vector2i:
 
 static func _is_xy(xy: Vector2i) -> bool:
 	return xy.x >= 0 and xy.y >= 0
+
+
+static func _slot_xy(value: Variant) -> Vector2i:
+	if typeof(value) == TYPE_VECTOR2I:
+		var v: Vector2i = value
+		return v
+	return _xy_from(value)
 
 
 static func _is_int_like(value: Variant) -> bool:

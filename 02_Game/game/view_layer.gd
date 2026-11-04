@@ -2,18 +2,25 @@ extends Control
 
 ## M0 第 1 周第 5 步：View 通道事件层。
 ## 统一消费时间轴上 channel=="view" 的事件：横幅文字（text / cta / levelup）、
-## 棋盘选中（select / highlight）、角色与奖励动画（character_leave / character_next /
-## star_fly / coin_popup）。供 main 实时播放与编辑器预览共用。
+## 棋盘选中（select / highlight）、停留提示（hint）、角色与奖励动画（character_leave /
+## character_next / star_fly / coin_popup），以及棋盘已满 toast（show_board_full）。
+## 供 main 实时播放与编辑器预览共用。
 ## 只依赖注入的 project_data / board_view / order_view；空引用与空 payload 全部安全忽略。
 
 const AssetLoader := preload("res://game/asset_loader.gd")
 
 const MAIN_RECT := Rect2(0.0, 560.0, 1080.0, 120.0)
 const CTA_RECT := Rect2(0.0, 1560.0, 1080.0, 120.0)
+const BOARD_FULL_RECT := Rect2(284.0, 1000.0, 512.0, 128.0)
 const MAIN_FONT_SIZE := 64
 const CTA_FONT_SIZE := 56
+const BOARD_FULL_FONT_SIZE := 48
 const DEFAULT_TEXT_SECONDS := 2.0
 const DEFAULT_LEVELUP_SECONDS := 1.5
+const DEFAULT_HINT_SECONDS := 2.0
+const BOARD_FULL_SECONDS := 1.5
+const BOARD_FULL_TEXT_KEY := "board.full"
+const BOARD_FULL_FALLBACK := "棋盘已满"
 const LEVELUP_FALLBACK := "LEVEL UP"
 const LEVELUP_TEXT_KEY := "levelup"
 
@@ -21,11 +28,16 @@ var project_data: Dictionary = {}
 var board_view = null
 var order_view = null
 var loader = null
+var theme_doc = null
 
 var _main_label: Label = null
 var _cta_label: Label = null
+var _board_full: Control = null
 var _main_hide_at := -1.0
 var _cta_hide_at := -1.0
+var _board_full_until := -1.0
+var _hint_until := -1.0
+var _now := 0.0
 var _main_text_key := ""
 var _cta_text_key := ""
 var _show_seq := 0
@@ -33,10 +45,11 @@ var _main_show_seq := 0
 var _cta_show_seq := 0
 
 
-func setup(project_data_arg: Dictionary, board_view_arg, order_view_arg) -> void:
+func setup(project_data_arg: Dictionary, board_view_arg, order_view_arg, theme_arg = null) -> void:
 	project_data = project_data_arg
 	board_view = board_view_arg
 	order_view = order_view_arg
+	theme_doc = theme_arg
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	loader = AssetLoader.new()
@@ -48,6 +61,7 @@ func setup(project_data_arg: Dictionary, board_view_arg, order_view_arg) -> void
 	if font != null:
 		_main_label.add_theme_font_override("font", font)
 		_cta_label.add_theme_font_override("font", font)
+	_board_full = _ensure_board_full_toast(_board_full)
 	clear()
 
 
@@ -70,6 +84,8 @@ func on_event(event: Dictionary, snapshot: Dictionary, now: float) -> void:
 			_handle_select(payload_v, payload)
 		"highlight":
 			_handle_highlight(payload_v, payload)
+		"hint":
+			_handle_hint(payload_v, payload, event, now)
 		"star_fly", "coin_popup":
 			_handle_reward(payload)
 		"character_leave":
@@ -81,6 +97,13 @@ func on_event(event: Dictionary, snapshot: Dictionary, now: float) -> void:
 
 
 func tick(now: float) -> void:
+	_now = now
+	if _valid_object(_board_full) and _board_full.visible and _board_full_until >= 0.0 and now >= _board_full_until:
+		_board_full.visible = false
+		_board_full_until = -1.0
+	if _hint_until >= 0.0 and now >= _hint_until:
+		_hint_until = -1.0
+		_clear_board_hint()
 	if _valid_object(_main_label) and _main_label.visible and _main_hide_at >= 0.0 and now >= _main_hide_at:
 		_main_label.visible = false
 		_main_label.text = ""
@@ -93,6 +116,18 @@ func tick(now: float) -> void:
 		_cta_hide_at = -1.0
 
 
+## 棋盘已满 toast：显示约 1.5 秒，由 tick 到期隐藏。
+func show_board_full() -> void:
+	_board_full_until = _now + BOARD_FULL_SECONDS
+	if not _valid_object(_board_full):
+		return
+	_board_full.visible = true
+
+
+func board_full_visible() -> bool:
+	return _valid_object(_board_full) and _board_full.visible
+
+
 func clear() -> void:
 	if _valid_object(_main_label):
 		_main_label.text = ""
@@ -100,10 +135,15 @@ func clear() -> void:
 	if _valid_object(_cta_label):
 		_cta_label.text = ""
 		_cta_label.visible = false
+	if _valid_object(_board_full):
+		_board_full.visible = false
 	_main_hide_at = -1.0
 	_cta_hide_at = -1.0
+	_board_full_until = -1.0
+	_hint_until = -1.0
 	_main_text_key = ""
 	_cta_text_key = ""
+	_clear_board_hint()
 
 
 func current_text() -> String:
@@ -190,6 +230,31 @@ func _handle_highlight(payload_raw: Variant, payload: Dictionary) -> void:
 	if slots.is_empty():
 		return
 	_set_board_selection(slots)
+
+
+## hint：提取 slots（{slots:[[x,y],...]} / {slot:[x,y]} / 裸数组），交给棋盘视图停留提示。
+func _handle_hint(payload_raw: Variant, payload: Dictionary, event: Dictionary, now: float) -> void:
+	var slots: Array = []
+	var slots_v: Variant = payload.get("slots")
+	if typeof(slots_v) == TYPE_ARRAY:
+		slots = _normalize_slots_array(slots_v as Array)
+	if slots.is_empty():
+		var slot_v: Variant = payload.get("slot")
+		if slot_v != null:
+			var single := _normalize_slot(slot_v)
+			if not single.is_empty():
+				slots = [single]
+	if slots.is_empty() and typeof(payload_raw) == TYPE_ARRAY:
+		var raw: Array = payload_raw
+		if raw.size() >= 2 and _is_number(raw[0]) and _is_number(raw[1]):
+			slots = [_normalize_slot(raw)]
+		else:
+			slots = _normalize_slots_array(raw)
+	if slots.is_empty():
+		return
+	if _valid_object(board_view) and board_view.has_method("set_hint_slots"):
+		board_view.set_hint_slots(slots)
+	_hint_until = now + _event_duration(event, DEFAULT_HINT_SECONDS)
 
 
 ## star_fly / coin_popup：coin 优先取 payload.amount，其次 payload.coin；star 取 payload.star。
@@ -311,6 +376,58 @@ func _set_board_selection(selection: Array) -> void:
 	board_view.set_selection(selection)
 
 
+func _clear_board_hint() -> void:
+	if not _valid_object(board_view) or not board_view.has_method("clear_hint"):
+		return
+	board_view.clear_hint()
+
+
+## 棋盘已满 toast：优先 PLACEHOLDER 贴图，加载失败则用本地化文字 Label。
+func _ensure_board_full_toast(existing: Control) -> Control:
+	var node := existing
+	if node == null or not is_instance_valid(node):
+		node = _create_board_full_toast()
+		add_child(node)
+	node.position = BOARD_FULL_RECT.position
+	node.size = BOARD_FULL_RECT.size
+	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	node.visible = false
+	if node is Label:
+		var label := node as Label
+		label.text = _board_full_text()
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", BOARD_FULL_FONT_SIZE)
+		label.add_theme_color_override("font_color", Color.WHITE)
+		var font := _ui_font()
+		if font != null:
+			label.add_theme_font_override("font", font)
+	return node
+
+
+func _create_board_full_toast() -> Control:
+	if loader != null:
+		var result: Dictionary = loader.load_texture("ui_board_full_toast")
+		if bool(result.get("ok", false)):
+			var texture_v: Variant = result.get("texture")
+			if texture_v is Texture2D:
+				var rect := TextureRect.new()
+				rect.texture = texture_v as Texture2D
+				rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				return rect
+	var label := Label.new()
+	label.text = _board_full_text()
+	return label
+
+
+func _board_full_text() -> String:
+	var text := _localized_text(BOARD_FULL_TEXT_KEY)
+	if text.is_empty():
+		return BOARD_FULL_FALLBACK
+	return text
+
+
 func _ensure_label(existing: Label, rect: Rect2, font_size: int) -> Label:
 	var label := existing
 	if label == null or not is_instance_valid(label):
@@ -329,6 +446,10 @@ func _ensure_label(existing: Label, rect: Rect2, font_size: int) -> Label:
 
 
 func _ui_font() -> Font:
+	if theme_doc != null:
+		var theme_font_v: Variant = theme_doc.ui_font()
+		if theme_font_v is Font:
+			return theme_font_v
 	if loader != null:
 		var result: Dictionary = loader.load_font("font_zh")
 		var font_v: Variant = result.get("font")

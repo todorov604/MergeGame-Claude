@@ -114,6 +114,32 @@ func run(r) -> void:
 	r.check(vnone.errors.is_empty(), "缺失 assets.json 不应是错误")
 	r.check(not vnone.warnings.is_empty(), "缺失 assets.json 应产生警告")
 
+	# 9) 主题映射：样例含 theme themes/pet_shop，真实 manifest + allow=true 仍 0 错误
+	var theme_base := _sample_dict()
+	r.eq(str(theme_base.get("theme", "")), "themes/pet_shop", "样例 project 应引用 themes/pet_shop")
+	var p_theme = ProjectDoc.new()
+	p_theme.from_dict(theme_base.duplicate(true), "<theme_sample>")
+	var v_theme = Validator.new()
+	v_theme.validate_manifest(manifest)
+	v_theme.validate_project(p_theme, manifest, true)
+	r.check(v_theme.errors.is_empty(), "含 pet_shop 主题的样例应 0 错误: " + _join(v_theme.errors))
+
+	# 10) 主题目录不存在应报错
+	_expect_error(r, manifest, theme_base, "theme", "主题文件不存在", func(d): d["theme"] = "themes/does_not_exist")
+
+	# 11) 主题引用 REFERENCE_ONLY 资源（真实 manifest 守卫）应报错
+	_expect_error(r, manifest, theme_base, "theme", "REFERENCE_ONLY", func(d): d["theme"] = "tests/fixtures/themes/reference")
+
+	# 12) allow=false：主题的 PLACEHOLDER 资源应被守卫拒绝
+	var p_theme_blocked = ProjectDoc.new()
+	p_theme_blocked.from_dict(theme_base.duplicate(true), "<theme_blocked>")
+	var v_theme_blocked = Validator.new()
+	v_theme_blocked.validate_project(p_theme_blocked, manifest, false)
+	r.check(
+		_has(v_theme_blocked.errors, "", "allow_placeholders"),
+		"allow=false 时 PLACEHOLDER 主题应报 allow_placeholders: " + _join(v_theme_blocked.errors)
+	)
+
 
 func _sample_dict() -> Dictionary:
 	var p = ProjectDoc.new()

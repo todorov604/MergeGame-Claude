@@ -128,7 +128,6 @@ func validate_manifest(manifest) -> void:
 # Project
 # ---------------------------------------------------------------------------
 
-@warning_ignore("unused_parameter")
 func validate_project(project, manifest, allow_placeholders: bool) -> void:
 	if not project.ok:
 		add_error("<project>", String(project.parse_error))
@@ -245,11 +244,12 @@ func validate_project(project, manifest, allow_placeholders: bool) -> void:
 					_check_max_level(entity, epath, false)
 
 	# P7 generators（只存行为）
+	var generators: Dictionary = {}
 	var generators_v: Variant = data.get("generators")
 	if typeof(generators_v) != TYPE_DICTIONARY:
 		add_error("generators", "generators 必须是对象")
 	else:
-		var generators: Dictionary = generators_v
+		generators = generators_v
 		for generator_key in generators.keys():
 			var gpath := "generators.%s" % generator_key
 			if entities_ok:
@@ -337,6 +337,7 @@ func validate_project(project, manifest, allow_placeholders: bool) -> void:
 				_check_board_slots(board, lpath + ".board", width, height, entities, entities_ok)
 			_check_obstacles(level, lpath, width, height)
 			_check_orders(level, lpath, entities, entities_ok, order_ids)
+			_check_order_reachability(level, lpath, entities, entities_ok, generators)
 
 	# P10 timeline
 	var timeline_v: Variant = data.get("timeline")
@@ -367,10 +368,150 @@ func validate_project(project, manifest, allow_placeholders: bool) -> void:
 			elif not order_ids.has(order_v):
 				add_error("timeline[%d].payload.order" % i, "订单未定义: %s" % order_v)
 
-	# P12 theme（本周只查结构）
+	# P12 theme / icons（静态结构 + 资源引用守卫，不加载纹理）
+	var theme_ok := true
+	var theme_dir := ""
 	if data.has("theme"):
-		if not _is_non_empty_string(data.get("theme")):
+		var theme_v: Variant = data.get("theme")
+		if not _is_non_empty_string(theme_v):
 			add_error("theme", "theme 必须是非空字符串")
+			theme_ok = false
+		else:
+			theme_dir = String(theme_v)
+	if theme_ok:
+		var theme_refs: Array = []
+		if data.has("theme"):
+			var theme_data_v: Variant = _load_theme(theme_dir)
+			if typeof(theme_data_v) == TYPE_DICTIONARY:
+				_collect_theme_refs(theme_data_v, theme_refs)
+		theme_refs.append_array(_validate_icons(data))
+		if manifest != null and manifest.ok:
+			_check_theme_refs(theme_refs, manifest, allow_placeholders)
+
+
+# ---------------------------------------------------------------------------
+# P12 细节：主题文件与图标
+# ---------------------------------------------------------------------------
+
+## 读取并校验 res://<theme>/theme.json；返回主题 Dictionary，失败返回 null。
+func _load_theme(theme_dir: String) -> Variant:
+	var theme_path := theme_dir
+	if not theme_path.begins_with("res://"):
+		theme_path = "res://" + theme_path
+	var path := theme_path.path_join("theme.json")
+	if not FileAccess.file_exists(path):
+		add_error("theme", "主题文件不存在: %s" % path)
+		return null
+	var text := FileAccess.get_file_as_string(path)
+	var parsed: Variant = JSON.parse_string(text)
+	if typeof(parsed) != TYPE_DICTIONARY:
+		add_error("theme", "主题 JSON 非法: %s" % path)
+		return null
+	var theme: Dictionary = parsed
+	_validate_theme_fields(theme)
+	return theme
+
+
+func _validate_theme_fields(theme: Dictionary) -> void:
+	if theme.has("name") and typeof(theme["name"]) != TYPE_STRING:
+		add_error("theme.name", "name 必须是字符串")
+
+	if theme.has("background"):
+		var background_v: Variant = theme["background"]
+		if typeof(background_v) != TYPE_DICTIONARY:
+			add_error("theme.background", "background 必须是对象")
+		else:
+			var background: Dictionary = background_v
+			for key in ["top", "bottom"]:
+				if not background.has(key):
+					continue
+				var color_v: Variant = background[key]
+				if typeof(color_v) != TYPE_STRING or not String(color_v).is_valid_html_color():
+					add_error("theme.background." + String(key), "%s 必须是合法 HTML 颜色" % key)
+
+	if theme.has("board_frame") and not _is_non_empty_string(theme["board_frame"]):
+		add_error("theme.board_frame", "board_frame 必须是非空字符串")
+	if theme.has("star") and not _is_non_empty_string(theme["star"]):
+		add_error("theme.star", "star 必须是非空字符串")
+
+	if theme.has("fonts"):
+		var fonts_v: Variant = theme["fonts"]
+		if typeof(fonts_v) != TYPE_DICTIONARY:
+			add_error("theme.fonts", "fonts 必须是对象")
+		elif (fonts_v as Dictionary).has("ui") and not _is_non_empty_string((fonts_v as Dictionary)["ui"]):
+			add_error("theme.fonts.ui", "ui 必须是非空字符串")
+
+	if theme.has("chip_palette"):
+		var palette_v: Variant = theme["chip_palette"]
+		if typeof(palette_v) != TYPE_ARRAY:
+			add_error("theme.chip_palette", "chip_palette 必须是数组")
+		elif (palette_v as Array).is_empty():
+			add_error("theme.chip_palette", "chip_palette 必须是非空数组")
+		else:
+			var palette: Array = palette_v
+			for i in range(palette.size()):
+				var color_v: Variant = palette[i]
+				if typeof(color_v) != TYPE_STRING or not String(color_v).is_valid_html_color():
+					add_error("theme.chip_palette[%d]" % i, "颜色必须是合法 HTML 颜色")
+
+
+## 校验可选 icons 字段；返回其中合法的资源引用 [{id, path}]。
+func _validate_icons(data: Dictionary) -> Array:
+	var refs: Array = []
+	if not data.has("icons"):
+		return refs
+	var icons_v: Variant = data["icons"]
+	if typeof(icons_v) != TYPE_DICTIONARY:
+		add_error("icons", "icons 必须是对象")
+		return refs
+	var icons: Dictionary = icons_v
+	for key in icons.keys():
+		var icon_path := "icons.%s" % String(key)
+		var icon_v: Variant = icons[key]
+		if not _is_non_empty_string(icon_v):
+			add_error(icon_path, "值必须是非空字符串")
+		else:
+			refs.append({"id": String(icon_v), "path": icon_path})
+	return refs
+
+
+func _collect_theme_refs(theme: Dictionary, refs: Array) -> void:
+	var board_frame_v: Variant = theme.get("board_frame")
+	if _is_non_empty_string(board_frame_v):
+		refs.append({"id": String(board_frame_v), "path": "theme.board_frame"})
+	var star_v: Variant = theme.get("star")
+	if _is_non_empty_string(star_v):
+		refs.append({"id": String(star_v), "path": "theme.star"})
+	var fonts_v: Variant = theme.get("fonts")
+	if typeof(fonts_v) == TYPE_DICTIONARY:
+		var ui_v: Variant = (fonts_v as Dictionary).get("ui")
+		if _is_non_empty_string(ui_v):
+			refs.append({"id": String(ui_v), "path": "theme.fonts.ui"})
+
+
+func _check_theme_refs(refs: Array, manifest, allow_placeholders: bool) -> void:
+	var seen: Dictionary = {}
+	for ref_v in refs:
+		var ref: Dictionary = ref_v
+		var id := String(ref["id"])
+		if seen.has(id):
+			continue
+		seen[id] = true
+		var ref_path := String(ref["path"])
+		if not manifest.has_resource(id):
+			add_error(ref_path, "主题引用资源未定义: %s" % id)
+			continue
+		var resource: Dictionary = manifest.get_resource(id)
+		var usage_v: Variant = resource.get("usage")
+		var usage := ""
+		if typeof(usage_v) == TYPE_STRING:
+			usage = String(usage_v)
+		if usage == "REFERENCE_ONLY":
+			add_error(ref_path, "REFERENCE_ONLY 资源禁止主题引用: %s" % id)
+		elif usage == "TODO":
+			add_error(ref_path, "TODO 资源未补齐: %s" % id)
+		elif usage == "PLACEHOLDER" and not allow_placeholders:
+			add_error(ref_path, "PLACEHOLDER 资源需 allow_placeholders=true: %s" % id)
 
 
 # ---------------------------------------------------------------------------
@@ -791,6 +932,150 @@ func _check_orders(level: Dictionary, lpath: String, entities: Dictionary, entit
 
 		_check_int_min(order, "star", opath + ".star", 0)
 		_check_int_min(order, "coin", opath + ".coin", 0)
+
+
+## M0 §7 订单不可达：按当前关卡棋盘与生成器产出估算 chip 可得数量上界
+## （Dictionary entity -> Dictionary level -> int），再用“两枚同级合成一枚高一级”
+## 判断每件订单物品是否可达。上界只用于可达性，不代表概率。
+func _check_order_reachability(level: Dictionary, lpath: String, entities: Dictionary, entities_ok: bool, generators: Dictionary) -> void:
+	if not entities_ok:
+		return
+	var board_v: Variant = level.get("board")
+	if typeof(board_v) != TYPE_DICTIONARY:
+		return
+	var slots_v: Variant = (board_v as Dictionary).get("slots")
+	if typeof(slots_v) != TYPE_ARRAY:
+		return
+
+	# 1) 统计当前关卡每类 chip 的可得数量。
+	var counts: Dictionary = {}
+	var seen_generators: Dictionary = {}
+	var slots: Array = slots_v
+	for slot_v in slots:
+		if typeof(slot_v) != TYPE_DICTIONARY:
+			continue
+		var slot: Dictionary = slot_v
+		var entity_v: Variant = slot.get("entity")
+		if not _is_non_empty_string(entity_v):
+			continue
+		var entity_id := String(entity_v)
+		var kind := _entity_kind(entities, entity_id)
+		if kind == "chip":
+			var level_v: Variant = slot.get("level")
+			if _is_int_like(level_v) and int(level_v) >= 1:
+				_add_chip_count(counts, entity_id, int(level_v), 1)
+		elif kind == "generator":
+			# 同一生成器实体只计一次（棋盘上出现多个同实体生成器时不重复计产出）。
+			if seen_generators.has(entity_id):
+				continue
+			seen_generators[entity_id] = true
+			var behavior_v: Variant = generators.get(entity_id)
+			if typeof(behavior_v) != TYPE_DICTIONARY:
+				continue
+			var behavior: Dictionary = behavior_v
+			var charges := 0
+			var charges_v: Variant = behavior.get("charges")
+			if _is_int_like(charges_v) and int(charges_v) > 0:
+				charges = int(charges_v)
+			if charges == 0:
+				continue
+			_add_output_counts(counts, behavior, "outputs", charges, entities)
+			_add_output_counts(counts, behavior, "rareOutputs", charges, entities)
+
+	# 2) 对每个订单的 mission 每件做合并可达判断。
+	var orders_v: Variant = level.get("orders")
+	if typeof(orders_v) != TYPE_ARRAY:
+		return
+	var orders: Array = orders_v
+	var reported: Dictionary = {}
+	for oi in range(orders.size()):
+		var order_v: Variant = orders[oi]
+		if typeof(order_v) != TYPE_DICTIONARY:
+			continue
+		var mission_v: Variant = (order_v as Dictionary).get("mission")
+		if typeof(mission_v) != TYPE_ARRAY:
+			continue
+		var mission: Array = mission_v
+		for mi in range(mission.size()):
+			var item_v: Variant = mission[mi]
+			if typeof(item_v) != TYPE_DICTIONARY:
+				continue
+			var item: Dictionary = item_v
+			var mission_entity_v: Variant = item.get("entity")
+			if not _is_non_empty_string(mission_entity_v):
+				continue
+			var mission_entity := String(mission_entity_v)
+			if _entity_kind(entities, mission_entity) != "chip":
+				continue
+			var mission_level_v: Variant = item.get("level")
+			if not _is_int_like(mission_level_v):
+				continue
+			var target_level := int(mission_level_v)
+			if target_level < 1 or target_level > 10:
+				# 非法等级（已有错误）不参与可达性分析，也避免超大等级导致长循环。
+				continue
+			# 同一 entity/level 的不可达只报一次。
+			var key := "%s|%d" % [mission_entity, target_level]
+			if reported.has(key):
+				continue
+			if _chip_reachable(counts, mission_entity, target_level):
+				continue
+			reported[key] = true
+			add_error(
+				"%s.orders[%d].mission[%d]" % [lpath, oi, mi],
+				"订单物品不可达: %s Lv%d" % [mission_entity, target_level]
+			)
+
+
+func _add_chip_count(counts: Dictionary, entity_id: String, level: int, amount: int) -> void:
+	if amount <= 0:
+		return
+	var by_level_v: Variant = counts.get(entity_id)
+	if typeof(by_level_v) != TYPE_DICTIONARY:
+		by_level_v = {}
+		counts[entity_id] = by_level_v
+	var by_level: Dictionary = by_level_v
+	by_level[level] = int(by_level.get(level, 0)) + amount
+
+
+## 生成器产出计入可达上界：同一 charge 可全部产出某一种，故每种产出各加 charges。
+func _add_output_counts(counts: Dictionary, behavior: Dictionary, key: String, charges: int, entities: Dictionary) -> void:
+	var outputs_v: Variant = behavior.get(key)
+	if typeof(outputs_v) != TYPE_ARRAY:
+		return
+	var outputs: Array = outputs_v
+	for item_v in outputs:
+		if typeof(item_v) != TYPE_DICTIONARY:
+			continue
+		var item: Dictionary = item_v
+		var entity_v: Variant = item.get("entity")
+		if not _is_non_empty_string(entity_v):
+			continue
+		var entity_id := String(entity_v)
+		if _entity_kind(entities, entity_id) != "chip":
+			continue
+		var level := 1
+		if item.has("level"):
+			var level_v: Variant = item["level"]
+			if not _is_int_like(level_v) or int(level_v) < 1:
+				continue
+			level = int(level_v)
+		_add_chip_count(counts, entity_id, level, charges)
+
+
+## 合并可达：avail[l] 初始为可得数量；低一级两枚可合成高一级一枚。
+func _chip_reachable(counts: Dictionary, entity_id: String, target_level: int) -> bool:
+	var by_level_v: Variant = counts.get(entity_id)
+	if typeof(by_level_v) != TYPE_DICTIONARY:
+		return false
+	var by_level: Dictionary = by_level_v
+	var avail: Dictionary = {}
+	for l in range(1, target_level + 1):
+		avail[l] = int(by_level.get(l, 0))
+	for l in range(1, target_level):
+		var current := int(avail.get(l, 0))
+		avail[l + 1] = int(avail.get(l + 1, 0)) + int(current / 2.0)
+	return int(avail.get(target_level, 0)) >= 1
 
 
 # ---------------------------------------------------------------------------

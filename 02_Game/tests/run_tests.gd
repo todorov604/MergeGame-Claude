@@ -14,6 +14,9 @@ const TEST_SCRIPTS := [
 	preload("res://tests/test_timeline_model.gd"),
 	preload("res://tests/test_timeline_player.gd"),
 	preload("res://tests/test_view_layer.gd"),
+	preload("res://tests/test_theme_doc.gd"),
+	preload("res://tests/test_autosave.gd"),
+	preload("res://tests/test_p0_features.gd"),
 ]
 
 

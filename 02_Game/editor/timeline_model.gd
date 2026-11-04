@@ -36,6 +36,17 @@ func load_file(path: String) -> bool:
 	return true
 
 
+## 从内存字典恢复项目（自动保存草稿/异常恢复用）：替换文档并重置历史。
+## 不做整项目校验门禁：草稿即使校验有错也保留，错误只刷新到 last_errors/last_warnings。
+func load_from_dict(data: Dictionary, source_path_arg := "<recovered>") -> bool:
+	project_data = data.duplicate(true)
+	source_path = source_path_arg
+	history = [project_data.duplicate(true)]
+	history_index = 0
+	validate()
+	return true
+
+
 func timeline() -> Array:
 	var value: Variant = project_data.get("timeline")
 	if typeof(value) == TYPE_ARRAY:

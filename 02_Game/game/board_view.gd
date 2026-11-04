@@ -11,6 +11,8 @@ const BOARD_ORIGIN := Vector2(48.0, 466.0)
 const BOARD_SIZE := Vector2(983.0, 1263.0)
 const CELL_INSET := 7.0
 const CHIP_INSET := 17.0
+const HINT_CHIP_SCALE := 1.08
+const HINT_CHIP_OFFSET := 6.0
 const SELECT_HEX := "#ffd83d"
 const COMPLETE_HEX := "#3ddc6a"
 
@@ -18,8 +20,10 @@ var project_data: Dictionary = {}
 var snapshot: Dictionary = {}
 var selection: Array = []
 var completed: Array = []
+var _hint_slots: Array = []
 var allow_placeholders := true
 var loader = null
+var theme_doc = null
 
 var _palette: Array[Color] = [
 	Color("#ff8a5c"),
@@ -34,13 +38,15 @@ var _palette: Array[Color] = [
 var _font_cache: Font = null
 
 
-func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, selection_arg: Array, completed_arg: Array, allow_placeholders_flag = true) -> void:
+func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, selection_arg: Array, completed_arg: Array, allow_placeholders_flag = true, theme_arg = null) -> void:
 	project_data = project_data_arg
 	snapshot = snapshot_arg
 	selection = selection_arg
 	completed = completed_arg
 	allow_placeholders = bool(allow_placeholders_flag)
+	theme_doc = theme_arg
 	_font_cache = null
+	_hint_slots = []
 	loader = AssetLoader.new()
 	loader.setup("res://assets/assets.json", bool(allow_placeholders_flag))
 	queue_redraw()
@@ -59,6 +65,30 @@ func set_selection(selection_arg: Array) -> void:
 func set_completed(completed_arg: Array) -> void:
 	completed = completed_arg
 	queue_redraw()
+
+
+## 提示槽位：[[x, y], ...]。只影响 chip 绘制（放大 + 向首个提示槽靠近），不影响命中。
+func set_hint_slots(slots: Array) -> void:
+	_hint_slots = []
+	for slot_v in slots:
+		var xy := _parse_xy(slot_v)
+		if xy.x < 0 or xy.y < 0:
+			continue
+		_hint_slots.append([xy.x, xy.y])
+	queue_redraw()
+
+
+func clear_hint() -> void:
+	_hint_slots = []
+	queue_redraw()
+
+
+func hint_active() -> bool:
+	return not _hint_slots.is_empty()
+
+
+func hint_slot_count() -> int:
+	return _hint_slots.size()
 
 
 func cell_center(x: int, y: int) -> Vector2:
@@ -106,6 +136,13 @@ func _draw_background() -> void:
 		canvas = DESIGN_SIZE
 	var top := Color("#35455f")
 	var bottom := Color("#101a2b")
+	if theme_doc != null:
+		var theme_top_v: Variant = theme_doc.background_top
+		var theme_bottom_v: Variant = theme_doc.background_bottom
+		if typeof(theme_top_v) == TYPE_COLOR:
+			top = theme_top_v
+		if typeof(theme_bottom_v) == TYPE_COLOR:
+			bottom = theme_bottom_v
 	var bands := 32
 	var band_height := canvas.y / float(bands)
 	for i in range(bands):
@@ -118,6 +155,11 @@ func _draw_background() -> void:
 
 func _draw_board_frame() -> void:
 	var rect := Rect2(BOARD_ORIGIN, BOARD_SIZE)
+	if theme_doc != null:
+		var theme_texture_v: Variant = theme_doc.board_frame_texture()
+		if theme_texture_v is Texture2D:
+			draw_texture_rect(theme_texture_v as Texture2D, rect, false)
+			return
 	if loader != null:
 		var result: Dictionary = loader.load_texture("board_frame")
 		if bool(result.get("ok", false)):
@@ -161,7 +203,7 @@ func _draw_chips() -> void:
 
 
 func _draw_chip(x: int, y: int, entity: String, level: int, font: Font) -> void:
-	var chip_rect := _cell_rect(x, y).grow(-CHIP_INSET)
+	var chip_rect := _chip_draw_rect(x, y)
 	var fill := _entity_color(entity)
 	var border := fill.lightened(clampf(0.22 + 0.06 * float(maxi(level, 0)), 0.22, 0.9))
 	draw_style_box(_make_style(fill, 20, border, 4), chip_rect)
@@ -169,6 +211,32 @@ func _draw_chip(x: int, y: int, entity: String, level: int, font: Font) -> void:
 	var center := chip_rect.get_center()
 	_draw_text_centered(font, "Lv%d" % level, Vector2(center.x, center.y - chip_rect.size.y * 0.16), 24, Color(1.0, 1.0, 1.0, 0.95))
 	_draw_text_centered(font, entity.substr(0, 8), Vector2(center.x, center.y + chip_rect.size.y * 0.16), 20, Color(1.0, 1.0, 1.0, 0.8))
+
+
+## chip 的实际绘制矩形：普通格子返回原矩形；提示格围绕格心放大并向首个提示槽偏移。
+## 只用于绘制，cell_rect / 命中检测保持不变。
+func _chip_draw_rect(x: int, y: int) -> Rect2:
+	var chip_rect := _cell_rect(x, y).grow(-CHIP_INSET)
+	if not hint_active() or not _hint_has_slot(x, y):
+		return chip_rect
+	var cell_center := _cell_rect(x, y).get_center()
+	var center := cell_center
+	var dims := _board_dims()
+	var first := _parse_xy(_hint_slots[0])
+	if _in_bounds(first, dims):
+		var direction := _cell_rect(first.x, first.y).get_center() - cell_center
+		if direction.length_squared() > 0.0001:
+			center += direction.normalized() * HINT_CHIP_OFFSET
+	var scaled_size := chip_rect.size * HINT_CHIP_SCALE
+	return Rect2(center - scaled_size * 0.5, scaled_size)
+
+
+func _hint_has_slot(x: int, y: int) -> bool:
+	for slot_v in _hint_slots:
+		var xy := _parse_xy(slot_v)
+		if xy.x == x and xy.y == y:
+			return true
+	return false
 
 
 func _draw_obstacles() -> void:
@@ -325,17 +393,31 @@ func _cell_rect(x: int, y: int) -> Rect2:
 	return Rect2(BOARD_ORIGIN + Vector2(float(x) * cell_size.x, float(y) * cell_size.y), cell_size)
 
 
+func _active_palette() -> Array:
+	if theme_doc != null:
+		var palette_v: Variant = theme_doc.palette
+		if typeof(palette_v) == TYPE_ARRAY and not (palette_v as Array).is_empty():
+			return palette_v as Array
+	return _palette
+
+
 func _entity_color(entity: String) -> Color:
+	var palette := _active_palette()
 	# djb2 稳定哈希：同一 entity 跨运行得到同一颜色。
 	var hash_value := 5381
 	for i in range(entity.length()):
 		hash_value = (hash_value * 33 + entity.unicode_at(i)) % 2147483647
-	return _palette[hash_value % _palette.size()]
+	return palette[hash_value % palette.size()]
 
 
 func _ui_font() -> Font:
 	if _font_cache != null:
 		return _font_cache
+	if theme_doc != null:
+		var theme_font_v: Variant = theme_doc.ui_font()
+		if theme_font_v is Font:
+			_font_cache = theme_font_v
+			return _font_cache
 	if loader != null:
 		var en: Dictionary = loader.load_font("font_en")
 		var en_font: Variant = en.get("font")

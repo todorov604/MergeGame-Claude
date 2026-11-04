@@ -2,6 +2,7 @@ extends Control
 
 ## M0 第 1 周第 5 步：时间轴编辑器（冻结规格 §5.1 时间轴页）。
 ## 轨道分组 / 绝对与相对锚点编辑 / 预览 / 单步 / 撤销重做 / 保存草稿。
+## M0 第 8 步：自动保存与异常恢复（AutosaveStore）+ 校验结果面板（点选定位）。
 ## 事件模型与播放器来自 editor/timeline_model.gd、game/timeline_player.gd（纯逻辑契约）。
 
 const ProjectDoc := preload("res://core/project_doc.gd")
@@ -12,6 +13,9 @@ const OrderView := preload("res://game/order_view.gd")
 const TimelineModel := preload("res://editor/timeline_model.gd")
 const TimelinePlayer := preload("res://game/timeline_player.gd")
 const ViewLayer := preload("res://game/view_layer.gd")
+const HUDView := preload("res://game/hud_view.gd")
+const ThemeDoc := preload("res://game/theme_doc.gd")
+const AutosaveStore := preload("res://editor/autosave.gd")
 
 const PROJECT_PATH := "res://data/projects/sample_30s.json"
 const DRAFT_URL := "user://timeline_draft.json"
@@ -24,8 +28,12 @@ const DESIGN_WIDTH := 1080.0
 const DESIGN_HEIGHT := 1920.0
 const SELECTED_COLOR := Color(1.0, 0.847, 0.239)
 const ERROR_COLOR := Color(1.0, 0.42, 0.42)
+const WARNING_COLOR := Color(1.0, 0.86, 0.3)
+const PASS_COLOR := Color(0.45, 0.9, 0.45)
+const AUTOSAVE_INTERVAL := 30.0
 const IDLE_TEXT := "播放"
 const PLAYING_TEXT := "暂停"
+const HINT_DELAY := 3.0
 
 var _model = null
 var _player = null
@@ -35,12 +43,26 @@ var _playing := false
 var _elapsed := 0.0
 var _collapsed: Dictionary = {}
 var _row_buttons: Dictionary = {}
+var _project_path := PROJECT_PATH
+var _player_ok := false
 var _capture_path := ""
+var _autosave = null
+var _autosave_elapsed := 0.0
+var _dirty := false
+var _recovery_dialog: ConfirmationDialog = null
+var _validation_dialog: AcceptDialog = null
+var _validation_list: ItemList = null
+var _validation_paths: Array = []
 
 var _board_view = null
 var _order_view = null
 var _view_layer = null
+var _hud = null
+var _theme = null
 var _view_cursor := 0           # 下一个待应用的 view 事件在 _player.events 中的下标
+var _selection_slots: Array = []
+var _selection_at := -1.0
+var _hint_shown := false
 var _scroll: ScrollContainer = null
 var _list_vbox: VBoxContainer = null
 var _time_label: Label = null
@@ -66,18 +88,32 @@ var _error_label: Label = null
 
 
 func _ready() -> void:
+	_project_path = _resolve_project_path(_arg_value("--project", PROJECT_PATH))
 	_apply_ui_font()
 	_build_preview()
 	_build_toolbar()
 	_build_event_list()
 	_build_properties()
 	_capture_path = _capture_path_from_args()
+	var validate_requested := _has_cmdline_arg("--validate")
 	if not _load_project():
 		if not _capture_path.is_empty():
 			get_tree().quit(1)
 		return
+	_setup_autosave()
 	if not _capture_path.is_empty():
+		# capture 模式只截图验收：跳过恢复询问；--validate 先弹结果面板再截图。
+		# 校验不通过的项目（player 初始化失败）仅 --validate 时允许继续截图。
+		if not _player_ok and not validate_requested:
+			get_tree().quit(1)
+			return
+		if validate_requested:
+			_on_validate_pressed()
 		await _run_capture(_capture_path)
+		return
+	if validate_requested:
+		_on_validate_pressed()
+	_check_autosave_recovery()
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +161,7 @@ func _build_toolbar() -> void:
 	hbox.add_child(_make_button("撤销", _on_undo_pressed))
 	hbox.add_child(_make_button("重做", _on_redo_pressed))
 	hbox.add_child(_make_button("保存草稿", _on_save_pressed))
+	hbox.add_child(_make_button("校验", _on_validate_pressed))
 
 	_time_label = Label.new()
 	_time_label.text = "t=0.0 · 0/0 事件"
@@ -340,6 +377,12 @@ func _make_button(text: String, callback: Callable, font_size: int = 20) -> Butt
 	return button
 
 
+## 主界面主题（含 font_zh）不会自动传给独立的 Window 节点，手动下发保证中文显示。
+func _apply_dialog_theme(dialog: Window) -> void:
+	if theme != null:
+		dialog.theme = theme
+
+
 # ---------------------------------------------------------------------------
 # 加载 / 模型 / 播放器
 # ---------------------------------------------------------------------------
@@ -349,32 +392,36 @@ func _load_project() -> bool:
 	_set_status("")
 	_model = TimelineModel.new()
 	var loaded := false
-	var load_v: Variant = _model.load_file(PROJECT_PATH)
+	var load_v: Variant = _model.load_file(_project_path)
 	if typeof(load_v) == TYPE_BOOL:
 		loaded = bool(load_v)
 	if not loaded:
-		_set_error(_model_error_text("项目加载失败: %s" % PROJECT_PATH))
+		_set_error(_model_error_text("项目加载失败: %s" % _project_path))
 		return false
 
 	var data_v: Variant = _model.project_data
 	if typeof(data_v) == TYPE_DICTIONARY:
 		_project_data = data_v
 	if _project_data.is_empty():
-		_set_error("项目数据为空: %s" % PROJECT_PATH)
+		_set_error("项目数据为空: %s" % _project_path)
 		return false
 
-	if not _rebuild_player():
-		return false
+	# JSON 可解析但校验不通过时 player.setup 失败：保留错误 Label，
+	# 仍构建事件列表/属性/校验能力，供“校验”面板定位问题。
+	_rebuild_player()
 	_setup_views()
 	_rebuild_event_list()
 	_populate_properties()
 	_refresh_to_player()
 	_update_time_label()
+	if not _player_ok:
+		_set_error(_player_error_text("播放器初始化失败"))
 	return true
 
 
 func _rebuild_player() -> bool:
 	_player = null
+	_player_ok = false
 	_playing = false
 	_elapsed = 0.0
 	_reset_view_layer()
@@ -392,6 +439,7 @@ func _rebuild_player() -> bool:
 	if not ok:
 		_set_error(_player_error_text("播放器初始化失败"))
 		return false
+	_player_ok = true
 	return true
 
 
@@ -407,12 +455,43 @@ func _copy_project_data() -> Dictionary:
 func _setup_views() -> void:
 	if _board_view == null or _order_view == null:
 		return
+	# 主题随 project_data 重新加载：项目加载与每次模型提交（编辑/撤销/重做）都取最新 theme 字段。
+	_theme = null
+	var theme_dir := String(_project_data.get("theme", "themes/pet_shop"))
+	var theme_doc = ThemeDoc.new()
+	if theme_doc.load_theme(theme_dir, _project_data, true):
+		_theme = theme_doc
+	else:
+		# 编辑器不因主题失败而不可用：报错，视图退回默认主题。
+		_set_error("主题加载失败: " + String(theme_doc.error))
 	var snapshot := _player_current_snapshot()
-	_board_view.setup(_project_data, snapshot, [], [], true)
-	_order_view.setup(_project_data, snapshot, true)
+	_board_view.setup(_project_data, snapshot, [], [], true, _theme)
+	_order_view.setup(_project_data, snapshot, true, _theme)
 	_board_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if _view_layer != null:
-		_view_layer.setup(_project_data, _board_view, _order_view)
+		_view_layer.setup(_project_data, _board_view, _order_view, _theme)
+	_clear_selection_hint()
+	_rebuild_hud(snapshot)
+
+
+## 预览层 HUD：重建后插到 view_layer 之后，保持在编辑器面板之下。
+func _rebuild_hud(snapshot: Dictionary) -> void:
+	if _hud != null and is_instance_valid(_hud):
+		remove_child(_hud)
+		_hud.queue_free()
+		_hud = null
+	_hud = HUDView.new()
+	add_child(_hud)
+	if _hud is Control:
+		var hud_control := _hud as Control
+		hud_control.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		hud_control.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var hud_index := 0
+	if _view_layer != null and is_instance_valid(_view_layer):
+		hud_index = _view_layer.get_index() + 1
+	move_child(_hud, hud_index)
+	_hud.setup(_project_data, _theme, true)
+	_hud.refresh(snapshot, maxf(_last_applied_time(), 0.0))
 
 
 func _refresh_to_player() -> void:
@@ -424,11 +503,15 @@ func _refresh_views(snapshot: Dictionary) -> void:
 		return
 	_board_view.refresh(snapshot)
 	_order_view.refresh(snapshot)
+	if _hud != null:
+		_hud.refresh(snapshot, maxf(_last_applied_time(), 0.0))
 
 
 func _after_model_change() -> void:
 	if _model == null:
 		return
+	_dirty = true
+	_close_validation_dialog()
 	_clear_error()
 	_set_status("")
 	# 模型提交后可能已替换 project_data（撤销/重做/编辑），views 必须用新数据重建。
@@ -805,6 +888,8 @@ func _on_step_pressed() -> void:
 	if not done:
 		_apply_selection_for_event(_event_from_result(result))
 		_sync_view_events(maxf(_last_applied_time(), 0.0))
+	# toast 在视图 tick 之后显示，避免被同一帧的过期判定立即隐藏。
+	_handle_board_full(result)
 	if ok:
 		_clear_error()
 	elif done:
@@ -812,6 +897,7 @@ func _on_step_pressed() -> void:
 	else:
 		_set_error(_step_failure_text(result))
 	_update_time_label()
+	_maybe_show_hint(maxf(_last_applied_time(), 0.0))
 
 
 func _on_reset_pressed() -> void:
@@ -862,6 +948,10 @@ func _on_save_pressed() -> void:
 		_set_error(_model_error_text("草稿保存失败"))
 		return
 	_clear_error()
+	if _autosave != null:
+		_bool_result(_autosave.clear())
+	_dirty = false
+	_autosave_elapsed = 0.0
 	_set_status("草稿已保存 %s" % DRAFT_URL)
 
 
@@ -953,10 +1043,255 @@ func _on_delete_pressed() -> void:
 
 
 # ---------------------------------------------------------------------------
+# 自动保存 / 异常恢复
+# ---------------------------------------------------------------------------
+
+func _setup_autosave() -> void:
+	_autosave = AutosaveStore.new()
+	_autosave.setup()
+
+
+func _check_autosave_recovery() -> void:
+	if _autosave == null:
+		return
+	if not bool(_autosave.has_draft()):
+		return
+	var draft: Dictionary = _autosave.load_draft()
+	if draft.is_empty():
+		return
+	var source := _string_field(draft, "source", PROJECT_PATH)
+	var saved_text := _format_draft_time(draft.get("saved_at"))
+	var text := "检测到上次会话的自动保存草稿。"
+	if not saved_text.is_empty():
+		text += "\n草稿时间: %s" % saved_text
+	if not source.is_empty():
+		text += "\n来源: %s" % source
+	text += "\n\n恢复草稿会覆盖当前打开的项目内容。"
+	_recovery_dialog = ConfirmationDialog.new()
+	_recovery_dialog.title = "恢复草稿"
+	_recovery_dialog.dialog_text = text
+	_recovery_dialog.ok_button_text = "恢复草稿"
+	_recovery_dialog.cancel_button_text = "丢弃"
+	_apply_dialog_theme(_recovery_dialog)
+	_recovery_dialog.confirmed.connect(_on_recovery_confirmed.bind(draft))
+	_recovery_dialog.canceled.connect(_on_recovery_canceled)
+	add_child(_recovery_dialog)
+	_recovery_dialog.popup_centered()
+
+
+func _on_recovery_confirmed(draft: Dictionary) -> void:
+	_free_recovery_dialog()
+	if _model == null:
+		return
+	var project: Dictionary = {}
+	var project_v: Variant = draft.get("project", {})
+	if typeof(project_v) == TYPE_DICTIONARY:
+		project = project_v
+	var source := _string_field(draft, "source")
+	if source.is_empty():
+		source = PROJECT_PATH
+	if not _bool_result(_model.load_from_dict(project, source)):
+		_set_error(_model_error_text("恢复自动保存草稿失败"))
+		return
+	_selected_index = -1
+	_after_model_change()
+	_set_status("已恢复自动保存草稿")
+
+
+func _on_recovery_canceled() -> void:
+	_free_recovery_dialog()
+	if _autosave != null:
+		_bool_result(_autosave.clear())
+	_set_status("已丢弃自动保存草稿")
+
+
+func _free_recovery_dialog() -> void:
+	if _recovery_dialog != null and is_instance_valid(_recovery_dialog):
+		_recovery_dialog.queue_free()
+	_recovery_dialog = null
+
+
+func _format_draft_time(value: Variant) -> String:
+	if typeof(value) == TYPE_STRING:
+		return String(value)
+	if typeof(value) == TYPE_INT or typeof(value) == TYPE_FLOAT:
+		var seconds := int(value)
+		if seconds > 0:
+			# saved_at 是 Unix 时间戳（UTC），按本机时区换算后展示。
+			return Time.get_datetime_string_from_unix_time(seconds + _local_utc_offset_seconds(), true)
+	return ""
+
+
+func _local_utc_offset_seconds() -> int:
+	# 对比“本地时间分量按 UTC 解释”与真实 UTC 时间戳求偏移，
+	# 避免 Time.get_time_zone_from_system().bias 在不同平台上符号不一致的问题。
+	var local_dict := Time.get_datetime_dict_from_system()
+	var local_as_unix := int(Time.get_unix_time_from_datetime_dict(local_dict))
+	return local_as_unix - int(Time.get_unix_time_from_system())
+
+
+func _save_autosave() -> void:
+	if _autosave == null or _model == null:
+		return
+	if bool(_autosave.save(_model.project_data, _model.source_path)):
+		_dirty = false
+		_autosave_elapsed = 0.0
+		_set_status("已自动保存 %s" % Time.get_time_string_from_system())
+	else:
+		# 失败也让计时重新开始，避免 _process 每帧重复写盘；错误保留在状态栏。
+		_autosave_elapsed = 0.0
+		_set_error("自动保存失败: " + String(_autosave.last_error))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST:
+		if _dirty:
+			_save_autosave()
+		var tree := get_tree()
+		if tree != null:
+			tree.quit()
+
+
+func _exit_tree() -> void:
+	if _dirty and _model != null:
+		_save_autosave()
+
+
+# ---------------------------------------------------------------------------
+# 校验结果（点选定位）
+# ---------------------------------------------------------------------------
+
+func _on_validate_pressed() -> void:
+	if _model == null:
+		return
+	var result: Dictionary = _model.validate()
+	_ensure_validation_dialog()
+	if _validation_list == null:
+		return
+	_validation_list.clear()
+	_validation_paths.clear()
+
+	var errors: Array = []
+	var warnings: Array = []
+	var errors_v: Variant = result.get("errors", [])
+	if typeof(errors_v) == TYPE_ARRAY:
+		errors = errors_v
+	var warnings_v: Variant = result.get("warnings", [])
+	if typeof(warnings_v) == TYPE_ARRAY:
+		warnings = warnings_v
+
+	_append_validation_entries(errors, "ERROR", ERROR_COLOR)
+	_append_validation_entries(warnings, "WARN", WARNING_COLOR)
+	if errors.is_empty():
+		var pass_index := _validation_list.add_item("校验通过")
+		_validation_list.set_item_custom_fg_color(pass_index, PASS_COLOR)
+		_validation_paths.append("")
+	_validation_dialog.popup_centered()
+
+
+func _ensure_validation_dialog() -> void:
+	if _validation_dialog != null and is_instance_valid(_validation_dialog):
+		return
+	_validation_dialog = AcceptDialog.new()
+	_validation_dialog.title = "校验结果"
+	_apply_dialog_theme(_validation_dialog)
+	add_child(_validation_dialog)
+
+	# AcceptDialog 会把直接 Control 子节点铺满内容区；ScrollContainer/ItemList 保证 ~900x600。
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(900.0, 600.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_validation_dialog.add_child(scroll)
+
+	_validation_list = ItemList.new()
+	_validation_list.custom_minimum_size = Vector2(880.0, 580.0)
+	_validation_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_validation_list.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_validation_list.add_theme_font_size_override("font_size", 18)
+	_validation_list.item_selected.connect(_on_validation_item_selected)
+	_validation_list.item_activated.connect(_on_validation_item_activated)
+	scroll.add_child(_validation_list)
+
+
+func _append_validation_entries(entries: Array, prefix: String, color: Color) -> void:
+	if _validation_list == null:
+		return
+	for entry_v in entries:
+		var path := ""
+		var message := ""
+		if typeof(entry_v) == TYPE_DICTIONARY:
+			var entry: Dictionary = entry_v
+			path = _string_field(entry, "path")
+			message = _string_field(entry, "message")
+		else:
+			message = str(entry_v)
+		if path.is_empty() and message.is_empty():
+			continue
+		var text := "%s %s: %s" % [prefix, path, message]
+		if path.is_empty():
+			text = "%s %s" % [prefix, message]
+		var item_index := _validation_list.add_item(text)
+		_validation_list.set_item_custom_fg_color(item_index, color)
+		_validation_paths.append(path)
+
+
+func _on_validation_item_selected(index: int) -> void:
+	_locate_validation_item(index)
+
+
+func _on_validation_item_activated(index: int) -> void:
+	_locate_validation_item(index)
+
+
+func _locate_validation_item(index: int) -> void:
+	if index < 0 or index >= _validation_paths.size():
+		return
+	var path := String(_validation_paths[index])
+	if path.is_empty():
+		return
+	var event_index := _event_index_from_path(path)
+	if event_index >= 0 and event_index < _event_count():
+		_selected_index = event_index
+		_rebuild_event_list()
+		_populate_properties()
+		var event_id := ""
+		if _model != null:
+			var event_v: Variant = _model.get_event(event_index)
+			if typeof(event_v) == TYPE_DICTIONARY:
+				event_id = _string_field(event_v, "id")
+		if event_id.is_empty():
+			event_id = str(event_index)
+		_set_status("已定位到事件 " + event_id)
+	else:
+		_set_status("定位: " + path)
+
+
+func _event_index_from_path(path: String) -> int:
+	var regex := RegEx.new()
+	if regex.compile("^timeline\\[(\\d+)\\]") != OK:
+		return -1
+	var match_result := regex.search(path)
+	if match_result == null:
+		return -1
+	return int(match_result.get_string(1))
+
+
+func _close_validation_dialog() -> void:
+	if _validation_dialog != null and is_instance_valid(_validation_dialog):
+		_validation_dialog.queue_free()
+	_validation_dialog = null
+	_validation_list = null
+	_validation_paths.clear()
+
+
+# ---------------------------------------------------------------------------
 # 播放 / 单步驱动
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	_autosave_elapsed += delta
+	if _dirty and _autosave_elapsed >= AUTOSAVE_INTERVAL:
+		_save_autosave()
 	if not _playing or _player == null:
 		return
 	_elapsed += delta
@@ -973,6 +1308,7 @@ func _process(delta: float) -> void:
 			_stop_playing()
 			_set_error("播放步进失败")
 			return
+		_handle_board_full(result)
 		if not bool(result.get("ok", false)):
 			_stop_playing()
 			if bool(result.get("done", false)):
@@ -992,6 +1328,7 @@ func _process(delta: float) -> void:
 			break
 	# view 事件按时间推进（每帧 tick 以驱动层内动画）。
 	_sync_view_events(_elapsed)
+	_maybe_show_hint(_elapsed)
 	if stepped:
 		_update_time_label()
 	if not _has_next():
@@ -1034,6 +1371,29 @@ func _capture_path_from_args() -> String:
 		if String(args[i]) == "--capture" and i + 1 < args.size():
 			return String(args[i + 1])
 	return ""
+
+
+## 读取 `-- <key> <value>` 形式的用户参数；缺失或没有值时返回 fallback。
+func _arg_value(key: String, fallback: String) -> String:
+	var args := OS.get_cmdline_user_args()
+	for i in range(args.size()):
+		if String(args[i]) == key and i + 1 < args.size():
+			return String(args[i + 1])
+	return fallback
+
+
+## --project 路径解析：res:// 与绝对路径原样；其它按 02_Game 工程根解析。
+func _resolve_project_path(path: String) -> String:
+	if path.begins_with("res://") or path.is_absolute_path():
+		return path
+	return ProjectSettings.globalize_path("res://").path_join(path).simplify_path()
+
+
+func _has_cmdline_arg(flag: String) -> bool:
+	for value in OS.get_cmdline_user_args():
+		if String(value) == flag:
+			return true
+	return false
 
 
 func _run_capture(path: String) -> void:
@@ -1177,6 +1537,93 @@ func _set_board_selection(selection: Array) -> void:
 	if not _board_view.has_method("set_selection"):
 		return
 	_board_view.set_selection(selection)
+	if selection.is_empty():
+		_clear_selection_hint()
+	else:
+		_track_selection(selection)
+
+
+# ---------------------------------------------------------------------------
+# 选中停留提示（与 game/main.gd 同规则：停留 HINT_DELAY 秒后提示同 entity+level）
+# ---------------------------------------------------------------------------
+
+func _maybe_show_hint(now: float) -> void:
+	if _board_view == null or _selection_slots.is_empty() or _hint_shown:
+		return
+	if _selection_at < 0.0 or now - _selection_at < HINT_DELAY:
+		return
+	var origin := _slot_xy(_selection_slots[0])
+	var slots := _matching_entity_slots(_player_current_snapshot(), origin)
+	if slots.size() >= 2:
+		if _board_view.has_method("set_hint_slots"):
+			_board_view.set_hint_slots(slots)
+		_hint_shown = true
+
+
+## 新选中/切换选中：记录停留起点并清掉旧提示。
+func _track_selection(slots: Array) -> void:
+	_selection_slots = slots.duplicate()
+	_selection_at = maxf(_last_applied_time(), 0.0)
+	_hint_shown = false
+	if _board_view != null and _board_view.has_method("clear_hint"):
+		_board_view.clear_hint()
+
+
+## 选中清空（deliver/order_claim/level_next/重置/视图重建）：清状态并撤掉提示。
+func _clear_selection_hint() -> void:
+	_selection_slots = []
+	_selection_at = -1.0
+	_hint_shown = false
+	if _board_view != null and _board_view.has_method("clear_hint"):
+		_board_view.clear_hint()
+
+
+## 与 origin 同 entity+level 的全部格子坐标（含 origin 自身）。
+func _matching_entity_slots(snapshot: Dictionary, origin: Vector2i) -> Array:
+	var slots: Array = []
+	var board_v: Variant = snapshot.get("board")
+	if typeof(board_v) != TYPE_DICTIONARY:
+		return slots
+	var cells_v: Variant = (board_v as Dictionary).get("cells")
+	if typeof(cells_v) != TYPE_ARRAY:
+		return slots
+	var cells: Array = cells_v
+	var entity := ""
+	var level := 0
+	var found := false
+	for cell_v in cells:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var cell: Dictionary = cell_v
+		if _int_field(cell, "x") == origin.x and _int_field(cell, "y") == origin.y:
+			entity = _string_field(cell, "entity")
+			level = _int_field(cell, "level")
+			found = true
+			break
+	if not found or entity.is_empty():
+		return slots
+	for cell_v in cells:
+		if typeof(cell_v) != TYPE_DICTIONARY:
+			continue
+		var match_cell: Dictionary = cell_v
+		if _string_field(match_cell, "entity") != entity:
+			continue
+		if _int_field(match_cell, "level") != level:
+			continue
+		slots.append(Vector2i(_int_field(match_cell, "x"), _int_field(match_cell, "y")))
+	return slots
+
+
+## 棋盘已满：显式 board_full 事件，或事件失败且消息为“棋盘已满”。
+func _handle_board_full(result: Dictionary) -> void:
+	if _view_layer == null or not _view_layer.has_method("show_board_full"):
+		return
+	var event := _event_from_result(result)
+	var event_type := _string_field(event, "type")
+	var ok := bool(result.get("ok", false))
+	var message := _string_field(result, "message")
+	if event_type == "board_full" or (not ok and message.contains("棋盘已满")):
+		_view_layer.show_board_full()
 
 
 func _step_failure_text(result: Dictionary) -> String:
@@ -1287,6 +1734,16 @@ static func _xy_or_empty(value: Variant) -> Array:
 	if not _is_int_like(arr[0]) or not _is_int_like(arr[1]):
 		return []
 	return [int(arr[0]), int(arr[1])]
+
+
+static func _slot_xy(value: Variant) -> Vector2i:
+	if typeof(value) == TYPE_VECTOR2I:
+		var v: Vector2i = value
+		return v
+	var arr := _xy_or_empty(value)
+	if arr.size() != 2:
+		return Vector2i(-1, -1)
+	return Vector2i(int(arr[0]), int(arr[1]))
 
 
 static func _is_int_like(value: Variant) -> bool:

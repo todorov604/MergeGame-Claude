@@ -3,6 +3,7 @@ extends RefCounted
 ## 第 5 步验收：TimelineModel（加载 / 编辑 / 校验 / 撤销重做 / 草稿保存）。
 
 const TimelineModel = preload("res://editor/timeline_model.gd")
+const ProjectDoc = preload("res://core/project_doc.gd")
 
 const SAMPLE_PATH := "res://data/projects/sample_30s.json"
 const DRAFT_PATH := "user://test_timeline_draft.json"
@@ -18,6 +19,8 @@ func run(r) -> void:
 	_test_move_event(r, model)
 	_test_save_draft(r, model)
 	_test_next_event_id(r)
+	_test_load_from_dict(r)
+	_test_load_from_dict_edit_undo(r)
 
 
 # ---------------------------------------------------------------- load / validate
@@ -153,6 +156,45 @@ func _test_next_event_id(r) -> void:
 	r.eq(model.event_count(), 10, "删除 e5 后事件数应为 10")
 	r.eq(model.next_event_id(), "e12", "删除 e5 后 next_event_id 仍应为 e12")
 	r.eq(str(model.get_event(9).get("id", "")), "e11", "删除后末尾事件应为 e11")
+
+
+# ---------------------------------------------------------------- load_from_dict
+
+## 第 8 步：从内存字典恢复（自动保存草稿恢复入口）。
+func _test_load_from_dict(r) -> void:
+	var doc := ProjectDoc.new()
+	r.check(doc.load_file(SAMPLE_PATH), "load_from_dict 测试应能加载样例: " + doc.parse_error)
+	var data: Dictionary = doc.data.duplicate(true)
+
+	var model = TimelineModel.new()
+	r.check(model.load_from_dict(data, "user://draft.json"), "load_from_dict 应成功")
+	r.eq(model.event_count(), 11, "load_from_dict 后事件数应为 11")
+	r.eq(model.source_path, "user://draft.json", "load_from_dict 后 source_path 应为传入路径")
+	r.check(not model.can_undo(), "load_from_dict 后不应可撤销")
+	r.check(not model.can_redo(), "load_from_dict 后不应可重做")
+
+	var report: Dictionary = model.validate()
+	r.eq(_array_size(report.get("errors", [])), 0, "load_from_dict 后校验错误数应为 0")
+
+
+## load_from_dict 后的编辑应记入历史，undo 能回到草稿初始状态。
+func _test_load_from_dict_edit_undo(r) -> void:
+	var doc := ProjectDoc.new()
+	r.check(doc.load_file(SAMPLE_PATH), "load_from_dict 撤销测试应能加载样例: " + doc.parse_error)
+	var data: Dictionary = doc.data.duplicate(true)
+
+	var model = TimelineModel.new()
+	r.check(model.load_from_dict(data, "user://draft.json"), "草稿应有内存数据可恢复")
+	var edited: Dictionary = model.get_event(0).duplicate(true)
+	edited["duration"] = 9.0
+	r.check(model.update_event(0, edited), "load_from_dict 后 update_event 应成功: " + _errors_text(model.last_errors))
+	r.check(model.can_undo(), "load_from_dict 后的修改应可撤销")
+
+	r.check(model.undo(), "undo 应成功")
+	r.check(not model.can_undo(), "undo 回到草稿初始后不应再可撤销")
+	var reverted: Dictionary = model.get_event(0)
+	r.eq(str(reverted.get("id", "")), "e1", "undo 后 0 号事件仍应为 e1")
+	r.check(not is_equal_approx(float(reverted.get("duration", 0.0)), 9.0), "undo 后 duration 应恢复草稿初始值")
 
 
 # ---------------------------------------------------------------- helpers

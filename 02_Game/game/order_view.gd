@@ -20,6 +20,7 @@ var character_id := ""
 var order_state := ""
 var allow_placeholders := true
 var loader = null
+var theme_doc = null
 
 var _palette: Array[Color] = [
 	Color("#ff8a5c"),
@@ -43,9 +44,10 @@ var _claim_token: Control = null
 var _reward_labels: Array = []
 
 
-func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, allow_placeholders_flag := true) -> void:
+func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, allow_placeholders_flag := true, theme_arg = null) -> void:
 	project_data = project_data_arg
 	allow_placeholders = bool(allow_placeholders_flag)
+	theme_doc = theme_arg
 	_font_cache = null
 	_star_texture = null
 	_star_checked = false
@@ -524,6 +526,10 @@ func _spawn_popup(text: String, color: Color, start: Vector2) -> void:
 # ---------------------------------------------------------------------------
 
 func _star_texture_or_null() -> Texture2D:
+	if theme_doc != null:
+		var theme_texture_v: Variant = theme_doc.star_texture()
+		if theme_texture_v is Texture2D:
+			return theme_texture_v
 	if _star_checked:
 		return _star_texture
 	_star_checked = true
@@ -535,19 +541,33 @@ func _star_texture_or_null() -> Texture2D:
 	return _star_texture
 
 
+func _active_palette() -> Array:
+	if theme_doc != null:
+		var palette_v: Variant = theme_doc.palette
+		if typeof(palette_v) == TYPE_ARRAY and not (palette_v as Array).is_empty():
+			return palette_v as Array
+	return _palette
+
+
 func _entity_color(entity: String) -> Color:
 	if entity.is_empty():
 		return Color("#8fa3bf")
+	var palette := _active_palette()
 	# djb2 稳定哈希：同一 entity 跨运行得到同一颜色。
 	var hash_value := 5381
 	for i in range(entity.length()):
 		hash_value = (hash_value * 33 + entity.unicode_at(i)) % 2147483647
-	return _palette[hash_value % _palette.size()]
+	return palette[hash_value % palette.size()]
 
 
 func _ui_font() -> Font:
 	if _font_cache != null:
 		return _font_cache
+	if theme_doc != null:
+		var theme_font_v: Variant = theme_doc.ui_font()
+		if theme_font_v is Font:
+			_font_cache = theme_font_v
+			return _font_cache
 	if loader != null:
 		var zh: Dictionary = loader.load_font("font_zh")
 		var zh_font: Variant = zh.get("font")

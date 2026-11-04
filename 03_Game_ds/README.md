@@ -8,7 +8,7 @@ M0 §9 全 9 步交付：**manifest/schema 校验器**、**core 模拟 + 事件�
 ```bash
 G="/e/Program Files/Godot/Godot_v4.7.2.exe"   # git-bash(MSYS) 路径；Windows 原样路径见 00_design/START-HERE.md
 
-# 一键总验收（7 步：测试 / 校验 / 24 条反例 / 搬移 / 两张截图 / 出片确定性）
+# 一键总验收（7 步：测试 / 校验 / 25 条反例 / 搬移 / 两张截图 / 出片确定性）
 bash tools/accept.sh
 
 # 全量测试（自动发现 tests/t_*.gd）
@@ -50,7 +50,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 │  ├─ editor/      project_store / undo_stack / timeline_editor
 │  ├─ render/      movie_scene / render_plan / render_manifest
 │  └─ tools/       CLI、manifest 快照构建
-├─ tests/          15 个套件（自动发现）+ 24 条反例夹具
+├─ tests/          15 个套件（自动发现）+ 25 条反例夹具
 ├─ tools/          accept.sh / render.sh / framemd5_compare.sh / gen_fixtures.py / shot_*.gd
 └─ docs/           AUDIT-S1.md、REVIEW-CORE.md、PERF-BASELINE.md
 ```
@@ -82,7 +82,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | 生成器：点击产出、稀有直出订单物品、棋盘满提示 | ✅ | `t_sim`（rare 进池条件、`SIM_BOARD_FULL`） |
 | 选中提示：黄框 + 停留放大/靠近 | ✅ | `output/board_1080x1920.png`（黄括角 + 黄光 + 放大 8% 并向盘心偏移 7px） |
 | 时间轴：锚点、同刻排序、预览/单步/渲染一致 | ✅ | `t_event_model` 排序用例 + 编辑器单步 + 出片共用求值器 |
-| 资源守卫：REFERENCE_ONLY 无法出片；PLACEHOLDER 需显式 | ✅ | 24 条反例逐条命中 + `t_guard` |
+| 资源守卫：REFERENCE_ONLY 无法出片；PLACEHOLDER 需显式 | ✅ | 25 条反例逐条命中 + `t_guard` |
 | 校验：缺图/越界/不可达/usage 违规在出片前阻断 | ✅ | `output/validation_report.json`、`accept.sh` 步骤 2–3 |
 | 两次出片 framemd5 一致 | ✅ | 全片 `10b138d4…4071`（1800 帧，A/B/第三次重跑三份一致，整条流水线 234s）；4s 短片 `d3b357db…ebfd`（240 帧，157 个唯一帧） |
 | 换 1 套主题 ≤10 分钟、不改代码 | ✅ | `--theme=themes/pet_shop` → `output/game_theme_pet_shop.png`，零代码改动 |
@@ -97,7 +97,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 6. 编辑器属性面板不做格子坐标编辑（只做错误定位）；折叠状态不持久化。
 7. 并发跑出片会共用临时目录，需用 `RENDER_TMP_DIR=<dir>` 隔离（`accept.sh` 已隔离）。
 8. 音频仍为 `TODO`（M0 不做）；帧级确定性只在本机验证，未做跨机验证。
-9. **merge 限定 chip、`directOrder` 已实现**：非 chip 合并返回 `SIM_NOT_MERGEABLE`；`directOrder=true`（缺省）稀有产出只在该 `entity+level` 被未完成订单需要时进池，`false` 为无条件大奖。见 `docs/REVIEW-CORE.md` §4。
+9. **merge 限定 chip、`directOrder` 已实现（均已写入 M0 v0.20 §2.1.9/§2.1.10）**：非 chip 合并返回 `SIM_NOT_MERGEABLE`；`directOrder=true`（缺省）稀有产出只在该 `entity+level` 被未完成订单需要时进池，`false` 为无条件大奖。见 `docs/REVIEW-CORE.md` §4。
 
 ## 7. 证据文件
 

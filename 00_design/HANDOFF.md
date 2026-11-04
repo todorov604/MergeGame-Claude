@@ -140,14 +140,14 @@
 
 ## 4. 待用户拍板的两个设计问题
 
-> 建议在开 M1 前写进 `00_design/M0-冻结规格.md`，升 v0.20；两边按同一版继续。
+> **已写入 `00_design/M0-冻结规格.md` v0.20（2026-11-04）**；两边按同一版继续。
 
-1. **merge 限定 kind** — **已裁决（2026-11-04）：只允许 `chip`**
+1. **merge 限定 kind** — **已裁决（2026-11-04），已入规格 v0.20 §2.1.9：只允许 `chip`**
    - 实现：`03_Game_ds` `_do_merge()` 返回 `SIM_NOT_MERGEABLE`（`special` / `generator` / `character` 一律不合），回归 `tests/t_sim_defects.gd::_test_merge_kind_gate`。
    - 理由：`generator_state` 按 entity id 共享电量，合成出的 Lv2 生成器会与 Lv1 共用同一电荷池，语义无法自圆；`special` 没有等级对应的美术与玩法。
    - 原建议「chip + generator 可合」作废；如坚持生成器可合，需先把电量改成 per-cell 并补 Lv2 生成器表现。02_Game 目前仍是任意 entity 可合，待对齐。
 
-2. **`directOrder` 语义** — **已裁决并实现（2026-11-04）**
+2. **`directOrder` 语义** — **已裁决并实现（2026-11-04），已入规格 v0.20 §2.1.10**
    - `true`（**缺省值**）= 只有未完成订单缺该 `entity+level` 时才进稀有池；`false` = 无条件稀有掉落。
    - 实现：`03_Game_ds` `sim.tap_pool()`；回归 `tests/t_sim_defects.gd::_test_direct_order_semantics`。缺省取 `true`，避免旧数据静默获得无条件稀有。
    - 02_Game 现状：`directOrder` 被读入但**未参与筛选**，`rareOutputs` 无条件进池，待对齐。

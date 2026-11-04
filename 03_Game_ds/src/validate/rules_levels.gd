@@ -124,6 +124,9 @@ static func _check_generators(ctx) -> void:
 				var w = item.get("weight", null)
 				if not Ctx.is_num(w) or float(w) <= 0.0:
 					ctx.err("GEN_WEIGHT", ipath + ".weight", "weight must be a number > 0")
+				if ln == "rareOutputs" and item.has("directOrder"):
+					if typeof(item["directOrder"]) != TYPE_BOOL:
+						ctx.err("GEN_DIRECT_ORDER_TYPE", ipath + ".directOrder", "directOrder must be a boolean (M0 v0.20 §2.1.10)")
 				if ln == "rareOutputs":
 					var lvl = item.get("level", null)
 					if not Ctx.is_int_val(lvl):

@@ -11,7 +11,7 @@
 | `game_1080x1920.png` | 主游戏页 t=6.2s：HUD(8 字段) / 订单卡完成绿药丸 / 落点与消耗后的棋盘 | `2d8ae7d1242888a2725441c9c38fe041ac2d2d2831092563abb5f9a1fcdddcdc` |
 | `orders_panel.png` | 订单卡特写（角色头像 + mission 计数 + 奖励 + DONE） | `c30dd08d843cea6e46e2d83540eb80f6ffa0632294d598407f41af9d486b8eef` |
 | `game_theme_pet_shop.png` | 同一帧换主题：`--theme=themes/pet_shop`，**零代码改动** | `be574ed0a51237a0e26aa40393b9f335cf5ad53ea163c0ac1f1a71aa51e886fa` |
-| `accept.log` | `bash tools/accept.sh` 的真实输出：7 步 12 项 **ALL CHECKS PASS** | `14178a6ab89fb0d72ef86c7594561758dcaeb09838678d77a142f2bf45e9cc13` |
+| `accept.log` | `bash tools/accept.sh` 的真实输出：7 步 12 项 **ALL CHECKS PASS** | `a88b463853b41aded63cf87f64cc52478be489d72547e7187abd399922312692` |
 
 > 附注：三张 PNG 在两次独立 `accept.sh` 运行中 **sha256 完全相同**（`c190a3c3…` / `2d8ae7d1…` / `be574ed0…`），截图本身也是确定性的。
 
@@ -31,7 +31,7 @@ bash tools/accept.sh                              # 重新生成全部证据（�
 
 ```
 [tests] TOTAL checks=944 failures=0   RESULT PASS
-[PASS] all broken fixtures rejected with the expected code      (24/24)
+[PASS] all broken fixtures rejected with the expected code      (25/25)
 [PASS] relocated copy ... passes the same suite
 [PASS] two takes are frame-identical (framemd5)
 [PASS] compared range actually animates (157 unique frames)

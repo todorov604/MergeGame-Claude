@@ -32,12 +32,12 @@
 
 ### R1 merge 不限定 kind（与我的初版同款）— 中
 `core/sim/merge_engine.gd`：只判 `entity` 相等、`level` 相等、`level < max_level`，从不看 `kind`。
-→ 两个 `SafeBox_X`（special）或两个生成器可以被合成升级。本 lane 已按用户裁决改为**仅 `kind=chip`**（`SIM_NOT_MERGEABLE`），建议对方对齐。
+→ 两个 `SafeBox_X`（special）或两个生成器可以被合成升级。本 lane 已按用户裁决改为**仅 `kind=chip`**（`SIM_NOT_MERGEABLE`），并写入 `M0-冻结规格.md` v0.20 §2.1.9；建议对方对齐。
 
 ### R2 `directOrder` 被记录但未参与筛选 — 中
 `core/sim/generator_engine.gd:130` 把 `directOrder` 读进 `table` 条目，但**没有用它过滤**：
 `rareOutputs` 全部无条件进入权重表。这与我修的"稀有产出只在订单需要时进池"相反——"直出订单物品"会变成无条件掉落。
-本 lane 的裁决：`directOrder=true`（缺省）→ 仅当未完成订单缺该 `entity+level` 时进池；`false` → 无条件。
+本 lane 的裁决（已写入 M0 v0.20 §2.1.10）：`directOrder=true`（缺省）→ 仅当未完成订单缺该 `entity+level` 时进池；`false` → 无条件。
 
 ### R3 可搬移性 / 导入缓存依赖 — 中
 - `tools/export_info.gd:17`、`tools/sync_assets.gd:25` 用 `res:// + "/../00_design/resource_manifest.json"`；项目单独移走即失效（实测 21 项失败）。

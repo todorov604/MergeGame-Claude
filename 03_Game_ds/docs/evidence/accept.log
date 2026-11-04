@@ -17,8 +17,8 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [suite] t_sim_defects.gd checks=48 failures=0
 [suite] t_theme.gd checks=34 failures=0
 [suite] t_undo.gd checks=58 failures=0
-[suite] t_validator.gd checks=74 failures=0
-[tests] TOTAL checks=951 failures=0 elapsed=1094ms
+[suite] t_validator.gd checks=76 failures=0
+[tests] TOTAL checks=953 failures=0 elapsed=1074ms
 [tests] RESULT PASS
 [PASS] test suite (rc=0)
 [PASS] no engine-level script errors
@@ -42,6 +42,7 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 ===== 3/7 broken fixtures hit their own rule codes =====
   ok   bad_anchor_cycle               -> EV_ANCHOR_CYCLE
   ok   bad_anchor_missing             -> EV_ANCHOR_MISSING
+  ok   bad_direct_order_type          -> GEN_DIRECT_ORDER_TYPE
   ok   bad_dup_event_id               -> EV_DUP_ID
   ok   bad_generator_kind             -> REF_KIND_MISMATCH
   ok   bad_generator_nonbehavior      -> GEN_NON_BEHAVIOR_FIELD
@@ -70,10 +71,10 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [suite] t_sim_defects.gd checks=48 failures=0
 [suite] t_theme.gd checks=34 failures=0
 [suite] t_undo.gd checks=58 failures=0
-[suite] t_validator.gd checks=74 failures=0
-[tests] TOTAL checks=951 failures=0 elapsed=1938ms
+[suite] t_validator.gd checks=76 failures=0
+[tests] TOTAL checks=953 failures=0 elapsed=1456ms
 [tests] RESULT PASS
-[PASS] relocated copy at /tmp/tmp.nlySQt7OvB passes the same suite
+[PASS] relocated copy at /tmp/tmp.vGcRCh4nZJ passes the same suite
 
 ===== 5/7 static board screenshot (real window) =====
 [shot] saved 1080x1920 source=subviewport bytes=80606
@@ -98,7 +99,7 @@ Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
 [md5] same=YES frames=240 digest=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
 [md5] a=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
 [md5] b=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
-[render] ok=1 frames=240 fps=60 size=1080x1920 out=/e/MergeGame-Claude/03_Game_ds/output/accept_render.mp4 mp4_bytes=100401 md5=[md5] same=YES frames=240 digest=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd elapsed=37s
+[render] ok=1 frames=240 fps=60 size=1080x1920 out=/e/MergeGame-Claude/03_Game_ds/output/accept_render.mp4 mp4_bytes=100401 md5=[md5] same=YES frames=240 digest=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd elapsed=34s
 [PASS] two takes are frame-identical (framemd5)
 [PASS] compared range actually animates (157 unique frames)
 [PASS] manifest describes this film (frames=240, ok=true)

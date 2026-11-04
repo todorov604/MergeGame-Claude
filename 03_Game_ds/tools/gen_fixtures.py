@@ -131,6 +131,12 @@ def m_generator_nonbehavior(p):
     p["generators"]["G"]["entity"] = "A"
 
 
+def m_direct_order_type(p):
+    p["generators"]["G"]["rareOutputs"] = [
+        {"entity": "A", "level": 2, "weight": 1, "directOrder": "yes"}
+    ]
+
+
 def m_wait(p):
     p["timeline"].append({"id": "e9", "channel": "sim", "type": "wait", "at": 6.0, "payload": {}})
 
@@ -198,6 +204,7 @@ BROKEN_CASES = {
     "bad_slot_oob.json": (m_slot_oob, "SLOT_OOB", False, True),
     "bad_slot_chip_key.json": (m_slot_chip_key, "SLOT_CHIP_KEY_LEGACY", False, True),
     "bad_generator_nonbehavior.json": (m_generator_nonbehavior, "GEN_NON_BEHAVIOR_FIELD", False, True),
+    "bad_direct_order_type.json": (m_direct_order_type, "GEN_DIRECT_ORDER_TYPE", False, True),
     "bad_wait.json": (m_wait, "EV_WAIT_FORBIDDEN", False, True),
     "bad_anchor_missing.json": (m_anchor_missing, "EV_ANCHOR_MISSING", False, True),
     "bad_anchor_cycle.json": (m_anchor_cycle, "EV_ANCHOR_CYCLE", False, True),

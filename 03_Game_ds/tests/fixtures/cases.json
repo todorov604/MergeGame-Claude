@@ -80,6 +80,12 @@
       "allow_placeholders": true
     },
     {
+      "file": "res://tests/fixtures/broken/bad_direct_order_type.json",
+      "code": "GEN_DIRECT_ORDER_TYPE",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
       "file": "res://tests/fixtures/broken/bad_wait.json",
       "code": "EV_WAIT_FORBIDDEN",
       "strict": false,

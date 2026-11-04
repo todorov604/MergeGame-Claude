@@ -80,7 +80,7 @@ godot --path 02_Game res://editor/timeline_editor.tscn -- --project res://tests/
 - ✅ 顶栏 HUD：level / energy（mm:ss 倒计时）/ coin / star / gem / exp。
 - ✅ 生成器棋盘已满 Toast（`board_full` 事件或满盘 tap 触发，1.5s）。
 - ✅ 选中停留 3s 后，同 entity+level 的 chip 放大 1.08 并向选中格靠近 6px；时间轴 `hint` 事件同样生效。
-- ✅ 订单可达性校验：初始棋盘 + 生成器 charges 推导，不可达订单在出片前阻断。
+- ✅ 订单可达性校验：初始棋盘 + 生成器 charges 推导，不可达订单在出片前阻断（保守近似，不保证完备；见「M0 已知限制」P2-3）。
 - ⏳ 音频为 TODO（M0 不出音轨）。
 
 ## 当前边界
@@ -88,3 +88,24 @@ godot --path 02_Game res://editor/timeline_editor.tscn -- --project res://tests/
 - 音频为 TODO，出片无音轨。
 - 芯片/角色/棋盘仍为自绘占位；主题 `chip_icons` 映射待有可用的非 REFERENCE_ONLY 芯片素材。
 - Godot 4.7.2 Movie Maker 的退出摘要偶发少报帧数；`render.sh` 以每次独立帧目录的 PNG 文件序列为准（数量 + 首末帧编号）。
+
+## M0 已知限制（收口登记）
+
+以下为 M0 修复复核（`10_report/CC02/M0修复复核-1104.md`）确认、M0 阶段不修、列入 M1 待办的 P2 级残留。它们**不阻塞 M0 交付**。
+
+| 编号 | 残留 | 现状 / 兜底 |
+|---|---|---|
+| P2-3 | 订单可达性为保守近似 | 障碍格（lock 等）、生成器共享 charges、mission 重复需求三类会漏杀；validate PASS 不代表运行时一定可达。收口口径见 M0 规格 v0.21：保守近似、不保证完备。 |
+| P2-4 | 门禁口径不一 | preview / 单步 / simulate 传 null manifest；export_info 不校验 manifest / assets 记录。 |
+| P2-5 | `core/resource_guard.gd` 未接入运行时 | 死代码，且 fail-open；运行时实际走 `game/asset_loader.gd`。 |
+| P2-6 | 快照不含生成器 charges / next_time 与 RNG | 同 seed 不同 charges 可得到同 hash。 |
+| P2-9 | audio 通道恒拒 | `AUDIO_TYPES := []`，audio / bgm 在 evaluate / validate / export_info / simulate 四道门禁均判「未注册的事件类型」；M0 无音轨。 |
+| B1 | `SIM_NOT_MERGEABLE` 只是 message 前缀 | 事件无结构化 code。 |
+| B2 | validator 不校验 merge 命令语义 | `kind=chip`、`level+1 ≤ min(10, maxLevel)` 未前置校验。 |
+| D1 | `render.sh` 只认字面 `SCRIPT ERROR` | 不认运行期 `ERROR:`（push_error）。 |
+| C1 | `.uid` 跟踪不一致 | 10 个已跟踪与 `*.uid` 忽略并存；`*.import` 的 CRLF 噪声取决于客户端 `core.autocrlf`，仓库无 `.gitattributes`。 |
+| E1 | validator 可达性对 rareOutputs 无条件计 charges | 与运行时 directOrder 门控分叉，只会加剧 P2-3 漏杀。 |
+
+证据与最小复现见 `10_report/CC02/M0修复复核-1104.md`（§3.7–§3.14、§4）。M1 修复时逐项补回归。
+
+**M0 快照说明**：`data/manifest_index.json` 为 M0 快照（74 条：REFERENCE_ONLY 47 / PLACEHOLDER 20 / PRODUCTION 2 / TODO 5）；`00_design/resource_manifest.json` 已于 2026-11-04 收口时将 01_icon 素材转为 PRODUCTION（180 条），本工程快照暂不同步，M1 主题接入时再用 `tools/sync_assets.gd` 同步重生成。

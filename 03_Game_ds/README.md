@@ -97,7 +97,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 6. 编辑器属性面板不做格子坐标编辑（只做错误定位）；折叠状态不持久化。
 7. 并发跑出片会共用临时目录，需用 `RENDER_TMP_DIR=<dir>` 隔离（`accept.sh` 已隔离）。
 8. 音频仍为 `TODO`（M0 不做）；帧级确定性只在本机验证，未做跨机验证。
-9. **merge 限定 chip**（已裁决）：`chip` 之外（`special`/`generator`）返回 `SIM_NOT_MERGEABLE`；`directOrder: false` 的语义仍待定，见 `docs/REVIEW-CORE.md` §4。
+9. **merge 限定 chip、`directOrder` 已实现**：非 chip 合并返回 `SIM_NOT_MERGEABLE`；`directOrder=true`（缺省）稀有产出只在该 `entity+level` 被未完成订单需要时进池，`false` 为无条件大奖。见 `docs/REVIEW-CORE.md` §4。
 
 ## 7. 证据文件
 
@@ -115,5 +115,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | `docs/AUDIT-S1.md` | 资源/可搬移/schema 独立审计 + 验收追记 |
 | `docs/REVIEW-CORE.md` | core 层独立复审：7 项缺陷、修法、回归测试 |
 | `docs/REVIEW-RENDER.md` | 出片/守卫独立复审：7 项缺陷、修法、验证证据 |
+| `docs/REVIEW-02GAME.md` | 只读交叉审查 02_Game：422 checks 复现、3 项实质问题、3 处可借鉴 |
+| `docs/evidence/` | 冻结证据（成片 / 两张 1080×1920 截图 / 订单卡 / 换主题 / manifest / accept.log + sha256） |
 
 `output/` 与 `.godot/` 已 gitignore；本工程不产生 commit（由会话主人决定）。

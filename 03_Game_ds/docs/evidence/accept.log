@@ -1,0 +1,108 @@
+
+===== 1/7 headless test suite =====
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[tests] engine=4.7.2-stable (official) suites=15
+[suite] t_autosave.gd checks=56 failures=0
+[suite] t_board_view.gd checks=91 failures=0
+[suite] t_editor.gd checks=82 failures=0
+[suite] t_event_model.gd checks=23 failures=0
+[suite] t_guard.gd checks=26 failures=0
+[suite] t_manifest_index.gd checks=38 failures=0
+[suite] t_order_view.gd checks=85 failures=0
+[suite] t_relocatable.gd checks=20 failures=0
+[suite] t_render_plan.gd checks=73 failures=0
+[suite] t_schema_v2.gd checks=45 failures=0
+[suite] t_sim.gd checks=198 failures=0
+[suite] t_sim_defects.gd checks=48 failures=0
+[suite] t_theme.gd checks=34 failures=0
+[suite] t_undo.gd checks=58 failures=0
+[suite] t_validator.gd checks=74 failures=0
+[tests] TOTAL checks=951 failures=0 elapsed=1094ms
+[tests] RESULT PASS
+[PASS] test suite (rc=0)
+[PASS] no engine-level script errors
+
+===== 2/7 validate sample (strict, no placeholders) =====
+Godot Engine v4.7.2.stable.official.ed1daf0bf - https://godotengine.org
+
+[validate] res://data/sample_project.json -> ok=true errors=0 warnings=0
+[validate] levels=2 events=21 end=30.00s entities=6 asset_refs=0
+[guard] allow_placeholders=false refs_logged=0 index_ids=74
+[order] resolved=21 end=30.000s
+[order]   2.000  sim   tap              e01
+[order]   2.200  view  text             e03
+[order]   3.200  sim   merge            e02
+[order]   3.200  view  highlight        e04
+[order]   3.700  view  hint             e21
+[order]   3.800  view  select           e05
+[PASS] sample validates clean in strict mode
+[PASS] timeline ends at 30.00s
+
+===== 3/7 broken fixtures hit their own rule codes =====
+  ok   bad_anchor_cycle               -> EV_ANCHOR_CYCLE
+  ok   bad_anchor_missing             -> EV_ANCHOR_MISSING
+  ok   bad_dup_event_id               -> EV_DUP_ID
+  ok   bad_generator_kind             -> REF_KIND_MISMATCH
+  ok   bad_generator_nonbehavior      -> GEN_NON_BEHAVIOR_FIELD
+  ok   bad_generator_output           -> REF_UNDEFINED
+  ok   bad_hud_missing                -> HUD_MISSING_FIELD
+  ok   bad_locale_key                 -> LOCALE_KEY_MISSING
+  ok   bad_maxlevel                   -> ENTITY_MAX_LEVEL
+  ok   bad_meta_duration              -> META_DURATION_PRESENT
+  ok   bad_next                       -> LEVEL_NEXT_REMOVED
+  ok   bad_obstacle_type              -> OBSTACLE_TYPE
+  ok   bad_order_unreachable          -> ORDER_UNREACHABLE
+  ok   bad_placeholder_no_flag        -> ASSET_PLACEHOLDER_BLOCKED
+  ok   bad_ref_only                   -> ASSET_REFERENCE_ONLY
+  ok   bad_slot_chip_key              -> SLOT_CHIP_KEY_LEGACY
+  ok   bad_slot_dup                   -> SLOT_DUP
+  ok   bad_slot_entity                -> REF_UNDEFINED
+  ok   bad_slot_level                 -> SLOT_LEVEL_RANGE
+  ok   bad_slot_oob                   -> SLOT_OOB
+  ok   bad_theme_missing              -> THEME_MISSING
+  ok   bad_todo_audio                 -> ASSET_TODO
+  ok   bad_version                    -> SCHEMA_VERSION
+  ok   bad_wait                       -> EV_WAIT_FORBIDDEN
+[PASS] all broken fixtures rejected with the expected code
+
+===== 4/7 relocate the whole project and re-run the suite =====
+[suite] t_sim_defects.gd checks=48 failures=0
+[suite] t_theme.gd checks=34 failures=0
+[suite] t_undo.gd checks=58 failures=0
+[suite] t_validator.gd checks=74 failures=0
+[tests] TOTAL checks=951 failures=0 elapsed=1938ms
+[tests] RESULT PASS
+[PASS] relocated copy at /tmp/tmp.nlySQt7OvB passes the same suite
+
+===== 5/7 static board screenshot (real window) =====
+[shot] saved 1080x1920 source=subviewport bytes=80606
+[shot] board board=7x9 items=6 obstacles=4 selected=(3,3) complete=1
+[shot] sample pixels colors=92 #e6edf6 #e6edf6 #f7eb91 #a8bdd5
+[shot] exit=0
+[PASS] board screenshot is 1080x1920
+
+===== 6/7 game screen screenshot (HUD + orders + board, t=6.2) =====
+[shot] scene loaded window=1080x1061 viewport=1080x1920 out=res://output/game_1080x1920.png
+[game] hud level=2 energy=87 tick=120s/decrement coin=14 star=1 gem=50 exp=0
+[shot] saved frame 1080x1920 bytes=115150
+[shot] game level=1/level_1 events=21 clock=6.20 selected=(5, 5) sim_rejected=0 view=9
+[shot] saved orders 1080x250 bytes=21074
+[shot] panel cards=1 done=1 missions=1 order_1:char_01:CleanSet_Ca@2 1/1 done=1
+[shot] game level=1/level_1 events=21 clock=6.20 selected=(5, 5) sim_rejected=0 view=9
+[shot] exit=0
+[PASS] game screen screenshot is 1080x1920
+[PASS] order card reaches its done state at t=6.2
+
+===== 7/7 render determinism (240 frames = 4s, two takes, framemd5) =====
+[md5] same=YES frames=240 digest=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
+[md5] a=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
+[md5] b=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd
+[render] ok=1 frames=240 fps=60 size=1080x1920 out=/e/MergeGame-Claude/03_Game_ds/output/accept_render.mp4 mp4_bytes=100401 md5=[md5] same=YES frames=240 digest=d3b357dbf386d57332e332320179a15d3220e84ea69c1f8dadf8b38af2d2ebfd elapsed=37s
+[PASS] two takes are frame-identical (framemd5)
+[PASS] compared range actually animates (157 unique frames)
+[PASS] manifest describes this film (frames=240, ok=true)
+[PASS] REFERENCE_ONLY project is refused before recording
+
+================ ACCEPT SUMMARY ================
+ALL CHECKS PASS

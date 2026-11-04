@@ -46,7 +46,8 @@
 1. ~~**merge 是否只允许 chip**~~ → **已裁决并实施（选项 A）**：只有 `kind=chip` 能合并，其余返回 `SIM_NOT_MERGEABLE`。
    理由：`generator_state` 按 entity id 共享电量，合成出的 lv2 生成器会与 lv1 共用同一电荷池，语义无法自圆；`special` 没有等级对应的美术/玩法。
    实现：`src/core/sim.gd` `_do_merge()` 在 entity 相等之后加 kind 判定；回归：`tests/t_sim_defects.gd::_test_merge_kind_gate`（special/generator 被拒且 digest 不变，chip 仍可合到 lv2）。
-2. **`directOrder` 字段从未被读取**：现在 rare 产出只有在"当前关有未完成订单且缺该 entity+level"时才进池，与 `directOrder: true` 的语义重合；若 `false` 应当表示"不进池"，需补规则。
+2. ~~**`directOrder` 字段从未被读取**~~ → **已裁决并实施**：`directOrder=true`（**缺省值**，保持旧数据行为）时，rare 仅在未完成订单缺该 `entity+level` 时进池；`directOrder=false` 表示普通大奖，**无条件**进池。
+   实现：`src/core/sim.gd::tap_pool()`；回归：`tests/t_sim_defects.gd::_test_direct_order_semantics`（有订单/无订单/缺省/显式 false 四种输入）。
 
 ## 5. 复现命令
 

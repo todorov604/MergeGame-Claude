@@ -26,6 +26,7 @@ func run(t) -> void:
 	_test_d6_reset_keeps_load_failure(t)
 	_test_d7_clock_out_of_digest(t)
 	_test_merge_kind_gate(t)
+	_test_direct_order_semantics(t)
 
 
 # ------------------------------------------------------------------ fixtures
@@ -316,3 +317,47 @@ func _test_merge_kind_gate(t) -> void:
 		"payload": {"from": [1, 1], "to": [2, 1]}})
 	t.ok(bool(r3.get("ok", false)), "chip + chip still merges", String(r3.get("code", "")))
 	t.eq(int(s3.board.item(Vector2i(2, 1)).get("level", -1)), 2, "merged chip reached level 2")
+
+
+# ------------------------------------------- directOrder: true = order-gated
+
+func _test_direct_order_semantics(t) -> void:
+	# no order needs A@2 in this fixture: only the flag decides pool membership
+	var project := _project()
+	project["levels"][0]["orders"] = []
+	project["generators"] = {"G": {"charges": 5, "cooldown": 0,
+		"outputs": [{"entity": "A", "weight": 1}],
+		"rareOutputs": [{"entity": "A", "level": 2, "weight": 1, "directOrder": true}]}}
+	var gated = _sim(project)
+	t.eq(_pool_sizes(gated.tap_pool("G")), 1, "directOrder=true: rare stays out with no open order")
+	t.ok(not _pool_has_rare(gated.tap_pool("G")), "directOrder=true: pool has no rare entry")
+
+	project["generators"]["G"]["rareOutputs"][0]["directOrder"] = false
+	var jackpot = _sim(project)
+	t.eq(_pool_sizes(jackpot.tap_pool("G")), 2, "directOrder=false: rare joins the pool unconditionally")
+	t.ok(_pool_has_rare(jackpot.tap_pool("G")), "directOrder=false: pool carries the rare entry")
+
+	# missing flag keeps today's behaviour (order-gated), never an accidental jackpot
+	project["generators"]["G"]["rareOutputs"][0].erase("directOrder")
+	var legacy = _sim(project)
+	t.eq(_pool_sizes(legacy.tap_pool("G")), 1, "missing directOrder defaults to order-gated")
+	t.ok(not _pool_has_rare(legacy.tap_pool("G")), "missing directOrder does not create a jackpot")
+
+	# and the gate still opens when an unfinished order actually needs it
+	var wanted := _project()
+	wanted["generators"] = {"G": {"charges": 5, "cooldown": 0,
+		"outputs": [{"entity": "A", "weight": 1}],
+		"rareOutputs": [{"entity": "A", "level": 2, "weight": 1, "directOrder": true}]}}
+	var s2 = _sim(wanted)
+	t.ok(_pool_has_rare(s2.tap_pool("G")), "directOrder=true: rare enters once an order needs it")
+
+
+func _pool_sizes(pool: Array) -> int:
+	return pool.size()
+
+
+func _pool_has_rare(pool: Array) -> bool:
+	for item in pool:
+		if typeof(item) == TYPE_DICTIONARY and bool(item.get("rare", false)):
+			return true
+	return false

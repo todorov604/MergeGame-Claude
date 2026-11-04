@@ -1,0 +1,27 @@
+{
+  "allow_placeholders": false,
+  "assets": [
+    {
+      "allowed": true,
+      "id": "font_en",
+      "license": "Noto Sans OFL 1.1",
+      "usage": "PRODUCTION"
+    },
+    {
+      "allowed": true,
+      "id": "font_zh",
+      "license": "Noto Sans OFL 1.1",
+      "usage": "PRODUCTION"
+    }
+  ],
+  "blocked": [],
+  "end_time": 30.0,
+  "fps": 60,
+  "frames": 1800,
+  "mp4_sha256": "314419d3e55662040f998ed4f043fd7037ddff4b5b2dc6426c0cc271c11fa648",
+  "ok": true,
+  "out": "output/render.mp4",
+  "project": "res://data/sample_project.json",
+  "project_title": "Merge Ad 30s (M0 sample)",
+  "schema": 1
+}

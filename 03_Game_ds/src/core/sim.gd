@@ -261,7 +261,14 @@ func tap_pool(entity_id: String) -> Array:
 				continue
 			var re := String(r.get("entity", ""))
 			var rl := int(r.get("level", 1))
-			if not _rare_is_wanted(re, rl):
+			# directOrder decides WHY a rare is in the pool:
+			#   true  (default) - it exists to satisfy an open order: only eligible while
+			#                     an unfinished mission still lacks exactly this entity+level
+			#   false           - it is an ordinary jackpot: eligible unconditionally
+			# The default is `true` on purpose: data written before the flag existed keeps
+			# its current behaviour instead of silently gaining unconditional rares.
+			var direct_order := bool(r.get("directOrder", true))
+			if direct_order and not _rare_is_wanted(re, rl):
 				continue
 			pool.append({
 				"entity": re,

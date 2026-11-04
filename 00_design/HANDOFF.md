@@ -2,7 +2,7 @@
 
 > 用途：换工作区 / 开新会话时，先读这份，再读权威文档。
 > **这不是权威规格**：与 `M0-冻结规格.md` 冲突时，以 M0 规格为准。
-> 快照日期：2026-11-04。状态变化后请更新本文件或直接删掉。
+> 快照日期：2026-11-04（含 03_Game_ds 冻结推送后的状态）。状态变化后请更新本文件或直接删掉。
 
 ---
 
@@ -18,16 +18,20 @@
 
 ### 02_Game（Claude）
 
-- M0 已完成并提交，主分支最新提交 `2be09d3`（以 `git log` 为准）。
-- README 自述：366 checks、30s/1800 帧、framemd5 一致、M0 §7 验收全过。
+- M0 已完成并提交（`02_Game/` 自身最后一次提交 `2be09d3`；主分支此后还有 `f0e6f01`、`989d5a3` 两个 03_Game_ds 提交）。
+- 实测（2026-11-04，独立复核）：**422 checks**；README 写的 366 已过期。
+- **注意**：必须先 `--import`（或开一次编辑器）生成 `.godot` 导入缓存，否则干净克隆下 11 项资源加载失败；另依赖 `../00_design/resource_manifest.json` 相对路径，单独搬走工程会失败。
 - 已知边界：音频 TODO、芯片/角色/棋盘仍是自绘占位、主题 `chip_icons` 映射待有非 REFERENCE_ONLY 素材。
-- 下一步：M0 收口 + 交叉审查 03_Game_ds（见 §3 Prompt A）。
+- 下一步：按 `03_Game_ds/docs/REVIEW-02GAME.md` 的 R1–R3 对齐（merge 限定 kind、directOrder 参与筛选、去掉外部路径/缓存依赖）。
 
 ### 03_Game_ds（DeepSeek）
 
-- README 自述 M0 全 9 步、938 checks、`docs/REVIEW-CORE.md` 修了 7 个 core 缺陷、`docs/AUDIT-S1.md` 唯一 FAIL 是文档里的盘符路径。
-- **截至快照仍在收尾，且 `03_Game_ds/` 在 git 里是未跟踪目录**；不要直接当“已完成”去审别人。
-- 下一步：先收口 M0、冻结一个 commit（见 §3 Prompt B1），再做镜像审查（Prompt B2）。
+- M0 全 9 步已完成、已冻结并推送：`cf8db56`（工程）→ `f0e6f01`（HANDOFF）→ `989d5a3`（证据 + directOrder + 交叉审查）。`03_Game_ds/` 已是跟踪目录。
+- 实测（2026-11-04）：**951 checks / 15 套件 / 0 failures**；`bash tools/accept.sh` 7 步 12 项 ALL CHECKS PASS；全片 1800 帧三份 framemd5 一致（`10b138d4…`）；整目录 tar 到临时目录后同样全绿（不依赖 `../00_design`，也不依赖导入缓存）。
+- 复审记录：`docs/REVIEW-CORE.md`（core 7 项）、`docs/REVIEW-RENDER.md`（出片/守卫 7 项）、`docs/AUDIT-S1.md`（资源/可搬移/schema）、`docs/evidence/`（成片与截图 + sha256）。
+- 已反向审查 02_Game：`docs/REVIEW-02GAME.md`（只读，未改对方文件）。
+- 已知边界：音频 TODO；chip/角色程序化占位；主题不覆盖 chip 底色；帧级确定性仅本机验证。
+- 下一步：可选吸收 02_Game 的 `sync_assets` 流程；M1 按 §5。
 
 ---
 
@@ -35,7 +39,7 @@
 
 ```
 1. 各自跑真实验收：tests / validate / simulate / render verify
-2. 各自冻结一个 commit（03_Game_ds 现在还没跟踪，必须先 commit）
+2. 各自冻结一个 commit（03_Game_ds 已于 `cf8db56` 冻结，02_Game 于 `2be09d3` 冻结）
 3. 交叉审查：只读对方代码，不改对方目录、不抄代码
 4. 只修自己确认的 P0 缺陷，补回归测试
 5. 对比两份审查报告 → 用户拍板 merge/directOrder → 更新 M0 规格 → 开 M1
@@ -138,13 +142,15 @@
 
 > 建议在开 M1 前写进 `00_design/M0-冻结规格.md`，升 v0.20；两边按同一版继续。
 
-1. **merge 限定 kind**
-   - 建议：`chip` + `generator` 可合；`special` / `character` 不可合。
-   - 依据：实机截图里生成器 Lv6 明确可合成升级；保险箱/能量箱不应随便合。
+1. **merge 限定 kind** — **已裁决（2026-11-04）：只允许 `chip`**
+   - 实现：`03_Game_ds` `_do_merge()` 返回 `SIM_NOT_MERGEABLE`（`special` / `generator` / `character` 一律不合），回归 `tests/t_sim_defects.gd::_test_merge_kind_gate`。
+   - 理由：`generator_state` 按 entity id 共享电量，合成出的 Lv2 生成器会与 Lv1 共用同一电荷池，语义无法自圆；`special` 没有等级对应的美术与玩法。
+   - 原建议「chip + generator 可合」作废；如坚持生成器可合，需先把电量改成 per-cell 并补 Lv2 生成器表现。02_Game 目前仍是任意 entity 可合，待对齐。
 
-2. **`directOrder` 语义**
-   - 建议：`true` = 只有当前订单需要该 `entity+level` 时才进稀有池；`false` = 可无条件稀有掉落。
-   - 现状：03_Game_ds 的复审指出该字段当前未被读取，需要补规则。
+2. **`directOrder` 语义** — **已裁决并实现（2026-11-04）**
+   - `true`（**缺省值**）= 只有未完成订单缺该 `entity+level` 时才进稀有池；`false` = 无条件稀有掉落。
+   - 实现：`03_Game_ds` `sim.tap_pool()`；回归 `tests/t_sim_defects.gd::_test_direct_order_semantics`。缺省取 `true`，避免旧数据静默获得无条件稀有。
+   - 02_Game 现状：`directOrder` 被读入但**未参与筛选**，`rareOutputs` 无条件进池，待对齐。
 
 ---
 

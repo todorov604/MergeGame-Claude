@@ -101,15 +101,16 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 
 ### M0 已知限制（收口登记）
 
-以下为 M0 修复复核（`10_report/DS03/M0修复复核-1104.md`、`10_report/CC02/M0修复复核-1104.md`）确认、本轮不修的 P2 级残留：**不阻塞 M0 交付，列入 M1 待办**。
+以下为 M0 修复复核 `10_report/DS03/M0修复复核-1104.md` 确认、本轮不修的 P2 级残留：**不阻塞 M0 交付，列入 M1 待办**。同日 `10_report/CC02/M0修复复核-1104.md` 属 `02_Game` lane 的复核，无 03 未修项（其 P2-3 是同名不同项），不在本表登记。
 
 | 编号 | 级别 | 残留 | 现状 / 兜底 |
 |---|---|---|---|
-| P2-3 | P2 | 成片端未消费 `camera` / `character_leave` / `character_next`：`src/core/event_model.gd:19-21` 注册 12 类 view 事件，`src/render/movie_scene.gd:562` 的 `_draw_view_layer()` 只画其中 9 类 | 预览端有实现（`src/view/fly_anim.gd:16,144-149` 处理 `character_leave`/`character_next`）；`camera` 全工程无消费者；样片未使用这三类事件，不影响当前成片 |
+| P2-3 | P2 | 成片端未消费 `camera` / `character_leave` / `character_next`：`src/core/event_model.gd:19-21` 注册 12 类 view 事件，`src/render/movie_scene.gd:562` 的 `_draw_view_layer()` 只画其中 9 类 | `character_leave` / `character_next` 预览端有实现（`src/view/fly_anim.gd:16,144-149`），缺的只有成片端；`camera` **两端都没有消费者**（全 `src/` 仅注册 `event_model.gd:20` 与注释 `movie_scene.gd:327`）。样片用到 `camera`（`sample_project.json:168`，24.0s，`payload.zoom=1.0`），被忽略不产生画面差异；另两类样片未使用 |
 | NEW-1 | P2 | 订单**多件需求**与生成器**共享 `charges`** 未做联合容量扣减：`src/validate/rules_levels.gd:461-467` 逐条查 bucket 计数但**不扣减**，`:348-366` 把同一 `charges` 池对每个 `(chain, level)` 产出各计满额 → validator 假绿 | 出片阶段由 `tools/render.sh:180` 的 `TAKE_REFUSAL_RE`（`SCRIPT ERROR` / `[movie] rejected ` / `rejected=N>0`）拒绝该 take 兜底，不会交付坏片；只跑 strict 不出片的 CI 会漏过 |
-| NEW-2 | P2 | `outputs[].level` 超过实体 `maxLevel` 未校验：`src/validate/rules_levels.gd:283-290` 只要求落在 `1..M0_MAX_LEVEL` | sim 侧按 `src/core/sim.gd:330` `clampi(level, 1, _level_cap(entity))` 夹取，声明的产出等级可能实际不可达（订单随之不可达） |
+| NEW-2 | P2 | `outputs[].level` **无校验也无诊断**：`src/validate/rules_levels.gd:283-290` 对非整数、越界只静默 `continue`，不产生 error/warning；只有 `rareOutputs.level` 有 `GEN_RARE_LEVEL`（`:212-219`） | sim 侧 `src/core/sim.gd:330` 用 `clampi(level, 1, _level_cap(entity))` 夹取，声明的产出等级可能被夹到实体上限后实际不可达（订单随之不可达） |
 
 - 三项均属**校验器过松边界 / 表现层覆盖面**：不产生坏成片，也不改变本轮 25 条反例与 1134 checks 的结论；最小复现与修法建议见 `10_report/DS03/M0修复复核-1104.md`（P2-3 见 §3，NEW-1/NEW-2 见 §4）。
+- 同一报告里的文档漂移 **NEW-DOC-1**（`tests/` 套件数 15 → 19）已随 §2 目录树修正**关闭**，不再登记。
 - `data/manifest_index.json` 是 **M0 快照**（74 条：`REFERENCE_ONLY` 47 / `PLACEHOLDER` 20 / `PRODUCTION` 2 / `TODO` 5，`snapshot_date=2026-11-04`）；M1 接入新主题/新资源时按新 manifest 同步重建，不沿用本快照。
 
 ## 7. 证据文件

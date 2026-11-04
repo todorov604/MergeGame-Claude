@@ -11,4 +11,4 @@
 - Godot 4.7.2：`E:\Program Files\Godot\Godot_v4.7.2.exe`（4.7.2.stable.official）
 - FFmpeg / ffprobe 9.0：已在 PATH（winget Gyan.FFmpeg）
 
-当前版本：主文档 v0.19 / 资源 v7 / **M0 规格 v0.20（2026-11-04）**。
+当前版本：主文档 v0.19 / 资源 v7 / **M0 规格 v0.21（2026-11-04）**。

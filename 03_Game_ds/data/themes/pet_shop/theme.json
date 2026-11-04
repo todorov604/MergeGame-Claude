@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "pet-shop-wood",
+  "note": "Second theme, data only: warm wood palette, larger card/board radius and gap, thicker bottom band. No icon ids, so the strictest guard mode still passes. Select it with --theme=themes/pet_shop or by pointing project.theme at it.",
+  "palette": {
+    "page": "#F3E3C8",
+    "panel": "#B98B5E",
+    "panel_edge": "#9A6E45",
+    "cell": "#E4CBA8",
+    "card": "#FFF8EC",
+    "card_edge": "#D8B98E",
+    "ink": "#43301F",
+    "ink_dim": "#7A5F45",
+    "accent": "#C97B3C",
+    "done": "#7FBF5E",
+    "coin": "#E8A33D",
+    "star": "#F0B429",
+    "gem": "#9C6BD6",
+    "board_tint": "#FFD9A0",
+    "banner": "#FFF8EC",
+    "band": "#8D6A48"
+  },
+  "metrics": {
+    "card_radius": 30.0,
+    "card_gap": 18.0,
+    "hud_radius": 18.0,
+    "board_radius": 40.0,
+    "band_height": 210.0,
+    "tint_alpha": 0.10
+  },
+  "icons": {}
+}

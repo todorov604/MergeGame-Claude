@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "placeholder-demo",
+  "note": "演示 PLACEHOLDER 通道：必须带 allow_placeholders=true 才允许通过校验；渲染日志需标注“占位”。",
+  "icons": {
+    "board": {
+      "frame": "board_frame"
+    },
+    "hud": {
+      "star": "ui_icon_star"
+    },
+    "generator": {
+      "CleanBox_C": "box_treasure_y"
+    }
+  }
+}

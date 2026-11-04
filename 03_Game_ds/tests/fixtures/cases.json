@@ -1,0 +1,149 @@
+{
+  "note": "generated; consumed by tests/t_validator.gd",
+  "cases": [
+    {
+      "file": "res://tests/fixtures/broken/bad_version.json",
+      "code": "SCHEMA_VERSION",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_next.json",
+      "code": "LEVEL_NEXT_REMOVED",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_slot_entity.json",
+      "code": "REF_UNDEFINED",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_generator_output.json",
+      "code": "REF_UNDEFINED",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_generator_kind.json",
+      "code": "REF_KIND_MISMATCH",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_slot_level.json",
+      "code": "SLOT_LEVEL_RANGE",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_maxlevel.json",
+      "code": "ENTITY_MAX_LEVEL",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_order_unreachable.json",
+      "code": "ORDER_UNREACHABLE",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_obstacle_type.json",
+      "code": "OBSTACLE_TYPE",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_slot_dup.json",
+      "code": "SLOT_DUP",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_slot_oob.json",
+      "code": "SLOT_OOB",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_slot_chip_key.json",
+      "code": "SLOT_CHIP_KEY_LEGACY",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_generator_nonbehavior.json",
+      "code": "GEN_NON_BEHAVIOR_FIELD",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_wait.json",
+      "code": "EV_WAIT_FORBIDDEN",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_anchor_missing.json",
+      "code": "EV_ANCHOR_MISSING",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_anchor_cycle.json",
+      "code": "EV_ANCHOR_CYCLE",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_dup_event_id.json",
+      "code": "EV_DUP_ID",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_meta_duration.json",
+      "code": "META_DURATION_PRESENT",
+      "strict": true,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_hud_missing.json",
+      "code": "HUD_MISSING_FIELD",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_ref_only.json",
+      "code": "ASSET_REFERENCE_ONLY",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_placeholder_no_flag.json",
+      "code": "ASSET_PLACEHOLDER_BLOCKED",
+      "strict": false,
+      "allow_placeholders": false
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_todo_audio.json",
+      "code": "ASSET_TODO",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_theme_missing.json",
+      "code": "THEME_MISSING",
+      "strict": false,
+      "allow_placeholders": true
+    },
+    {
+      "file": "res://tests/fixtures/broken/bad_locale_key.json",
+      "code": "LOCALE_KEY_MISSING",
+      "strict": false,
+      "allow_placeholders": true
+    }
+  ]
+}

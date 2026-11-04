@@ -1,0 +1,19 @@
+; Engine configuration file.
+; M0 week 1 - target engine: Godot 4.7.2 stable
+; Keep this file free of absolute paths: the whole folder must stay relocatable.
+
+config_version=5
+
+[application]
+
+config/name="MergeGame M0 (ds)"
+config/description="M0 week 1: manifest validator + core sim + static board view"
+run/main_scene="res://src/view/game_screen.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1080
+window/size/viewport_height=1920
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"

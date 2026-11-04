@@ -1,0 +1,536 @@
+extends RefCounted
+## M0 core sim: board / merge / generator / order / level state.
+##
+## Driven only by sim events (tap, merge, deliver, order_claim, energy_tick,
+## level_complete, level_next). Nothing ticks per frame and nothing reads the
+## clock, so `seed + ordered event list` fully determines the final state.
+##
+## Every rule returns {"ok", "code", "note"}: a rejected command never mutates
+## state, which is what makes "same digest before and after a failed claim" a
+## meaningful test instead of a coincidence.
+
+const BoardState = preload("res://src/core/board_state.gd")
+const ProjectModel = preload("res://src/core/project_model.gd")
+const Rng = preload("res://src/core/rng.gd")
+const StateDigest = preload("res://src/core/state_digest.gd")
+const SimHandlers = preload("res://src/core/sim_handlers.gd")
+
+const MAX_LEVEL := 10
+const INVALID_POS := Vector2i(-1000000, -1000000)
+
+var model
+var board
+var rng
+var level_index: int = 0
+var time: float = 0.0
+var hud: Dictionary = {}
+var orders: Array = []
+var generator_state: Dictionary = {}
+var level_complete_pending: bool = false
+var board_full_pending: bool = false
+var log_events: Array = []
+var seed_value: int = 0
+
+
+func setup(model_in, seed_value_in: int) -> void:
+	model = model_in
+	seed_value = seed_value_in
+	board = BoardState.new()
+	rng = Rng.make(seed_value_in, 0)
+	level_index = 0
+	time = 0.0
+	hud = model.hud_initial() if model != null else {}
+	orders = []
+	generator_state = {}
+	level_complete_pending = false
+	board_full_pending = false
+	log_events = []
+	_load_level(0)
+
+
+# ---------------------------------------------------------------- level state
+
+func _load_level(index: int) -> void:
+	var lvl: Dictionary = {}
+	if model != null:
+		lvl = model.level(index)
+	board.load_level(lvl)
+
+	orders = []
+	var raw_orders = lvl.get("orders", [])
+	if typeof(raw_orders) == TYPE_ARRAY:
+		for o in raw_orders:
+			if typeof(o) == TYPE_DICTIONARY:
+				orders.append(_make_order(o))
+
+	generator_state = {}
+	var gen_table := {}
+	if model != null and typeof(model.project) == TYPE_DICTIONARY:
+		var table = model.project.get("generators", {})
+		if typeof(table) == TYPE_DICTIONARY:
+			gen_table = table
+	var ids: Array = gen_table.keys()
+	ids.sort()
+	for gid in ids:
+		var cfg = gen_table[gid]
+		var charges := 0
+		if typeof(cfg) == TYPE_DICTIONARY:
+			charges = int(cfg.get("charges", 0))
+		generator_state[String(gid)] = {"charges": charges, "ready_at": 0.0}
+
+	# A level without orders is already cleared. Without this, no claim could ever
+	# set the flag and level_next would be unreachable — and M0 §2.2 explicitly
+	# allows `"orders": []` on a level.
+	level_complete_pending = orders.is_empty()
+	board_full_pending = false
+	_sanitize_board_levels()
+
+
+## M0 caps every level at 10 (and at the entity's own maxLevel). The validator
+## blocks bad data before rendering, but the sim is also driven directly by
+## previews/tests, so it must not carry an out-of-range item into its state.
+func _sanitize_board_levels() -> void:
+	if board == null:
+		return
+	for pos in board.cells.keys():
+		var it = board.cells[pos]
+		if typeof(it) != TYPE_DICTIONARY:
+			continue
+		var cap := _level_cap(String(it.get("entity", "")))
+		it["level"] = clampi(int(it.get("level", 1)), 1, cap)
+
+
+func _make_order(raw: Dictionary) -> Dictionary:
+	var mission: Array = []
+	var src = raw.get("mission", [])
+	if typeof(src) == TYPE_ARRAY:
+		for it in src:
+			if typeof(it) != TYPE_DICTIONARY:
+				continue
+			mission.append({
+				"entity": String(it.get("entity", "")),
+				"level": int(it.get("level", 1)),
+				"have": 0,
+			})
+	return {
+		"id": String(raw.get("id", "")),
+		"character": String(raw.get("character", "")),
+		"mission": mission,
+		"star": int(raw.get("star", 0)),
+		"coin": int(raw.get("coin", 0)),
+		"done": false,
+	}
+
+
+func current_level_id() -> String:
+	if model == null:
+		return ""
+	var lvl: Dictionary = model.level(level_index)
+	return String(lvl.get("id", ""))
+
+
+func set_time(t: float) -> void:
+	time = t
+
+
+func _refresh_board_full() -> void:
+	if board == null:
+		board_full_pending = false
+		return
+	board_full_pending = board.first_free_cell().x < 0
+
+
+# ------------------------------------------------------------------ dispatch
+
+func apply(event: Dictionary) -> Dictionary:
+	var type := String(event.get("type", ""))
+	var at = event.get("at", null)
+	if typeof(at) == TYPE_INT or typeof(at) == TYPE_FLOAT:
+		time = float(at)
+	var res: Dictionary
+	if not SimHandlers.is_registered(type):
+		res = _err("SIM_UNKNOWN_TYPE", "unregistered sim type: " + type)
+	else:
+		res = SimHandlers.apply(self, event)
+	if typeof(res) != TYPE_DICTIONARY:
+		res = _err("SIM_UNKNOWN_TYPE", "handler returned no result")
+	if not res.has("code"):
+		res["code"] = ""
+	if not res.has("note"):
+		res["note"] = ""
+	# `board_full_pending` is derived state: recompute it after every command so a
+	# freed cell clears the flag instead of leaving a stale "board full" forever.
+	_refresh_board_full()
+	log_events.append({
+		"id": String(event.get("id", "")),
+		"type": type,
+		"at": time,
+		"ok": bool(res.get("ok", false)),
+		"code": String(res.get("code", "")),
+	})
+	return res
+
+
+# ---------------------------------------------------------------------- utils
+
+func _err(code: String, note: String = "") -> Dictionary:
+	return {"ok": false, "code": code, "note": note}
+
+
+func _ok(note: String = "") -> Dictionary:
+	return {"ok": true, "code": "", "note": note}
+
+
+func _to_pos(v) -> Vector2i:
+	if typeof(v) != TYPE_ARRAY:
+		return INVALID_POS
+	var arr: Array = v
+	if arr.size() < 2:
+		return INVALID_POS
+	var x = arr[0]
+	var y = arr[1]
+	if not (typeof(x) == TYPE_INT or typeof(x) == TYPE_FLOAT):
+		return INVALID_POS
+	if not (typeof(y) == TYPE_INT or typeof(y) == TYPE_FLOAT):
+		return INVALID_POS
+	return Vector2i(int(x), int(y))
+
+
+func _level_cap(entity_id: String) -> int:
+	var cap := MAX_LEVEL
+	if model != null:
+		var ent: Dictionary = model.entity(entity_id)
+		if ent.has("maxLevel"):
+			var raw = ent["maxLevel"]
+			if typeof(raw) == TYPE_INT or typeof(raw) == TYPE_FLOAT:
+				cap = int(raw)
+	if cap <= 0:
+		cap = MAX_LEVEL
+	return mini(MAX_LEVEL, cap)
+
+
+func _find_order(order_id: String) -> int:
+	for i in range(orders.size()):
+		if String(orders[i].get("id", "")) == order_id:
+			return i
+	return -1
+
+
+func _all_orders_done() -> bool:
+	for o in orders:
+		if not bool(o.get("done", false)):
+			return false
+	return true
+
+
+func _generator_slot(entity_id: String, cfg: Dictionary) -> Dictionary:
+	if generator_state.has(entity_id):
+		return generator_state[entity_id]
+	var gs := {"charges": int(cfg.get("charges", 0)), "ready_at": 0.0}
+	generator_state[entity_id] = gs
+	return gs
+
+
+# ------------------------------------------------------------------------ tap
+
+## Output pool for one generator. Rare entries only join the pool when an
+## unfinished order in the CURRENT level asks for exactly that entity + level, so
+## "rare direct-order drop" can never be a free bonus.
+func tap_pool(entity_id: String) -> Array:
+	var pool: Array = []
+	if model == null:
+		return pool
+	var cfg: Dictionary = model.generator(entity_id)
+	if cfg.is_empty():
+		return pool
+	var outputs = cfg.get("outputs", [])
+	if typeof(outputs) == TYPE_ARRAY:
+		for o in outputs:
+			if typeof(o) != TYPE_DICTIONARY:
+				continue
+			pool.append({
+				"entity": String(o.get("entity", "")),
+				"level": int(o.get("level", 1)),
+				"weight": float(o.get("weight", 0.0)),
+				"rare": false,
+			})
+	var rares = cfg.get("rareOutputs", [])
+	if typeof(rares) == TYPE_ARRAY:
+		for r in rares:
+			if typeof(r) != TYPE_DICTIONARY:
+				continue
+			var re := String(r.get("entity", ""))
+			var rl := int(r.get("level", 1))
+			if not _rare_is_wanted(re, rl):
+				continue
+			pool.append({
+				"entity": re,
+				"level": rl,
+				"weight": float(r.get("weight", 0.0)),
+				"rare": true,
+			})
+	return pool
+
+
+func _rare_is_wanted(entity_id: String, level: int) -> bool:
+	for o in orders:
+		if bool(o.get("done", false)):
+			continue
+		for it in o["mission"]:
+			if int(it["have"]) >= 1:
+				continue
+			if String(it["entity"]) == entity_id and int(it["level"]) == level:
+				return true
+	return false
+
+
+func _do_tap(payload: Dictionary) -> Dictionary:
+	var target = payload.get("target", null)
+	var pos := INVALID_POS
+	if typeof(target) == TYPE_DICTIONARY:
+		pos = _to_pos((target as Dictionary).get("slot", null))
+	if not board.in_bounds(pos):
+		return _err("SIM_SLOT_OOB", "tap target slot is missing or out of bounds")
+	if not board.has_item(pos):
+		return _err("SIM_TAP_NO_GENERATOR", "tapped slot holds no item")
+	var item: Dictionary = board.item(pos)
+	var entity_id := String(item.get("entity", ""))
+	var ent: Dictionary = model.entity(entity_id)
+	if String(ent.get("kind", "")) != "generator":
+		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" is not a generator")
+	var cfg: Dictionary = model.generator(entity_id)
+	if cfg.is_empty():
+		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no generator behaviour")
+	var gs: Dictionary = _generator_slot(entity_id, cfg)
+	if int(gs["charges"]) <= 0:
+		return _err("SIM_NO_CHARGES", "\"" + entity_id + "\" has no charges left")
+	if time < float(gs["ready_at"]):
+		return _err("SIM_COOLDOWN", "\"" + entity_id + "\" ready at " + str(gs["ready_at"]))
+	# Check for space BEFORE drawing from the RNG: a rejected command must not
+	# consume randomness, otherwise later drops shift and the digest cannot see it.
+	var free: Vector2i = board.first_free_cell()
+	if free.x < 0:
+		board_full_pending = true
+		return _err("SIM_BOARD_FULL", "board is full; charge kept")
+	var pool: Array = tap_pool(entity_id)
+	if pool.is_empty():
+		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no usable output")
+	var idx: int = rng.pick_weighted(pool)
+	if idx < 0 or idx >= pool.size():
+		return _err("SIM_TAP_NO_GENERATOR", "weighted output pick failed")
+	var picked: Dictionary = pool[idx]
+	var spawn_entity := String(picked["entity"])
+	var spawn_level: int = clampi(int(picked["level"]), 1, _level_cap(spawn_entity))
+	board.put(free, spawn_entity, spawn_level)
+	gs["charges"] = int(gs["charges"]) - 1
+	gs["ready_at"] = time + float(cfg.get("cooldown", 0.0))
+	return _ok("spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
+
+
+# ---------------------------------------------------------------------- merge
+
+func _do_merge(payload: Dictionary) -> Dictionary:
+	var from := _to_pos(payload.get("from", null))
+	var to := _to_pos(payload.get("to", null))
+	if from == INVALID_POS or to == INVALID_POS:
+		return _err("SIM_SLOT_OOB", "merge needs two [x, y] cells")
+	if from == to:
+		return _err("SIM_SAME_CELL", "from and to are the same cell")
+	if not board.in_bounds(from) or not board.in_bounds(to):
+		return _err("SIM_SLOT_OOB", "merge endpoint is outside the board")
+	if board.is_blocked(from) or board.is_blocked(to):
+		return _err("SIM_BLOCKED", "an obstacle covers one of the cells")
+	if not board.has_item(from):
+		return _err("SIM_SOURCE_EMPTY", "source cell is empty")
+	if not board.has_item(to):
+		return _err("SIM_TARGET_EMPTY", "target cell is empty")
+	var src: Dictionary = board.item(from)
+	var dst: Dictionary = board.item(to)
+	var se := String(src.get("entity", ""))
+	var de := String(dst.get("entity", ""))
+	if se != de:
+		return _err("SIM_ENTITY_MISMATCH", se + " vs " + de)
+	# M0 decision: only chips merge. Generators keep a per-entity charge pool, so a
+	# merged generator would share charges across levels; specials have no level
+	# semantics at all. Everything else is rejected instead of silently levelling up.
+	var kind := String(model.entity(se).get("kind", ""))
+	if kind != "chip":
+		return _err("SIM_NOT_MERGEABLE", se + " is kind=\"" + kind + "\"; only chips merge")
+	var sl := int(src.get("level", 1))
+	var dl := int(dst.get("level", 1))
+	if sl != dl:
+		return _err("SIM_LEVEL_MISMATCH", "lv" + str(sl) + " vs lv" + str(dl))
+	var next_level := sl + 1
+	var cap := _level_cap(se)
+	if next_level > cap:
+		return _err("SIM_MAX_LEVEL", "lv" + str(next_level) + " exceeds cap " + str(cap))
+	board.put(to, se, next_level)
+	board.take(from)
+	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
+
+
+# ------------------------------------------------------------ deliver / claim
+
+func _do_deliver(payload: Dictionary) -> Dictionary:
+	var order_id := String(payload.get("order", ""))
+	var oi := _find_order(order_id)
+	if oi < 0:
+		return _err("SIM_ORDER_UNKNOWN", "no order \"" + order_id + "\" in this level")
+	var order: Dictionary = orders[oi]
+	if bool(order.get("done", false)):
+		return _err("SIM_DELIVER_MISMATCH", "order \"" + order_id + "\" is already claimed")
+	var from := _to_pos(payload.get("from", null))
+	if not board.in_bounds(from):
+		return _err("SIM_SLOT_OOB", "deliver source is outside the board")
+	if not board.has_item(from):
+		return _err("SIM_DELIVER_MISMATCH", "no item to deliver at " + str(from))
+	var it: Dictionary = board.item(from)
+	var k := _unsatisfied_match(order, String(it.get("entity", "")), int(it.get("level", 1)))
+	if k < 0:
+		return _err("SIM_DELIVER_MISMATCH", "item does not match an unsatisfied mission entry")
+	order["mission"][k]["have"] = int(order["mission"][k]["have"]) + 1
+	board.take(from)
+	return _ok("delivered " + String(it.get("entity", "")) + " to \"" + order_id + "\"")
+
+
+func _unsatisfied_match(order: Dictionary, entity_id: String, level: int) -> int:
+	var mission: Array = order["mission"]
+	for k in range(mission.size()):
+		var it: Dictionary = mission[k]
+		if int(it["have"]) >= 1:
+			continue
+		if String(it["entity"]) == entity_id and int(it["level"]) == level:
+			return k
+	return -1
+
+
+## Claim = "turn in the order". Satisfied either by delivered units (have >= 1)
+## or by exact items still sitting on the board, which are consumed row-major.
+## Everything is planned before anything is mutated: an unsatisfied claim leaves
+## the state - and therefore the digest - untouched.
+func _do_order_claim(payload: Dictionary) -> Dictionary:
+	var order_id := String(payload.get("order", ""))
+	var oi := _find_order(order_id)
+	if oi < 0:
+		return _err("SIM_ORDER_UNKNOWN", "no order \"" + order_id + "\" in this level")
+	var order: Dictionary = orders[oi]
+	if bool(order.get("done", false)):
+		return _err("SIM_ORDER_DONE", "order \"" + order_id + "\" is already claimed")
+	var mission: Array = order["mission"]
+	var plan: Array = []
+	var used := {}
+	for k in range(mission.size()):
+		var need: Dictionary = mission[k]
+		if int(need["have"]) >= 1:
+			plan.append({"k": k, "delivered": true, "slot": INVALID_POS})
+			continue
+		var found := Vector2i(-1, -1)
+		for pos in board.sorted_cells():
+			if used.has(pos):
+				continue
+			var it: Dictionary = board.item(pos)
+			if String(it.get("entity", "")) == String(need["entity"]) and int(it.get("level", 1)) == int(need["level"]):
+				found = pos
+				break
+		if found.x < 0:
+			return _err("SIM_ORDER_UNSATISFIED", "\"" + order_id + "\" still needs " + String(need["entity"]) + " lv" + str(int(need["level"])))
+		used[found] = true
+		plan.append({"k": k, "delivered": false, "slot": found})
+
+	for step in plan:
+		var k: int = int(step["k"])
+		mission[k]["have"] = 0
+		if not bool(step["delivered"]):
+			board.take(step["slot"])
+	order["done"] = true
+	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
+	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
+	if _all_orders_done():
+		level_complete_pending = true
+	return _ok("claimed \"" + order_id + "\"")
+
+
+# ------------------------------------------------------------ level / energy
+
+func _do_board_full(_payload: Dictionary) -> Dictionary:
+	return _ok("board_full is a no-op marker; nothing changed")
+
+
+func _do_energy_tick(payload: Dictionary) -> Dictionary:
+	var delta := 0
+	var raw = payload.get("delta", 0)
+	if typeof(raw) == TYPE_INT or typeof(raw) == TYPE_FLOAT:
+		delta = int(raw)
+	var before := int(hud.get("energy", 0))
+	hud["energy"] = maxi(0, before + delta)
+	return _ok("energy " + str(before) + " -> " + str(int(hud["energy"])))
+
+
+func _do_level_complete(_payload: Dictionary) -> Dictionary:
+	if not level_complete_pending:
+		return _err("SIM_LEVEL_NOT_COMPLETE", "every order must be claimed first")
+	return _ok("level \"" + current_level_id() + "\" is complete")
+
+
+func _do_level_next(_payload: Dictionary) -> Dictionary:
+	if not level_complete_pending:
+		return _err("SIM_LEVEL_NOT_COMPLETE", "every order must be claimed first")
+	var next_index := level_index + 1
+	if model == null or next_index >= model.level_count():
+		return _err("SIM_NO_MORE_LEVELS", "no level after index " + str(level_index))
+	level_index = next_index
+	_load_level(level_index)
+	return _ok("entered \"" + current_level_id() + "\"")
+
+
+# ------------------------------------------------------------- snapshots
+
+func snapshot() -> Dictionary:
+	var hud_snap := {}
+	var hud_keys: Array = hud.keys()
+	hud_keys.sort()
+	for k in hud_keys:
+		hud_snap[String(k)] = hud[k]
+
+	var gen_snap := {}
+	var gen_ids: Array = generator_state.keys()
+	gen_ids.sort()
+	for gid in gen_ids:
+		var gs: Dictionary = generator_state[gid]
+		gen_snap[String(gid)] = {
+			"charges": int(gs.get("charges", 0)),
+			"ready_at": float(gs.get("ready_at", 0.0)),
+		}
+
+	var order_rows: Array = []
+	for o in orders:
+		var mission_rows: Array = []
+		for it in o["mission"]:
+			mission_rows.append([String(it["entity"]), int(it["level"]), int(it["have"])])
+		order_rows.append({
+			"id": String(o["id"]),
+			"character": String(o["character"]),
+			"mission": mission_rows,
+			"star": int(o["star"]),
+			"coin": int(o["coin"]),
+			"done": bool(o["done"]),
+		})
+
+	var board_snap := {}
+	if board != null:
+		board_snap = board.snapshot()
+
+	return {
+		"level_index": level_index,
+		"level_id": current_level_id(),
+		"hud": hud_snap,
+		"orders": order_rows,
+		"generators": gen_snap,
+		"level_complete_pending": level_complete_pending,
+		"board_full_pending": board_full_pending,
+		"board": board_snap,
+	}
+
+
+func digest() -> String:
+	return StateDigest.of(snapshot())

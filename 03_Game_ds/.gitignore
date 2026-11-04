@@ -1,0 +1,4 @@
+# .godot 导入缓存、运行产物
+.godot/
+output/
+*.tmp

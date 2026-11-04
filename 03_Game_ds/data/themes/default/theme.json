@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "name": "default-procedural",
+  "note": "零图标引用：棋盘/chip/障碍/选中/完成全部程序化绘制，因此最严格的校验模式也能通过。",
+  "icons": {}
+}

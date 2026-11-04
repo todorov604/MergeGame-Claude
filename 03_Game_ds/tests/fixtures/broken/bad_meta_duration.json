@@ -1,0 +1,174 @@
+{
+  "version": 2,
+  "meta": {
+    "title": "min",
+    "resolution": [
+      1080,
+      1920
+    ],
+    "fps": 60,
+    "locale": "zh",
+    "duration": 30
+  },
+  "theme": "themes/default",
+  "locales": {
+    "zh": {
+      "cta.play": "立即游玩",
+      "hook.question": "它能合成吗？"
+    }
+  },
+  "hud": {
+    "level": 1,
+    "energy": 10,
+    "energyTickSeconds": 120,
+    "energyTickMode": "decrement",
+    "coin": 0,
+    "star": 0,
+    "gem": 0,
+    "exp": 0
+  },
+  "entities": {
+    "A": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "a",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#F2A65A",
+        "label": "A"
+      }
+    },
+    "B": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "b",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#7FB069",
+        "label": "B"
+      }
+    },
+    "G": {
+      "kind": "generator",
+      "maxLevel": 3,
+      "visual": {
+        "hue": "#5B8DEF",
+        "label": "G"
+      }
+    },
+    "C1": {
+      "kind": "character",
+      "visual": {
+        "hue": "#E9C46A",
+        "label": "C1"
+      }
+    }
+  },
+  "generators": {
+    "G": {
+      "charges": 3,
+      "cooldown": 0,
+      "outputs": [
+        {
+          "entity": "A",
+          "weight": 1
+        }
+      ]
+    }
+  },
+  "characters": {
+    "C1": {
+      "display": "阿奶"
+    }
+  },
+  "levels": [
+    {
+      "id": "level_1",
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {
+            "x": 0,
+            "y": 0,
+            "entity": "G",
+            "level": 1
+          },
+          {
+            "x": 1,
+            "y": 1,
+            "entity": "A",
+            "level": 1
+          },
+          {
+            "x": 2,
+            "y": 1,
+            "entity": "A",
+            "level": 1
+          }
+        ]
+      },
+      "obstacles": [
+        {
+          "slot": [
+            0,
+            1
+          ],
+          "type": "web"
+        }
+      ],
+      "orders": [
+        {
+          "id": "order_1",
+          "character": "C1",
+          "mission": [
+            {
+              "entity": "A",
+              "level": 2
+            }
+          ],
+          "star": 1,
+          "coin": 5
+        }
+      ]
+    }
+  ],
+  "timeline": [
+    {
+      "id": "e1",
+      "channel": "sim",
+      "type": "merge",
+      "at": 1.0,
+      "duration": 0.3,
+      "payload": {
+        "from": [
+          1,
+          1
+        ],
+        "to": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "e2",
+      "channel": "sim",
+      "type": "order_claim",
+      "at": 3.0,
+      "payload": {
+        "order": "order_1"
+      }
+    },
+    {
+      "id": "e3",
+      "channel": "view",
+      "type": "cta",
+      "at": 5.0,
+      "duration": 2.0,
+      "payload": {
+        "text_key": "cta.play"
+      }
+    }
+  ]
+}

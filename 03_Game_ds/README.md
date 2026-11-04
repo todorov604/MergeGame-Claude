@@ -8,7 +8,7 @@ M0 §9 全 9 步交付：**manifest/schema 校验器**、**core 模拟 + 事件�
 ```bash
 G="/e/Program Files/Godot/Godot_v4.7.2.exe"   # git-bash(MSYS) 路径；Windows 原样路径见 00_design/START-HERE.md
 
-# 一键总验收（7 步：测试 / 校验 / 25 条反例 / 搬移 / 两张截图 / 出片确定性）
+# 一键总验收（9 步：测试 / 校验 / 25 条反例 / 搬移 / 两张截图 / 出片确定性 / 出片门禁 / 主题成片）
 bash tools/accept.sh
 
 # 全量测试（自动发现 tests/t_*.gd）
@@ -79,19 +79,19 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | 30s / 1080×1920 / 60fps / 1800 帧 | ✅ | `ffprobe`：`1080x1920 / 60\/1 / nb_frames=1800 / duration=30.000` |
 | 2 关可配置，完成第 1 关订单 → 过关 → 第 2 关 | ✅ | `t_sim` 越关断言 + `output/game_level2.png` |
 | 订单完成：绿药丸 → 物品飞向角色 → 角色 → 金币/星星 → 新订单 | ✅（角色用溶解表现） | `output/game_1080x1920.png`(t=6.2)、`t_order_view` |
-| 生成器：点击产出、稀有直出订单物品、棋盘满提示 | ✅ | `t_sim`（rare 进池条件、`SIM_BOARD_FULL`） |
+| 生成器：点击产出、稀有直出订单物品、棋盘满提示 | ✅ | `t_sim`（rare 进池条件、`SIM_BOARD_FULL`）+ `t_board_toast`（view 端 1.5s toast 消费 `board.full`；成片端同风格提示条） |
 | 选中提示：黄框 + 停留放大/靠近 | ✅ | `output/board_1080x1920.png`（黄括角 + 黄光 + 放大 8% 并向盘心偏移 7px） |
 | 时间轴：锚点、同刻排序、预览/单步/渲染一致 | ✅ | `t_event_model` 排序用例 + 编辑器单步 + 出片共用求值器 |
 | 资源守卫：REFERENCE_ONLY 无法出片；PLACEHOLDER 需显式 | ✅ | 25 条反例逐条命中 + `t_guard` |
-| 校验：缺图/越界/不可达/usage 违规在出片前阻断 | ✅ | `output/validation_report.json`、`accept.sh` 步骤 2–3 |
-| 两次出片 framemd5 一致 | ✅ | 全片 `10b138d4…4071`（1800 帧，A/B/第三次重跑三份一致，整条流水线 234s）；4s 短片 `d3b357db…ebfd`（240 帧，157 个唯一帧） |
-| 换 1 套主题 ≤10 分钟、不改代码 | ✅ | `--theme=themes/pet_shop` → `output/game_theme_pet_shop.png`，零代码改动 |
+| 校验：缺图/越界/不可达/usage 违规在出片前阻断 | ✅ | `output/validation_report.json`、`accept.sh` 步骤 2–3、8（`payload_empty` / `f1_a` / `reject_sim`） |
+| 两次出片 framemd5 一致 | ✅ | 全片 `f85e4e51…7e19`（1800 帧，`--determinism` 双跑一致；两次产出的 MP4 与 `docs/evidence/render.mp4` sha256 同为 `663c484a…`）；4s 短片 `149419b5…4f6d`（240 帧，220 个唯一帧） |
+| 换 1 套主题 ≤10 分钟、不改代码 | ✅ | `--theme=themes/pet_shop` → `game_theme_pet_shop.png` + `render.sh --theme` 成片 framemd5 不同（`accept.sh` 步骤 9） |
 
 ## 6. 已知限制 / 与规格文字的偏差
 
 1. **选中"停留放大/靠近"是静态量**：选中 chip 由 1.0 放大到 1.08 并向盘心偏移 7px，用几何表达"靠近"，没有 Tween 过渡——出片要求逐帧确定性，动画一律由帧号/事件时间算出，不做补间累积。
 2. **角色消失**：用页面色溶解 + 收拢环表现，没有真正隐藏订单卡头像（FlyAnim 不反写 panel 状态）。
-3. **主题覆盖面**：HUD/订单卡/横幅/底栏/画板边框随主题变；chip 与格子底色不随主题变（受"不改 board_view 行为"约束）。
+3. **主题覆盖面**：HUD / 订单卡 / 棋盘底色与面板 / 横幅 / CTA / 底栏 / 圆角与间距随主题 palette+metrics 变（预览与成片一致）；chip 自身颜色仍由实体 `visual.hue` 决定，主题 palette 不覆盖 entity hue。
 4. `tap` 只支持 `{target:{slot:[x,y]}}`，旧文档的 `{generator:id}` 形式未支持。
 5. 无按帧自动回能：能量只由 `energy_tick` 事件改变（确定性要求）。
 6. 编辑器属性面板不做格子坐标编辑（只做错误定位）；折叠状态不持久化。
@@ -103,8 +103,8 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 
 | 文件 | 内容 |
 |---|---|
-| `output/accept.log` | 一键验收 7 步全量日志（ALL CHECKS PASS） |
-| `output/tests.log` | 15 套件 / 938 checks |
+| `output/accept.log` | 一键验收 9 步全量日志（ALL CHECKS PASS） |
+| `output/tests.log` | 19 套件 / 1134 checks |
 | `output/validation_report.json` | 样例工程校验报告（ok=true, 0 error, 0 warning） |
 | `output/board_1080x1920.png` | 静态棋盘（7×9、4 种障碍、选中、完成） |
 | `output/game_1080x1920.png` · `orders_panel.png` | 主游戏页（HUD+订单+棋盘）与订单卡特写 |
@@ -116,6 +116,6 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | `docs/REVIEW-CORE.md` | core 层独立复审：7 项缺陷、修法、回归测试 |
 | `docs/REVIEW-RENDER.md` | 出片/守卫独立复审：7 项缺陷、修法、验证证据 |
 | `docs/REVIEW-02GAME.md` | 只读交叉审查 02_Game：422 checks 复现、3 项实质问题、3 处可借鉴 |
-| `docs/evidence/` | 冻结证据（成片 / 两张 1080×1920 截图 / 订单卡 / 换主题 / manifest / accept.log + sha256） |
+| `docs/evidence/` | 冻结证据（成片 / 逐帧 framemd5 / 两张 1080×1920 截图 / 订单卡 / 换主题 / manifest / accept.log + sha256 新旧对照） |
 
 `output/` 与 `.godot/` 已 gitignore；本工程不产生 commit（由会话主人决定）。

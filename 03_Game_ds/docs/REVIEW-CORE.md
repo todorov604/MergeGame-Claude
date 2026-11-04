@@ -1,7 +1,7 @@
 # core 模拟层独立复审与修复记录
 
-> 复审：独立 agent（只读，不改代码）　修复：Lead（逐条复核后实施）　回归：`tests/t_sim_defects.gd`（35 checks）
-> 结论：**7 项属实，全部已修**；修复后全量 `938 checks / 0 failures`，一键验收 `ALL CHECKS PASS`。
+> 复审：独立 agent（只读，不改代码）　修复：Lead（逐条复核后实施）　回归：`tests/t_sim_defects.gd`（48 checks）
+> 结论：**7 项属实，全部已修**；修复后全量 `1134 checks / 0 failures`，一键验收 `ALL CHECKS PASS`。
 
 ## 1. 复审发现了什么
 
@@ -29,7 +29,7 @@
 | D6 | 新增 `load_ok` 标志；`reset()` 不再清 `errors`/`load_ok`；`run_all().ok` 纳入 `load_ok` | `src/core/event_evaluator.gd` |
 | D7 | `time` 移出 `snapshot()`（时钟不是游戏状态）；`set_time` 只对 sim 通道执行 | `src/core/sim.gd` / `event_evaluator.gd` |
 
-## 3. 回归测试（`tests/t_sim_defects.gd`，35 checks）
+## 3. 回归测试（`tests/t_sim_defects.gd`，48 checks）
 
 每个缺陷都有"当年会错"的具体输入，而不是复述实现：
 
@@ -54,6 +54,6 @@
 ```bash
 G="/e/Program Files/Godot/Godot_v4.7.2.exe"
 "$G" --headless --path . --script res://tests/run_tests.gd -- --suite res://tests/t_sim_defects.gd
-"$G" --headless --path . --script res://tests/run_tests.gd     # 938 checks
+"$G" --headless --path . --script res://tests/run_tests.gd     # 1134 checks
 bash tools/accept.sh                                          # ALL CHECKS PASS
 ```

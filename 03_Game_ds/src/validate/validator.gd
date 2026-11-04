@@ -49,12 +49,7 @@ static func validate_dictionary(project: Dictionary, path: String, guard, strict
 	ctx.guard = guard
 	ctx.strict = strict
 
-	_schema(ctx)
-	RulesLevels.check(ctx)
-	RulesBoard.check(ctx)
-	RulesRefs.check(ctx)
-	RulesTimeline.check(ctx)
-	RulesUsage.check(ctx)
+	_run_rules(ctx)
 
 	_finalize_stats(ctx)
 
@@ -63,8 +58,8 @@ static func validate_dictionary(project: Dictionary, path: String, guard, strict
 		for w in ctx.warnings:
 			var promoted: Dictionary = (w as Dictionary).duplicate(true)
 			promoted["level"] = "error"
-			promoted["code"] = String(w.get("code", ""))
-			promoted["msg"] = "%s (promoted by --strict)" % String(w.get("msg", ""))
+			promoted["code"] = str(w.get("code", ""))
+			promoted["msg"] = "%s (promoted by --strict)" % str(w.get("msg", ""))
 			promoted["promoted_from_warning"] = true
 			ctx.errors.append(promoted)
 
@@ -75,6 +70,54 @@ static func validate_dictionary(project: Dictionary, path: String, guard, strict
 	report.stats = ctx.stats
 	report.ok = ctx.errors.is_empty()
 	return report
+
+
+static func _run_rules(ctx) -> void:
+	# A GDScript runtime error aborts only the innermost function, so a rule that
+	# dies mid-way still lets validate_dictionary finish and print a green report.
+	# Each rule therefore runs under an abort gate: the rule clears ctx.rule on its
+	# last line, and a marker that is still set afterwards means it never got there.
+	ctx.rule = "schema"
+	_schema(ctx)
+	_finish_rule(ctx, "schema")
+
+	# rules_levels.gd / rules_board.gd clear the marker on their last line too, so
+	# they are covered by the same abort gate as the modules below.
+	ctx.rule = "levels"
+	RulesLevels.check(ctx)
+	_finish_rule(ctx, "levels")
+
+	ctx.rule = "board"
+	RulesBoard.check(ctx)
+	_finish_rule(ctx, "board")
+
+	ctx.rule = "refs"
+	RulesRefs.check(ctx)
+	_finish_rule(ctx, "refs")
+
+	ctx.rule = "timeline"
+	RulesTimeline.check(ctx)
+	_finish_rule(ctx, "timeline")
+
+	ctx.rule = "usage"
+	RulesUsage.check(ctx)
+	_finish_rule(ctx, "usage")
+
+
+## Runs one rule family under the abort gate. The callable must call ctx.rule_done()
+## as its last statement; without that marker the rule stopped early.
+static func run_rule(ctx, name: String, fn: Callable) -> bool:
+	ctx.rule = name
+	fn.call()
+	return _finish_rule(ctx, name)
+
+
+static func _finish_rule(ctx, name: String) -> bool:
+	var finished: bool = not ctx.rule_running()
+	ctx.rule = ""
+	if not finished:
+		ctx.err_internal(name, "the rule stopped before its last line")
+	return finished
 
 
 static func _finalize_stats(ctx) -> void:
@@ -131,13 +174,19 @@ static func _schema(ctx) -> void:
 		var fps = m.get("fps", null)
 		if not ValidateCtx.is_int_val(fps) or ValidateCtx.as_int(fps) != M0_FPS:
 			ctx.err("META_FPS", "meta.fps", "fps must be %d for M0 (got %s)" % [M0_FPS, str(fps)])
-		var loc := String(m.get("locale", ""))
-		if loc.is_empty():
+		var loc := ""
+		if not m.has("locale"):
 			ctx.err("META_LOCALE", "meta.locale", "meta.locale is required")
+		elif not ValidateCtx.is_string(m["locale"]):
+			ctx.err("META_LOCALE_TYPE", "meta.locale", "meta.locale must be a string (got %s)" % ValidateCtx.type_name_of(m["locale"]))
 		else:
-			var locales = ctx.project.get("locales", {})
-			if ValidateCtx.is_dict(locales) and not (locales as Dictionary).has(loc):
-				ctx.err("META_LOCALE", "meta.locale", "locale \"%s\" has no table under locales" % loc)
+			loc = String(m["locale"])
+			if loc.is_empty():
+				ctx.err("META_LOCALE", "meta.locale", "meta.locale is required")
+			else:
+				var locales = ctx.project.get("locales", {})
+				if ValidateCtx.is_dict(locales) and not (locales as Dictionary).has(loc):
+					ctx.err("META_LOCALE", "meta.locale", "locale \"%s\" has no table under locales" % loc)
 		if m.has("duration"):
 			ctx.warn("META_DURATION_PRESENT", "meta.duration", "meta.duration is not a length source; the timeline end is authoritative (found %s)" % str(m.get("duration")))
 
@@ -147,13 +196,17 @@ static func _schema(ctx) -> void:
 		var h: Dictionary = hud
 		for f in HUD_FIELDS:
 			if not h.has(f):
-				ctx.err("HUD_MISSING_FIELD", "hud." + String(f), "hud.%s is required in M0 (level/energy/energyTickSeconds/energyTickMode/coin/star/gem/exp)" % String(f))
+				ctx.err("HUD_MISSING_FIELD", "hud." + str(f), "hud.%s is required in M0 (level/energy/energyTickSeconds/energyTickMode/coin/star/gem/exp)" % str(f))
 				continue
 			if f == "energyTickMode":
-				var mode := String(h.get(f, ""))
+				if not ValidateCtx.is_string(h[f]):
+					ctx.err("HUD_BAD_TYPE", "hud.energyTickMode", "energyTickMode must be a string (got %s)" % ValidateCtx.type_name_of(h[f]))
+					continue
+				var mode := String(h[f])
 				if mode.is_empty():
 					ctx.err("HUD_BAD_TYPE", "hud.energyTickMode", "energyTickMode must be a string")
 				elif not KNOWN_TICK_MODES.has(mode):
 					ctx.warn("HUD_TICK_MODE", "hud.energyTickMode", "unknown energyTickMode \"%s\" (known: %s)" % [mode, str(KNOWN_TICK_MODES)])
 			elif not ValidateCtx.is_num(h.get(f)):
-				ctx.err("HUD_BAD_TYPE", "hud." + String(f), "hud.%s must be a number" % String(f))
+				ctx.err("HUD_BAD_TYPE", "hud." + str(f), "hud.%s must be a number" % str(f))
+	ctx.rule_done()

@@ -5,11 +5,14 @@
 #   bash tools/render.sh --frames 120         # 2 s short take (fast smoke test)
 #   bash tools/render.sh --determinism        # force two takes + framemd5 compare
 #   bash tools/render.sh --keep-frames        # keep the intermediate AVIs
+#   bash tools/render.sh --theme themes/pet_shop   # re-skin the film from data only
 #   bash tools/render.sh --out output/x.mp4 --frames 300
 #
-# Stages: Godot Movie Maker (real window, MJPEG AVI) -> ffprobe assertion ->
-# FFmpeg H.264 MP4 -> optional second take -> framemd5 compare -> cleanup ->
-# render manifest. Any failed assertion exits non-zero with a one-line reason.
+# Stages: Godot Movie Maker (real window, MJPEG AVI) -> take-log gate -> ffprobe
+# assertion -> FFmpeg H.264 MP4 -> optional second take -> framemd5 compare ->
+# cleanup -> render manifest. Any failed assertion exits non-zero with a one-line
+# reason. A take the sim refused is a failure, not a film: the log is scanned for
+# `SCRIPT ERROR`, `[movie] rejected ...` and `rejected=N` (N > 0).
 #
 # Frame count comes from the project timeline (same rule as the engine:
 # end = max(at + duration) over resolved anchors), never from meta.duration.
@@ -32,6 +35,7 @@ SCENE="res://src/render/movie_scene.tscn"
 FRAMES_ARG=""
 OUT="output/render.mp4"
 PROJECT="res://data/sample_project.json"
+THEME=""
 KEEP=0
 DETERMINISM=0
 ALLOW_PH=0
@@ -44,10 +48,12 @@ while [ $# -gt 0 ]; do
 		--out=*) OUT="${1#*=}"; shift ;;
 		--project) PROJECT="${2:-}"; shift 2 ;;
 		--project=*) PROJECT="${1#*=}"; shift ;;
+		--theme) THEME="${2:-}"; shift 2 ;;
+		--theme=*) THEME="${1#*=}"; shift ;;
 		--keep-frames) KEEP=1; shift ;;
 		--determinism) DETERMINISM=1; shift ;;
 		--allow-placeholders) ALLOW_PH=1; shift ;;
-		-h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+		-h|--help) sed -n '2,23p' "$0"; exit 0 ;;
 		*) echo "[render] FAIL unknown argument: $1" >&2; exit 2 ;;
 	esac
 done
@@ -154,16 +160,42 @@ LOG_A="$TMP_DIR/take_a.log"
 LOG_B="$TMP_DIR/take_b.log"
 
 echo "[render] godot=$GODOT_BIN"
-echo "[render] project=$PROJECT scene=$SCENE frames=$FRAMES fps=$FPS out=$OUT determinism=$DETERMINISM allow_placeholders=$ALLOW_PH"
+THEME_LABEL="${THEME:-project.theme}"
+echo "[render] project=$PROJECT scene=$SCENE frames=$FRAMES fps=$FPS out=$OUT determinism=$DETERMINISM allow_placeholders=$ALLOW_PH theme=$THEME_LABEL"
 
 MOVIE_EXTRA=("--frames=$FRAMES" "--project=$PROJECT")
 [ "$ALLOW_PH" -eq 1 ] && MOVIE_EXTRA+=("--allow-placeholders")
+[ -n "$THEME" ] && MOVIE_EXTRA+=("--theme=$THEME")
 
 take() { # take <avi> <log>
 	"$GODOT_BIN" --path . --resolution "${WIDTH}x${HEIGHT}" --write-movie "$1" \
 		--fixed-fps "$FPS" --quit-after "$FRAMES" "$SCENE" -- "${MOVIE_EXTRA[@]}" \
 		"--out-manifest=$MANIFEST_TMP" \
 		> "$2" 2>&1
+}
+
+# A take the sim refused is not a film. The scene exits 3 on rejected events, but
+# the log is the contract as well: a take can still write frames while the log
+# carries SCRIPT ERROR lines or per-event rejections. `rejected=0` must not match.
+TAKE_REFUSAL_RE='SCRIPT ERROR|\[movie\] rejected |rejected=[1-9][0-9]*'
+assert_take_log() { # assert_take_log <log> <label>
+	local log="$1" label="$2" hits
+	[ -f "$log" ] || fail "$label wrote no log ($log)"
+	if ! grep -q "\[movie\] done " "$log"; then
+		tail -20 "$log" >&2 || true
+		fail "$label never finished a take (no [movie] done line)"
+	fi
+	if grep -q "\[movie\] FAIL" "$log"; then
+		grep "\[movie\]" "$log" | tail -6 >&2 || true
+		fail "movie scene reported a failure ($label)"
+	fi
+	hits="$(grep -cE "$TAKE_REFUSAL_RE" "$log" || true)"
+	hits="${hits:-0}"
+	if [ "$hits" -gt 0 ]; then
+		grep -nE "$TAKE_REFUSAL_RE" "$log" | head -8 | sed 's/^/[render] refused-line: /' >&2
+		fail "$label has $hits rejected/SCRIPT-ERROR line(s); refusing the film"
+	fi
+	echo "[render] take check $label clean (no SCRIPT ERROR, rejected=0)"
 }
 
 probe_num() { # probe_num <file> <entry>
@@ -202,16 +234,15 @@ fi
 grep -E "^\[validate\]" "$TMP_DIR/validate.log" | head -2 | sed 's/^/[render] /'
 
 # ------------------------------------------------------------------- take A
-echo "[render] stage=record take=a frames=$FRAMES"
+echo "[render] stage=record take=a frames=$FRAMES theme=$THEME_LABEL"
 if ! take "$AVI_A" "$LOG_A"; then
+	grep "\[movie\]\|SCRIPT ERROR" "$LOG_A" | tail -8 | sed 's/^/[render] take-fail: /' >&2 || true
 	tail -20 "$LOG_A" >&2 || true
 	fail "godot movie maker failed (take a); see $LOG_A"
 fi
 [ -s "$AVI_A" ] || fail "take a produced no AVI ($AVI_A)"
-if grep -q "\[movie\] FAIL" "$LOG_A"; then
-	grep "\[movie\]" "$LOG_A" | tail -5 >&2
-	fail "movie scene reported a failure (take a)"
-fi
+assert_take_log "$LOG_A" "take a"
+grep "\[movie\] theme=" "$LOG_A" | tail -1 | sed 's/^/[render] /'
 grep "\[movie\] manifest" "$LOG_A" | tail -1 | sed 's/^/[render] /'
 AVI_BYTES=$(wc -c < "$AVI_A" | tr -d ' ')
 echo "[render] avi a bytes=$AVI_BYTES"
@@ -243,9 +274,11 @@ MD5_LINE="skipped"
 if [ "$DETERMINISM" -eq 1 ]; then
 	echo "[render] stage=record take=b (determinism)"
 	if ! take "$AVI_B" "$LOG_B"; then
+		grep "\[movie\]\|SCRIPT ERROR" "$LOG_B" | tail -8 | sed 's/^/[render] take-fail: /' >&2 || true
 		tail -20 "$LOG_B" >&2 || true
 		fail "godot movie maker failed (take b); see $LOG_B"
 	fi
+	assert_take_log "$LOG_B" "take b"
 	if ! bash tools/framemd5_compare.sh "$AVI_A" "$AVI_B"; then
 		fail "framemd5 mismatch: two takes of the same timeline are not deterministic"
 	fi
@@ -296,5 +329,5 @@ ELAPSED_MS=$((END_MS - START_MS))
 [ "$START_MS" -eq 0 ] && ELAPSED_MS=0
 ELAPSED_S=$((ELAPSED_MS / 1000))
 
-echo "[render] ok=1 frames=$FRAMES fps=$FPS size=${WIDTH}x${HEIGHT} out=$OUT mp4_bytes=$MP4_BYTES md5=${MD5_LINE} elapsed=${ELAPSED_S}s"
+echo "[render] ok=1 frames=$FRAMES fps=$FPS size=${WIDTH}x${HEIGHT} out=$OUT theme=$THEME_LABEL mp4_bytes=$MP4_BYTES md5=${MD5_LINE} elapsed=${ELAPSED_S}s"
 exit 0

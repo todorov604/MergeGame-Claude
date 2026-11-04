@@ -44,6 +44,17 @@ static func _is_num(v) -> bool:
 	return typeof(v) == TYPE_FLOAT or typeof(v) == TYPE_INT
 
 
+## `String(v)` is a runtime SCRIPT ERROR for a number, a bool or an object, not a
+## conversion — and a runtime error aborts the whole resolve() call, leaving the
+## caller with null and the validation report falsely green. Every identifier is
+## read through this guard instead; a wrong type simply resolves to "" and the
+## rule modules report it as a field-type error.
+static func _s(v) -> String:
+	if typeof(v) == TYPE_STRING or typeof(v) == TYPE_STRING_NAME:
+		return String(v)
+	return ""
+
+
 ## Resolves anchors and returns:
 ##   { ok, errors:[{code,path,msg}], events:[resolved...], end_time:float, start_time:float }
 ## A resolved event keeps `raw` (the original dictionary) plus parsed fields.
@@ -57,7 +68,7 @@ static func resolve(events: Array) -> Dictionary:
 		if typeof(ev) != TYPE_DICTIONARY:
 			errors.append({"code": "EV_NOT_OBJECT", "path": "timeline[%d]" % i, "msg": "event must be an object"})
 			continue
-		var id := String(ev.get("id", ""))
+		var id := _s(ev.get("id", ""))
 		if id.is_empty():
 			errors.append({"code": "EV_ID_MISSING", "path": "timeline[%d].id" % i, "msg": "event id is required"})
 			continue
@@ -73,7 +84,7 @@ static func resolve(events: Array) -> Dictionary:
 		var ev = events[i]
 		if typeof(ev) != TYPE_DICTIONARY:
 			continue
-		var id := String(ev.get("id", ""))
+		var id := _s(ev.get("id", ""))
 		if id.is_empty() or int(by_id.get(id, -1)) != i:
 			continue
 		var at = ev.get("at", null)
@@ -84,7 +95,7 @@ static func resolve(events: Array) -> Dictionary:
 			abs_times[id] = float(at)
 			continue
 		if typeof(at) == TYPE_DICTIONARY:
-			var after := String(at.get("after", ""))
+			var after := _s(at.get("after", ""))
 			var off = at.get("offset", 0.0)
 			if after.is_empty():
 				errors.append({"code": "EV_AT_INVALID", "path": "timeline[%d].at" % i, "msg": "anchor form is {after: <id>, offset: <seconds>}"})
@@ -135,7 +146,7 @@ static func resolve(events: Array) -> Dictionary:
 		var ev = events[i]
 		if typeof(ev) != TYPE_DICTIONARY:
 			continue
-		var id := String(ev.get("id", ""))
+		var id := _s(ev.get("id", ""))
 		if not abs_times.has(id):
 			continue
 		var dur = ev.get("duration", 0.0)
@@ -148,11 +159,11 @@ static func resolve(events: Array) -> Dictionary:
 			ord = int(ordv)
 		resolved.append({
 			"id": id,
-			"channel": String(ev.get("channel", "")),
-			"type": String(ev.get("type", "")),
+			"channel": _s(ev.get("channel", "")),
+			"type": _s(ev.get("type", "")),
 			"at": float(abs_times[id]),
 			"duration": durf,
-			"track": String(ev.get("track", "")),
+			"track": _s(ev.get("track", "")),
 			"order": ord,
 			"payload": ev.get("payload", {}),
 			"index": i,
@@ -168,11 +179,11 @@ static func resolve(events: Array) -> Dictionary:
 		var pb: int = int(CHANNEL_PRIORITY.get(b["channel"], 9))
 		if pa != pb:
 			return pa < pb
-		if String(a["track"]) != String(b["track"]):
-			return String(a["track"]) < String(b["track"])
+		if str(a["track"]) != str(b["track"]):
+			return str(a["track"]) < str(b["track"])
 		if int(a["order"]) != int(b["order"]):
 			return int(a["order"]) < int(b["order"])
-		return String(a["id"]) < String(b["id"])
+		return str(a["id"]) < str(b["id"])
 	)
 
 	var end_time := 0.0

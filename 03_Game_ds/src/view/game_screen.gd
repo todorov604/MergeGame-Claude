@@ -27,6 +27,8 @@ const BOARD_RECT := Rect2(50.0, 450.0, 980.0, 1260.0)
 const HUD_RECT := Rect2(0.0, 0.0, 1080.0, 185.0)
 const ORDER_RECT := Rect2(0.0, 182.0, 1080.0, 250.0)
 const DEFAULT_SEED := 7
+## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
+const TOAST_SECONDS := 1.5
 
 var board
 var hud
@@ -117,15 +119,15 @@ func _ready() -> void:
 	_sync_from_sim()
 
 	if _t_target >= 0.0:
+		# clock first: a toast raised while draining the preview window must start
+		# at the frozen time, otherwise it would expire before the screen is shot
+		_clock = _t_target
+		board.set_clock(_clock)
 		while evaluator.cursor < evaluator.events.size():
 			var ev: Dictionary = evaluator.events[evaluator.cursor]
 			if float(ev.get("at", 0.0)) > _t_target:
 				break
-			var report: Dictionary = evaluator.step()
-			if not bool(report.get("ok", true)):
-				sim_rejected += 1
-				_last_code = String(report.get("code", ""))
-		_clock = _t_target
+			_note_sim_result(evaluator.step())
 		fly.set_clock(_clock)
 	else:
 		fly.set_clock(0.0)
@@ -196,6 +198,7 @@ func _sync_from_sim() -> void:
 	board.build_from_level_data(level, _as_dict(model.project.get("entities", {})),
 			_generators_live(snap))
 	board.apply_state({"selected": _to_array(_selected), "completed": _completed_cells(snap)})
+	board.set_clock(_clock)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
 	orders.sync_orders(_as_array(snap.get("orders", [])))
 	_refresh_anchors()
@@ -352,6 +355,7 @@ func _process(delta: float) -> void:
 	if _freeze or evaluator == null:
 		return
 	if not _autoplay:
+		board.set_clock(_clock)
 		fly.set_clock(_clock)
 		return
 	_clock += delta
@@ -359,11 +363,45 @@ func _process(delta: float) -> void:
 		var ev: Dictionary = evaluator.events[evaluator.cursor]
 		if float(ev.get("at", 0.0)) > _clock:
 			break
-		var report: Dictionary = evaluator.step()
-		if not bool(report.get("ok", true)):
-			sim_rejected += 1
-			_last_code = String(report.get("code", ""))
+		_note_sim_result(evaluator.step())
+	board.set_clock(_clock)
 	fly.set_clock(_clock)
+
+
+## One place for the sim's verdict: the counters stay as they were (sim_rejected /
+## _last_code are part of the debug summary), and §7 item 4's prompt is raised when
+## the sim says the board is full.
+func _note_sim_result(report: Dictionary) -> void:
+	if bool(report.get("ok", true)):
+		return
+	sim_rejected += 1
+	_last_code = String(report.get("code", ""))
+	if _last_code == "SIM_BOARD_FULL":
+		board.show_toast(_board_full_text(), TOAST_SECONDS)
+
+
+## board.full from the project locale (meta.locale), falling back to the key and
+## then to plain English so the prompt is never empty.
+func _board_full_text() -> String:
+	var text := _locale_text("board.full")
+	if text.is_empty():
+		text = "Board full"
+	return text
+
+
+func _locale_text(key: String) -> String:
+	var project: Dictionary = _as_dict(model.project) if model != null else {}
+	var locales := _as_dict(project.get("locales", {}))
+	if locales.is_empty():
+		return ""
+	var locale := String(_as_dict(project.get("meta", {})).get("locale", "zh"))
+	var table := _as_dict(locales.get(locale, {}))
+	if table.is_empty():
+		table = _as_dict(locales.get("en", {}))
+	var value = table.get(key, "")
+	if typeof(value) != TYPE_STRING:
+		return ""
+	return String(value)
 
 
 func _input(event: InputEvent) -> void:

@@ -26,6 +26,7 @@ const EventEvaluator = preload("res://src/core/event_evaluator.gd")
 const AssetGuard = preload("res://src/assets/asset_guard.gd")
 const RenderPlan = preload("res://src/render/render_plan.gd")
 const RenderManifest = preload("res://src/render/render_manifest.gd")
+const ThemeLoader = preload("res://src/theme/theme_loader.gd")
 
 const FPS := 60
 const MANIFEST_INDEX := "res://data/manifest_index.json"
@@ -36,6 +37,13 @@ const FONT_ZH := "res://assets/fonts/font_zh.otf"
 const FONT_EN := "res://assets/fonts/font_en.ttf"
 const FRAME_ID := "board_frame"
 const FRAME_TEXTURE := "res://assets/ui/board_frame.png"
+
+## §7 item 4 prompt in the film: same geometry and fade curve as board_view, so a
+## preview screenshot and the delivered frame cannot disagree about the prompt.
+const TOAST_SECONDS := 1.5
+const TOAST_FADE := 0.25
+const TOAST_RECT := Rect2(190.0, 1802.0, 700.0, 84.0)
+const TOAST_COLOR := Color(0.10, 0.15, 0.21, 0.86)
 
 const COLOR_INK := Color("#22303F")
 const COLOR_WHITE := Color(1.0, 1.0, 1.0)
@@ -49,6 +57,8 @@ const COLOR_GEM := Color("#C86BFF")
 const COLOR_CTA := Color("#3FBF6A")
 const COLOR_DONE := Color("#8FD46B")
 const COLOR_CAPSULE := Color(0.10, 0.15, 0.21, 0.82)
+const COLOR_BAND := Color("#A8BDD5")
+const COLOR_INK_DIM := Color(0.30, 0.40, 0.52, 0.9)
 
 const CHIP_FONT := 40
 const CAPS_FONT := 22
@@ -61,6 +71,8 @@ var frame_cap := 0
 var allow_placeholders := false
 var seed_value := 7391
 var out_manifest := OUT_MANIFEST
+## `--theme=<name>` re-skins the film from data only; empty means project.theme.
+var theme_name := ""
 ## Diagnostic hook: extra manifest ids to push through the guard before the first
 ## frame. `--probe-ref=chip_clean_ca_lv01` must abort the render, which is how the
 ## REFERENCE_ONLY red line gets an end-to-end check instead of only a unit test.
@@ -69,8 +81,13 @@ var probe_refs: Array = []
 var _model = null
 var _evaluator = null
 var _guard = null
+var _theme_loader = null
 var _guard_blocked: Array = []
 var _rejected: Array = []
+var _colors: Dictionary = {}
+var _metrics: Dictionary = {}
+var _toast_text := ""
+var _toast_at := -1.0e9
 var _frame := 0
 var _t := 0.0
 var _total_frames := 0
@@ -132,6 +149,21 @@ func _ready() -> void:
 	if not _guard.load_from(MANIFEST_INDEX, allow_placeholders):
 		_fail("asset guard load failed: " + String(_guard.load_error))
 		return
+	# §7 item 7: the film must follow the theme. Palette + metrics come from the
+	# same ThemeLoader the live screen uses, so a theme change reaches the film
+	# without touching this file.
+	_theme_loader = ThemeLoader.new()
+	_theme_loader.setup(_guard, allow_placeholders)
+	var resolved_theme := theme_name
+	if resolved_theme.is_empty():
+		resolved_theme = String(_model.project.get("theme", "themes/default"))
+	var theme_result: Dictionary = _theme_loader.load_theme(resolved_theme, _model.project)
+	if not bool(theme_result.get("ok", false)):
+		_fail("theme load failed: " + str(theme_result.get("errors", [])))
+		return
+	theme_name = resolved_theme
+	_colors = _theme_loader.colors()
+	_metrics = _theme_loader.metrics
 	if allow_placeholders:
 		var code := String(_guard.check_ref(FRAME_ID))
 		if code.is_empty():
@@ -164,6 +196,7 @@ func _ready() -> void:
 		project_path, _total_frames, FPS, _end_time, seed_value,
 		"true" if allow_placeholders else "false",
 	])
+	print("[movie] theme=%s ok=true" % theme_name)
 	print("[movie] manifest " + RenderManifest.summary(manifest) + " [" + RenderManifest.detail(manifest) + "]")
 	print("[movie] window=%dx%d viewport=%dx%d" % [
 		DisplayServer.window_get_size().x, DisplayServer.window_get_size().y,
@@ -182,6 +215,8 @@ func _parse_args() -> void:
 			seed_value = int(arg.substr(7))
 		elif arg.begins_with("--out-manifest="):
 			out_manifest = arg.substr(15)
+		elif arg.begins_with("--theme="):
+			theme_name = arg.substr(8)
 		elif arg == "--allow-placeholders":
 			allow_placeholders = true
 		elif arg.begins_with("--probe-ref="):
@@ -237,8 +272,15 @@ func _advance_to(t: float) -> void:
 		if float(ev.get("at", 0.0)) > t + 1e-6:
 			break
 		var r: Dictionary = _evaluator.step()
-		if String(r.get("channel", "")) == "sim" and not bool(r.get("ok", false)):
-			_rejected.append({"id": String(r.get("id", "")), "code": String(r.get("code", ""))})
+		var channel := String(r.get("channel", ""))
+		if channel == "sim":
+			if not bool(r.get("ok", false)):
+				_rejected.append({"id": String(r.get("id", "")), "code": String(r.get("code", ""))})
+			# §7 item 4: the film shows the same prompt the live screen shows, either
+			# as an explicit board_full marker or as the sim's verdict on some event.
+			if String(r.get("code", "")) == "SIM_BOARD_FULL" \
+					or String(r.get("type", "")) == "board_full":
+				_prompt_board_full(float(r.get("at", t)))
 	_snap = _evaluator.sim.snapshot()
 	if not _snap.has("hud"):
 		_snap = _evaluator.sim.snapshot()
@@ -258,8 +300,16 @@ func _finish() -> void:
 	print("[movie] done frames=%d t=%.3f level=%s cells=%d obstacles=%d rejected=%d" % [
 		_frame, _t, level_id, cells, obs, _rejected.size(),
 	])
-	for r in _rejected:
-		print("[movie] rejected " + String(r.get("id", "")) + " " + String(r.get("code", "")))
+	# A take the sim refused is not a film. Before this gate the log could say
+	# "rejected=8" and render.sh still reported ok=1, so a timeline that only
+	# looked valid shipped as a silently incomplete video.
+	if not _rejected.is_empty():
+		print("[movie] FAIL rejected=%d" % _rejected.size())
+		for r in _rejected:
+			print("[movie] rejected " + String(r.get("id", "")) + " " + String(r.get("code", "")))
+		print("[movie] exit=3")
+		get_tree().quit(3)
+		return
 	print("[movie] exit=0")
 	get_tree().quit(0)
 
@@ -284,54 +334,68 @@ func on_event(_ev: Dictionary) -> void:
 # ----------------------------------------------------------------------- draw
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, _page), BoardView.COLOR_PAGE, true)
+	draw_rect(Rect2(Vector2.ZERO, _page), _palette("page", BoardView.COLOR_PAGE), true)
 	if _snap.is_empty():
 		return
+	_draw_band()
 	_draw_hud(_snap)
 	_draw_orders(_snap)
 	_draw_board(_snap)
 	_draw_view_layer()
+	_draw_toast()
+
+
+## Bottom band: metrics.band_height is the one theme knob with no other consumer, so
+## the band is what makes "thicker band" a visible property of the film.
+func _draw_band() -> void:
+	var height := _metric("band_height", 0.0)
+	if height <= 0.0:
+		return
+	draw_rect(Rect2(0.0, _page.y - height, _page.x, height), _palette("band", COLOR_BAND), true)
 
 
 func _draw_hud(snap: Dictionary) -> void:
 	var hud: Dictionary = snap.get("hud", {})
 	var y := 44.0
-	_hud_pill(Rect2(28.0, y, 186.0, 84.0), COLOR_ACCENT)
+	_hud_pill(Rect2(28.0, y, 186.0, 84.0), _palette("accent", COLOR_ACCENT),
+			Color(0, 0, 0, 0), _hud_radius())
 	_text_in(Rect2(28.0, y, 186.0, 84.0), "LV %d" % int(hud.get("level", 1)), HUD_FONT, COLOR_WHITE)
 
 	var er := Rect2(226.0, y, 250.0, 84.0)
-	_hud_pill(er, COLOR_PILL, COLOR_PILL_EDGE)
+	_hud_pill(er, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _hud_radius())
 	_bolt(Vector2(er.position.x + 34.0, er.position.y + er.size.y * 0.5), 22.0, COLOR_ENERGY)
-	_text_left(Rect2(er.position.x + 66.0, er.position.y, 170.0, 84.0), str(int(hud.get("energy", 0))), HUD_FONT, COLOR_INK)
+	_text_left(Rect2(er.position.x + 66.0, er.position.y, 170.0, 84.0), str(int(hud.get("energy", 0))), HUD_FONT, _palette("ink", COLOR_INK))
 
 	var cr := Rect2(488.0, y, 240.0, 84.0)
-	_hud_pill(cr, COLOR_PILL, COLOR_PILL_EDGE)
+	_hud_pill(cr, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _hud_radius())
 	_coin(Vector2(cr.position.x + 34.0, cr.position.y + cr.size.y * 0.5), 20.0)
-	_text_left(Rect2(cr.position.x + 66.0, cr.position.y, 160.0, 84.0), str(int(hud.get("coin", 0))), HUD_FONT, COLOR_INK)
+	_text_left(Rect2(cr.position.x + 66.0, cr.position.y, 160.0, 84.0), str(int(hud.get("coin", 0))), HUD_FONT, _palette("ink", COLOR_INK))
 
 	var sr := Rect2(740.0, y, 168.0, 84.0)
-	_hud_pill(sr, COLOR_PILL, COLOR_PILL_EDGE)
+	_hud_pill(sr, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _hud_radius())
 	_star(Vector2(sr.position.x + 32.0, sr.position.y + cr.size.y * 0.5), 20.0)
-	_text_left(Rect2(sr.position.x + 62.0, sr.position.y, 100.0, 84.0), str(int(hud.get("star", 0))), HUD_FONT, COLOR_INK)
+	_text_left(Rect2(sr.position.x + 62.0, sr.position.y, 100.0, 84.0), str(int(hud.get("star", 0))), HUD_FONT, _palette("ink", COLOR_INK))
 
 	var gr := Rect2(920.0, y, 132.0, 84.0)
-	_hud_pill(gr, COLOR_PILL, COLOR_PILL_EDGE)
+	_hud_pill(gr, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _hud_radius())
 	_gem(Vector2(gr.position.x + 30.0, gr.position.y + gr.size.y * 0.5), 18.0)
-	_text_left(Rect2(gr.position.x + 56.0, gr.position.y, 70.0, 84.0), str(int(hud.get("gem", 0))), HUD_FONT, COLOR_INK)
+	_text_left(Rect2(gr.position.x + 56.0, gr.position.y, 70.0, 84.0), str(int(hud.get("gem", 0))), HUD_FONT, _palette("ink", COLOR_INK))
 
 
 func _draw_orders(snap: Dictionary) -> void:
 	var orders: Array = snap.get("orders", [])
+	var card_radius := _card_radius()
+	var card_gap := _metric("card_gap", 14.0)
 	for i in range(mini(orders.size(), 2)):
 		var o: Dictionary = orders[i]
 		var done := bool(o.get("done", false))
-		var r := Rect2(40.0 + float(i) * 520.0, 170.0, 500.0, 214.0)
+		var r := Rect2(40.0 + float(i) * (500.0 + card_gap), 170.0, 500.0, 214.0)
 		if done:
-			_hud_pill(r, COLOR_DONE, Color("#5FA83F"))
+			_hud_pill(r, _palette("done", COLOR_DONE), Color("#5FA83F"), card_radius)
 		else:
-			_hud_pill(r, COLOR_PILL, COLOR_PILL_EDGE)
+			_hud_pill(r, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), card_radius)
 		_text_left(Rect2(r.position.x + 20.0, r.position.y + 10.0, 300.0, 40.0),
-			"ORDER " + String(o.get("id", "")), SMALL_FONT, COLOR_INK)
+			"ORDER " + String(o.get("id", "")), SMALL_FONT, _palette("ink", COLOR_INK))
 		var who := String(o.get("character", ""))
 		_character_badge(Rect2(r.position.x + r.size.x - 108.0, r.position.y + 16.0, 88.0, 88.0), who, done)
 		var mission: Array = o.get("mission", [])
@@ -345,14 +409,15 @@ func _draw_orders(snap: Dictionary) -> void:
 			# done card would read "0/1" on screen.
 			var shown := 1 if done else mini(have, 1)
 			var label := "%s Lv.%d  %d/%d" % [ent, lvl, shown, 1]
-			_text_left(Rect2(r.position.x + 24.0, row_y, 300.0, 44.0), label, 26, COLOR_INK)
+			_text_left(Rect2(r.position.x + 24.0, row_y, 300.0, 44.0), label, 26, _palette("ink", COLOR_INK))
 			_check_dot(Vector2(r.position.x + 352.0, row_y + 22.0), done or have >= 1)
 			row_y += 56.0
 
 
 func _draw_board(snap: Dictionary) -> void:
 	var panel := Rect2(_origin - Vector2(12.0, 12.0), _board_size + Vector2(24.0, 24.0))
-	_hud_pill(panel, BoardView.COLOR_PANEL, BoardView.COLOR_PANEL_EDGE)
+	_hud_pill(panel, _palette("panel", BoardView.COLOR_PANEL),
+			_palette("panel_edge", BoardView.COLOR_PANEL_EDGE), _board_radius())
 	if _frame_tex != null:
 		draw_texture_rect(_frame_tex, Rect2(_origin, _board_size), false)
 
@@ -362,6 +427,13 @@ func _draw_board(snap: Dictionary) -> void:
 	for y in range(height):
 		for x in range(width):
 			_cell_rect(x, y, false)
+
+	# metrics.tint_alpha washes the board base in palette.board_tint; at the default
+	# 0.0 nothing is painted, so the default film keeps its flat board.
+	var tint := _metric("tint_alpha", 0.0)
+	if tint > 0.0:
+		var tint_color: Color = _palette("board_tint", COLOR_WHITE)
+		draw_rect(Rect2(_origin, _board_size), Color(tint_color.r, tint_color.g, tint_color.b, tint), true)
 
 	var cells: Array = board.get("cells", [])
 	for raw in cells:
@@ -378,15 +450,20 @@ func _draw_board(snap: Dictionary) -> void:
 			_draw_obstacle(pos, String(kind))
 
 	var caption := "LEVEL %d / %s" % [int(snap.get("level_index", 0)) + 1, String(snap.get("level_id", ""))]
-	_text_left(Rect2(_origin.x, _origin.y - 52.0, 700.0, 40.0), caption, INK_FONT, Color(0.30, 0.40, 0.52, 0.9))
+	_text_left(Rect2(_origin.x, _origin.y - 52.0, 700.0, 40.0), caption, INK_FONT,
+			_palette("ink_dim", COLOR_INK_DIM))
 
 
 func _cell_rect(x: int, y: int, filled: bool) -> void:
 	var r := Rect2(_origin + Vector2(float(x) * _cell, float(y) * _cell), Vector2(_cell, _cell))
 	r = r.grow(-float(_cell_gap) * 0.5)
-	_rounded(r, 14, BoardView.COLOR_CELL)
+	var cell: Color = _palette("cell", BoardView.COLOR_CELL)
+	_rounded(r, 14, cell)
 	if not filled:
-		_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, BoardView.COLOR_CELL_LIP)
+		# cell_lip is not a palette key of its own: derive it from the theme cell so a
+		# re-skin moves the lip with the tile instead of leaving a stale blue line.
+		var lip: Color = _palette("cell_lip", cell.lightened(0.12))
+		_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, lip)
 
 
 func _draw_item(pos: Vector2i, entity_id: String, level: int) -> void:
@@ -399,7 +476,7 @@ func _draw_item(pos: Vector2i, entity_id: String, level: int) -> void:
 		"special":
 			_rounded(r, 14, BoardView.COLOR_SPECIAL)
 			_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 30.0)), 10, Color(1, 1, 1, 0.22))
-			_text_in(r, _short_label(entity_id), INK_FONT, COLOR_INK)
+			_text_in(r, _short_label(entity_id), INK_FONT, _palette("ink", COLOR_INK))
 		_:
 			_draw_chip(r, entity_id, level)
 
@@ -531,7 +608,7 @@ func _draw_view_layer() -> void:
 	if sel.x >= 0:
 		_selection_ring(sel, Color(0.35, 0.84, 0.42))
 	if hl.x >= 0:
-		_selection_ring(hl, COLOR_STAR)
+		_selection_ring(hl, _palette("star", COLOR_STAR))
 
 
 func _payload_slot(payload: Dictionary) -> Vector2i:
@@ -575,15 +652,21 @@ func _banner(text: String, r: Rect2, size: int, progress: float) -> void:
 	elif progress > 0.9:
 		a = (1.0 - progress) / 0.1
 	a = clampf(a, 0.0, 1.0)
-	_rounded(r, 26, Color(0.08, 0.12, 0.18, 0.72 * a))
-	_rounded_outline(r, 26, Color(1.0, 1.0, 1.0, 0.42 * a), 3)
-	_text_in(r, text, size, Color(1.0, 1.0, 1.0, a))
+	# The strip takes the theme ink (a dark capsule in both themes) and the label
+	# takes the theme banner colour, so a re-skin moves the banner without dropping
+	# the contrast that a light label needs.
+	var ink: Color = _palette("ink", COLOR_INK)
+	var label: Color = _palette("banner", COLOR_WHITE)
+	_rounded(r, 26, Color(ink.r, ink.g, ink.b, 0.78 * a))
+	_rounded_outline(r, 26, Color(label.r, label.g, label.b, 0.42 * a), 3)
+	_text_in(r, text, size, Color(label.r, label.g, label.b, a))
 
 
 func _draw_cta(text: String, progress: float) -> void:
 	var r := Rect2(150.0, 1732.0, 780.0, 132.0)
 	var a := clampf(progress / 0.15, 0.0, 1.0)
-	_rounded(r, 34, Color(COLOR_CTA.r, COLOR_CTA.g, COLOR_CTA.b, a))
+	var accent: Color = _palette("accent", COLOR_CTA)
+	_rounded(r, 34, Color(accent.r, accent.g, accent.b, a))
 	_rounded_outline(r, 34, Color(1.0, 1.0, 1.0, 0.55 * a), 4)
 	_text_in(r, "PLAY NOW" if text.is_empty() else text, 48, Color(1.0, 1.0, 1.0, a))
 
@@ -596,15 +679,80 @@ func _popup(text: String, pos: Vector2, alpha: float) -> void:
 	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var r := Rect2(pos - Vector2(w * 0.5 + 18.0, 30.0), Vector2(w + 36.0, 60.0))
 	_rounded(r, 22, Color(0.08, 0.12, 0.18, 0.55 * alpha))
-	_text_in(r, text, size, Color(1.0, 0.88, 0.35, alpha))
+	var coin: Color = _palette("coin", COLOR_COIN)
+	_text_in(r, text, size, Color(coin.r, coin.g, coin.b, alpha))
+
+
+# ------------------------------------------------------------------- prompt bar
+
+## §7 item 4 in the delivered film. The prompt window is counted from the sim
+## clock that produced it, never from wall time, so two takes stay identical.
+func _prompt_board_full(at: float) -> void:
+	var text := _locale("board.full")
+	if text.is_empty():
+		text = "Board full"
+	_toast_text = text
+	_toast_at = at
+
+
+func _toast_alpha() -> float:
+	if _toast_text.is_empty():
+		return 0.0
+	var age := _t - _toast_at
+	if age < 0.0 or age >= TOAST_SECONDS:
+		return 0.0
+	var remaining := TOAST_SECONDS - age
+	if remaining < TOAST_FADE:
+		return clampf(remaining / TOAST_FADE, 0.0, 1.0)
+	return 1.0
+
+
+func _draw_toast() -> void:
+	var alpha := _toast_alpha()
+	if alpha <= 0.0:
+		return
+	var bar := TOAST_RECT
+	_rounded(bar, 24, Color(TOAST_COLOR.r, TOAST_COLOR.g, TOAST_COLOR.b, TOAST_COLOR.a * alpha))
+	_rounded_outline(bar, 24, Color(1.0, 1.0, 1.0, 0.55 * alpha), 2)
+	_text_in(bar, _toast_text, INK_FONT, Color(1.0, 1.0, 1.0, alpha))
+
+
+# ------------------------------------------------------------------ theme lookup
+
+func _palette(key: String, fallback: Color) -> Color:
+	var value = _colors.get(key, null)
+	if value is Color:
+		return value
+	return fallback
+
+
+func _metric(key: String, fallback: float) -> float:
+	var value = _metrics.get(key, null)
+	if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
+		return float(value)
+	return fallback
+
+
+func _card_radius() -> int:
+	return int(round(_metric("card_radius", 22.0)))
+
+
+func _hud_radius() -> int:
+	return int(round(_metric("hud_radius", 26.0)))
+
+
+func _board_radius() -> int:
+	return int(round(_metric("board_radius", 28.0)))
 
 
 # ---------------------------------------------------------------- primitives
 
-func _hud_pill(r: Rect2, fill: Color, edge: Color = Color(0, 0, 0, 0)) -> void:
-	_rounded(r, int(minf(42.0, r.size.y * 0.5)), fill)
+func _hud_pill(r: Rect2, fill: Color, edge: Color = Color(0, 0, 0, 0), radius: int = -1) -> void:
+	var used := radius if radius >= 0 else int(minf(42.0, r.size.y * 0.5))
+	used = int(clampf(float(used), 0.0, minf(r.size.x, r.size.y) * 0.5))
+	_rounded(r, used, fill)
 	if edge.a > 0.0:
-		_rounded_outline(r, int(minf(42.0, r.size.y * 0.5)), edge, 3)
+		_rounded_outline(r, used, edge, 3)
 
 
 func _rounded(r: Rect2, radius: int, color: Color) -> void:
@@ -699,7 +847,7 @@ func _bolt(c: Vector2, s: float, color: Color) -> void:
 
 
 func _coin(c: Vector2, r: float) -> void:
-	draw_circle(c, r, COLOR_COIN, true, -1.0, true)
+	draw_circle(c, r, _palette("coin", COLOR_COIN), true, -1.0, true)
 	draw_circle(c, r, Color(0.72, 0.50, 0.12), false, 3.0, true)
 	draw_circle(c, r * 0.45, Color(0.94, 0.79, 0.42), true, -1.0, true)
 
@@ -710,20 +858,20 @@ func _star(c: Vector2, r: float) -> void:
 		var a := -PI * 0.5 + float(i) * PI / 5.0
 		var rad := r if i % 2 == 0 else r * 0.46
 		pts.append(c + Vector2(cos(a), sin(a)) * rad)
-	draw_colored_polygon(pts, COLOR_STAR)
+	draw_colored_polygon(pts, _palette("star", COLOR_STAR))
 
 
 func _gem(c: Vector2, r: float) -> void:
 	var pts := PackedVector2Array([
 		c + Vector2(0.0, -r), c + Vector2(r, -r * 0.15), c + Vector2(0.0, r), c + Vector2(-r, -r * 0.15),
 	])
-	draw_colored_polygon(pts, COLOR_GEM)
+	draw_colored_polygon(pts, _palette("gem", COLOR_GEM))
 	draw_polyline(_closed(pts), Color(1.0, 1.0, 1.0, 0.5), 2.0, true)
 
 
 func _check_dot(c: Vector2, done: bool) -> void:
 	if done:
-		draw_circle(c, 18.0, COLOR_DONE, true, -1.0, true)
+		draw_circle(c, 18.0, _palette("done", COLOR_DONE), true, -1.0, true)
 		var mark := PackedVector2Array([c + Vector2(-8.0, 0.0), c + Vector2(-2.0, 7.0), c + Vector2(9.0, -7.0)])
 		draw_polyline(mark, COLOR_WHITE, 5.0, true)
 	else:
@@ -735,7 +883,8 @@ func _character_badge(r: Rect2, who: String, done: bool) -> void:
 	_rounded(Rect2(r.position + Vector2(6.0, 6.0), Vector2(r.size.x - 12.0, r.size.y * 0.42)), 18, Color("#3A2A22"))
 	draw_circle(r.get_center() + Vector2(0.0, 14.0), 16.0, Color("#3A2A22"), true, -1.0, true)
 	var tag := who.replace("char_", "C")
-	_text_in(Rect2(r.position.x, r.position.y + r.size.y * 0.42, r.size.x, r.size.y * 0.58), tag, 26, COLOR_INK)
+	_text_in(Rect2(r.position.x, r.position.y + r.size.y * 0.42, r.size.x, r.size.y * 0.58), tag, 26,
+			_palette("ink", COLOR_INK))
 
 
 func _short_label(entity_id: String) -> String:

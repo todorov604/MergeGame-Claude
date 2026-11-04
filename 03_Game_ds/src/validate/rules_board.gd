@@ -16,6 +16,9 @@ const M0_MAX_LEVEL := 10
 static func check(ctx) -> void:
 	var levels = ctx.project.get("levels", [])
 	if typeof(levels) != TYPE_ARRAY:
+		# the schema rule owns the type error; ending the abort gate here keeps a
+		# malformed project from being reported as an internal script error too
+		ctx.rule_done()
 		return
 	var entities = ctx.project.get("entities", {})
 	var ents: Dictionary = entities if typeof(entities) == TYPE_DICTIONARY else {}
@@ -59,7 +62,12 @@ static func check(ctx) -> void:
 				seen[key] = ipath
 			if s.has("chip"):
 				ctx.err("SLOT_CHIP_KEY_LEGACY", ipath + ".chip", "schema v2 slots use `entity`; the legacy `chip` key was removed")
-			var eid := String(s.get("entity", ""))
+			var raw_eid = s.get("entity", null)
+			var eid := ""
+			if not Ctx.is_string(raw_eid):
+				ctx.err("SLOT_ENTITY_TYPE", ipath + ".entity", "slot entity must be a string (got %s)" % type_string(typeof(raw_eid)))
+			else:
+				eid = String(raw_eid)
 			var ent = ents.get(eid, null)
 			var lvl = s.get("level", null)
 			if not Ctx.is_int_val(lvl):
@@ -94,7 +102,11 @@ static func check(ctx) -> void:
 			if ox < 0 or oy < 0 or ox >= w or oy >= h:
 				ctx.err("OBSTACLE_OOB", ipath2 + ".slot", "obstacle (%d,%d) is outside %dx%d" % [ox, oy, w, h])
 				continue
-			var t := String(o.get("type", ""))
+			var raw_t = o.get("type", null)
+			if not Ctx.is_string(raw_t):
+				ctx.err("OBSTACLE_TYPE", ipath2 + ".type", "obstacle type must be a string (got %s)" % type_string(typeof(raw_t)))
+				continue
+			var t := String(raw_t)
 			if not KNOWN_OBSTACLE_TYPES.has(t):
 				ctx.err("OBSTACLE_TYPE", ipath2 + ".type", "unknown obstacle type \"%s\" (expected one of %s)" % [t, str(KNOWN_OBSTACLE_TYPES)])
 				continue
@@ -103,3 +115,5 @@ static func check(ctx) -> void:
 				ctx.err("OBSTACLE_DUP", ipath2, "duplicate %s obstacle at (%d,%d)" % [t, ox, oy])
 			else:
 				seen_ob[okey] = ipath2
+	# abort gate (N1): reached unless a runtime script error interrupted the loop
+	ctx.rule_done()

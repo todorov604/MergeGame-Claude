@@ -56,6 +56,15 @@ const OBSTACLE_TYPES := ["lock", "web", "bubble", "ice"]
 const DEFAULT_SELECTED := [3, 3]
 const DEFAULT_COMPLETED := [[1, 4]]
 
+## §7 item 4 "board full prompt": a procedural toast strip, so the prompt needs no
+## .tscn edit and no asset. The manifest id ui_board_full_toast stays REFERENCE_ONLY
+## and is deliberately never referenced here; the strip is drawn from code like
+## every other board element.
+const TOAST_SECONDS := 1.5
+const TOAST_FADE := 0.25
+const TOAST_RECT := Rect2(190.0, 1802.0, 700.0, 84.0)
+const COLOR_TOAST := Color(0.10, 0.15, 0.21, 0.86)
+
 var allow_placeholders: bool = false
 var project_path: String = ""
 var level_index: int = 0
@@ -70,6 +79,10 @@ var _completed: Dictionary = {} # Vector2i -> true
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
+var _clock: float = 0.0
+var _toast_text: String = ""
+var _toast_start: float = 0.0
+var _toast_seconds: float = TOAST_SECONDS
 
 
 func _ready() -> void:
@@ -216,6 +229,56 @@ func obstacle_count() -> int:
 	return _obstacles.size()
 
 
+# --------------------------------------------------------------------- toast API
+##
+## The toast lives on the view clock, not on wall time: callers drive it with
+## set_clock(), so the same code is deterministic in a screenshot tool and in the
+## film. `_draw()` only paints while the prompt is active.
+
+## Records the view clock. The toast window is measured from this value.
+func set_clock(t: float) -> void:
+	_clock = maxf(0.0, t)
+	if not _toast_text.is_empty():
+		queue_redraw()
+
+
+## Shows `text` for `seconds` (from the current clock) and repaints.
+func show_toast(text: String, seconds: float = TOAST_SECONDS) -> void:
+	_toast_text = text
+	_toast_seconds = seconds if seconds > 0.0 else TOAST_SECONDS
+	_toast_start = _clock
+	queue_redraw()
+
+
+func toast_text() -> String:
+	return _toast_text
+
+
+func toast_duration() -> float:
+	return _toast_seconds
+
+
+## 1.0 for the body of the window, linear fade over the last TOAST_FADE seconds,
+## 0.0 outside [start, start + duration).
+func toast_alpha_at(t: float) -> float:
+	if _toast_text.is_empty() or _toast_seconds <= 0.0:
+		return 0.0
+	var age := t - _toast_start
+	if age < 0.0 or age >= _toast_seconds:
+		return 0.0
+	var fade := minf(TOAST_FADE, _toast_seconds)
+	if fade <= 0.0:
+		return 1.0
+	var remaining := _toast_seconds - age
+	if remaining >= fade:
+		return 1.0
+	return clampf(remaining / fade, 0.0, 1.0)
+
+
+func toast_active_at(t: float) -> bool:
+	return toast_alpha_at(t) > 0.0
+
+
 # ------------------------------------------------------------------------ drawing
 
 func _draw() -> void:
@@ -259,6 +322,7 @@ func _draw() -> void:
 
 	_draw_legend()
 	_draw_caption()
+	_draw_toast()
 
 
 func _draw_cell(x: int, y: int) -> void:
@@ -472,6 +536,19 @@ func _draw_legend() -> void:
 		draw_string(_font, Vector2(x + 30.0, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 20,
 				Color(0.32, 0.41, 0.51, 0.9))
 		x += 30.0 + w + 22.0
+
+
+## §7 item 4: half-transparent rounded strip + centred text, painted only while the
+## prompt is alive. Nothing is drawn after the window closes, so a still frame
+## without a prompt stays byte-identical to the pre-toast board.
+func _draw_toast() -> void:
+	if not toast_active_at(_clock):
+		return
+	var alpha := toast_alpha_at(_clock)
+	var bar := TOAST_RECT
+	_rounded(bar, 24, Color(COLOR_TOAST.r, COLOR_TOAST.g, COLOR_TOAST.b, COLOR_TOAST.a * alpha))
+	_rounded_outline(bar, 24, Color(1.0, 1.0, 1.0, 0.55 * alpha), 2)
+	_text_center(bar, _toast_text, FONT_INK, Color(1.0, 1.0, 1.0, alpha))
 
 
 func _legend_color(kind: String) -> Color:

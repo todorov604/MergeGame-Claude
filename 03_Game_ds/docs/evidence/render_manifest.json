@@ -18,7 +18,7 @@
   "end_time": 30.0,
   "fps": 60,
   "frames": 1800,
-  "mp4_sha256": "314419d3e55662040f998ed4f043fd7037ddff4b5b2dc6426c0cc271c11fa648",
+  "mp4_sha256": "663c484aba61c781e1856cf0e009f5650f6b804681d9f42f66140e15319b979c",
   "ok": true,
   "out": "output/render.mp4",
   "project": "res://data/sample_project.json",

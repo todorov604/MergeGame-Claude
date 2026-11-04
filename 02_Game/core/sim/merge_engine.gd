@@ -15,6 +15,8 @@ func merge(board, from: Array, to: Array, max_level: int) -> Dictionary:
 	var to_y := int(to_xy[1])
 	if not board.in_bounds(from_x, from_y) or not board.in_bounds(to_x, to_y):
 		return _failure("坐标非法")
+	if from_x == to_x and from_y == to_y:
+		return _failure("坐标非法")
 	if board.has_obstacle(from_x, from_y) or board.has_obstacle(to_x, to_y):
 		return _failure("存在障碍，无法合并")
 

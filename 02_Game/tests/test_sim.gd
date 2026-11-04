@@ -89,6 +89,16 @@ func _test_merge(r) -> void:
 	r.check(not blocked["ok"], "障碍格应拒绝合并")
 	r.eq(blocked["message"], "存在障碍，无法合并", "障碍文案")
 
+	# 同格合并：坐标非法，且失败后棋盘不变
+	var same = BoardState.new()
+	same.setup(7, 9)
+	same.set_cell(2, 3, "Ca", 1)
+	var same_res: Dictionary = engine.merge(same, [2, 3], [2, 3], 10)
+	r.check(not same_res["ok"], "同格合并应拒绝")
+	r.eq(same_res["message"], "坐标非法", "同格合并文案")
+	r.check(same.has_cell(2, 3), "同格合并失败后 (2,3) 应仍有物品")
+	r.eq(int(same.get_cell(2, 3)["level"]), 1, "同格合并失败后 (2,3) 等级应仍为 Lv1")
+
 
 # ---------------------------------------------------------------- generator
 
@@ -214,6 +224,44 @@ func _test_orders(r) -> void:
 	var hud2 := {"coin": 0, "star": 0}
 	r.check(bool(o2.claim(b2, "o2", hud2)["ok"]), "双件订单应可领取")
 	r.eq(b2.count_cells(), 0, "双件订单应消耗两格")
+
+	# 空订单：视为全部完成，不阻塞切关
+	var empty_orders = OrderEngine.new()
+	empty_orders.setup({"id": "x", "orders": []})
+	r.check(empty_orders.all_claimed(), "空订单应视为全部完成")
+
+	var empty_data: Dictionary = _sample_data()
+	var empty_levels: Array = empty_data["levels"]
+	for level_v in empty_levels:
+		var empty_level: Dictionary = level_v
+		empty_level["orders"] = []
+	var empty_state = SimState.new()
+	empty_state.setup(empty_data, 1)
+	r.check(empty_state.level_complete, "空订单关卡 setup 后应标记 level_complete")
+	r.check(empty_state.advance_level(), "空订单关卡不应卡死，advance_level 应成功")
+
+	# mission 非整值：交付与领取都应报“订单数据非法”
+	var bad_mission = OrderEngine.new()
+	bad_mission.setup({
+		"id": "lv_bad",
+		"orders": [{
+			"id": "o",
+			"character": "char_01",
+			"mission": [{"entity": "Ca", "level": 1.5}],
+			"star": 0,
+			"coin": 0,
+		}],
+	})
+	var bad_board = BoardState.new()
+	bad_board.setup(2, 1)
+	bad_board.set_cell(0, 0, "Ca", 1)
+	var bad_deliver: Dictionary = bad_mission.deliver(bad_board, "o")
+	r.check(not bool(bad_deliver["ok"]), "非整值 mission 的交付应被拒绝")
+	r.eq(str(bad_deliver["message"]), "订单数据非法", "非整值 mission 交付文案")
+	var bad_hud: Dictionary = {"coin": 0, "star": 0}
+	var bad_claim: Dictionary = bad_mission.claim(bad_board, "o", bad_hud)
+	r.check(not bool(bad_claim["ok"]), "非整值 mission 的领取应被拒绝")
+	r.eq(str(bad_claim["message"]), "订单数据非法", "非整值 mission 领取文案")
 
 
 # ---------------------------------------------------------------- level flow

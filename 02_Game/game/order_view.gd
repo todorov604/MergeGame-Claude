@@ -146,6 +146,39 @@ func show_level_complete(text: String) -> void:
 	queue_redraw()
 
 
+func level_complete_text() -> String:
+	return _level_complete_text
+
+
+## View 通道 character_leave：角色 alpha 1→0（0.35s）后重绘。
+func play_character_leave() -> void:
+	if not is_inside_tree():
+		return
+	if _claim_tween != null and _claim_tween.is_valid():
+		_claim_tween.kill()
+	_claim_tween = create_tween()
+	_claim_tween.tween_method(_set_character_alpha, 1.0, 0.0, 0.35)
+	_claim_tween.tween_callback(func() -> void:
+		_claim_tween = null
+		queue_redraw()
+	)
+
+
+## View 通道 character_next：新角色由 refresh 驱动，这里先恢复角色可见。
+func play_character_next() -> void:
+	if not is_inside_tree():
+		return
+	_character_alpha = 1.0
+	queue_redraw()
+
+
+## View 通道 star_fly / coin_popup：复用交单奖励弹字（上浮 + 淡出）。
+func play_reward_popup(coin: int, star: int) -> void:
+	if not is_inside_tree():
+		return
+	_spawn_reward_popups(coin, star)
+
+
 # ---------------------------------------------------------------------------
 # 状态解析
 # ---------------------------------------------------------------------------
@@ -184,12 +217,11 @@ func _resolve_snapshot(snapshot_arg: Dictionary) -> void:
 			if typeof(mission_v) == TYPE_ARRAY:
 				new_mission = (mission_v as Array).duplicate(true)
 
-	var level_changed := level_index != _active_level_index
 	if _claim_tween != null:
 		# 外部 refresh 意味着视图状态被重新驱动（如重播/切关），终止未完成的交单动画。
 		_cancel_claim_animation()
-	if level_changed:
-		_level_complete_text = ""
+	# 横幅按快照覆盖：level_complete 为 true 时显示本地化文案，否则清空。
+	_level_complete_text = _level_complete_banner_text() if _snapshot_level_complete() else ""
 	_character_alpha = 1.0
 	_character_done = false
 	_active_level_index = level_index
@@ -206,6 +238,38 @@ func _snapshot_level_index() -> int:
 	if typeof(level_v) == TYPE_DICTIONARY:
 		index = _int_field(level_v as Dictionary, "index")
 	return index
+
+
+func _snapshot_level_complete() -> bool:
+	var value: Variant = snapshot.get("level_complete", false)
+	if typeof(value) == TYPE_BOOL:
+		return bool(value)
+	if typeof(value) == TYPE_INT:
+		return int(value) != 0
+	if typeof(value) == TYPE_FLOAT:
+		return not is_zero_approx(float(value))
+	return false
+
+
+## locales[meta.locale]["level.complete"]，缺失时回退 "Level Complete"。
+func _level_complete_banner_text() -> String:
+	var fallback := "Level Complete"
+	var locales_v: Variant = project_data.get("locales")
+	if typeof(locales_v) != TYPE_DICTIONARY:
+		return fallback
+	var meta_v: Variant = project_data.get("meta")
+	var locale := ""
+	if typeof(meta_v) == TYPE_DICTIONARY:
+		locale = _string_field(meta_v as Dictionary, "locale")
+	if locale.is_empty():
+		return fallback
+	var pack_v: Variant = (locales_v as Dictionary).get(locale)
+	if typeof(pack_v) != TYPE_DICTIONARY:
+		return fallback
+	var text_v: Variant = (pack_v as Dictionary).get("level.complete")
+	if typeof(text_v) == TYPE_STRING and not String(text_v).is_empty():
+		return String(text_v)
+	return fallback
 
 
 func _current_level() -> Dictionary:
@@ -421,8 +485,10 @@ func _cancel_claim_animation() -> void:
 		_claim_tween = null
 	_free_claim_token()
 	for label_v in _reward_labels:
-		if label_v is Node and is_instance_valid(label_v):
-			(label_v as Node).queue_free()
+		if is_instance_valid(label_v):
+			var label_node := label_v as Node
+			if label_node != null:
+				label_node.queue_free()
 	_reward_labels.clear()
 
 

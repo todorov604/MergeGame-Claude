@@ -59,7 +59,7 @@ func load_current_level() -> void:
 	board.load_from_level(level)
 	orders.setup(level)
 	generators.reset()
-	level_complete = false
+	level_complete = orders.all_claimed()
 
 
 func advance_level() -> bool:

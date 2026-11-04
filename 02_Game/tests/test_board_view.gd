@@ -61,3 +61,17 @@ func run(r) -> void:
 	empty_view.setup({}, {}, [], [], true)
 	r.eq(empty_view.slot_count(), 0, "空 snapshot 不应崩溃且槽位数为 0")
 	empty_view.free()
+
+	# ---------------------------------------------------------------- set_selection / set_completed 与 refresh
+	var mark_view = BoardView.new()
+	mark_view.setup(data, snapshot, [], [], true)
+	r.eq(mark_view.selection, [], "初始 selection 应为空")
+	r.eq(mark_view.completed, [], "初始 completed 应为空")
+	mark_view.set_selection([[2, 3]])
+	r.eq(mark_view.selection, [[2, 3]], "set_selection 应更新 selection")
+	mark_view.set_completed([[5, 5]])
+	r.eq(mark_view.completed, [[5, 5]], "set_completed 应更新 completed")
+	mark_view.refresh(snapshot)
+	r.eq(mark_view.selection, [[2, 3]], "refresh 后 selection 应保留")
+	r.eq(mark_view.completed, [[5, 5]], "refresh 后 completed 应保留")
+	mark_view.free()

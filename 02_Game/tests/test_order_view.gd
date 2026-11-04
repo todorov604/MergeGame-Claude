@@ -41,10 +41,13 @@ func run(r) -> void:
 	var claim_res: Dictionary = state.orders.claim(state.board, "order_1", hud)
 	r.check(bool(claim_res.get("ok", false)), "ready 订单应可领取: " + str(claim_res.get("message", "")))
 	var snapshot2: Dictionary = state.snapshot()
+	# 直接调用 orders.claim 不经过 SimRunner 的 level_complete 同步，按领取结果补齐快照。
+	snapshot2["level_complete"] = bool(claim_res.get("level_complete", false))
 	view.refresh(snapshot2)
 	r.eq(view.active_order_id(), "", "订单全部领取后 active_order_id 应为空")
 	r.eq(view.mission_count(), 0, "订单全部领取后 mission_count 应为 0")
 	r.check(not view.is_ready(), "无剩余订单时 is_ready 应为 false")
+	r.check(not view.level_complete_text().is_empty(), "level_1 完成快照 refresh 后过关横幅应非空")
 
 	# ---------------------------------------------------------------- 切到 level_2 后新角色新订单
 	var state2 = SimState.new()
@@ -64,6 +67,7 @@ func run(r) -> void:
 	r.eq(view.mission_count(), 1, "order_2 的 mission 数量应为 1")
 	r.eq(view.get_order_state(), "pending", "order_2 初始状态应为 pending")
 	r.check(not view.is_ready(), "order_2 未交付时 is_ready 应为 false")
+	r.eq(view.level_complete_text(), "", "level_2 初始快照 refresh 后过关横幅应为空")
 	view.free()
 
 	# ---------------------------------------------------------------- 空数据防御

@@ -53,7 +53,7 @@ func state_of(order_id: String) -> String:
 
 func all_claimed() -> bool:
 	if orders.is_empty():
-		return false
+		return true
 	for order_v in orders:
 		var order: Dictionary = order_v
 		if _string_or_empty(order.get("state")) != STATE_CLAIMED:
@@ -67,6 +67,8 @@ func deliver(board, order_id: String) -> Dictionary:
 	var order := get_order(order_id)
 	if order.is_empty():
 		return {"ok": false, "message": "订单不存在"}
+	if not _mission_valid(order):
+		return {"ok": false, "message": "订单数据非法"}
 	if state_of(order_id) != STATE_PENDING:
 		return {"ok": false, "message": "订单状态不允许交付"}
 	var available := _board_item_counts(board)
@@ -87,6 +89,8 @@ func claim(board, order_id: String, hud: Dictionary) -> Dictionary:
 	var order := get_order(order_id)
 	if order.is_empty():
 		return _failure("订单不存在")
+	if not _mission_valid(order):
+		return _failure("订单数据非法")
 	if state_of(order_id) != STATE_READY:
 		return _failure("订单未就绪")
 
@@ -140,7 +144,25 @@ static func _failure(message: String) -> Dictionary:
 	return {"ok": false, "message": message, "level_complete": false, "star": 0, "coin": 0}
 
 
-## mission -> [{"entity": String, "level": int}]；非法条目跳过（依赖 validator 先拦截）。
+## mission 必须严格整值：Array、每项 Dictionary、entity 非空 String、level int-like。
+static func _mission_valid(order: Dictionary) -> bool:
+	var mission_v: Variant = order.get("mission")
+	if typeof(mission_v) != TYPE_ARRAY:
+		return false
+	var mission: Array = mission_v
+	for item_v in mission:
+		if typeof(item_v) != TYPE_DICTIONARY:
+			return false
+		var item: Dictionary = item_v
+		var entity_v: Variant = item.get("entity")
+		if typeof(entity_v) != TYPE_STRING or String(entity_v).is_empty():
+			return false
+		if not _is_int_like(item.get("level")):
+			return false
+	return true
+
+
+## mission -> [{"entity": String, "level": int}]；调用前须先通过 _mission_valid。
 func _mission_items(order: Dictionary) -> Array:
 	var items: Array = []
 	var mission_v: Variant = order.get("mission")
@@ -155,9 +177,9 @@ func _mission_items(order: Dictionary) -> Array:
 		if typeof(entity_v) != TYPE_STRING or String(entity_v).is_empty():
 			continue
 		var level_v: Variant = item.get("level")
-		if typeof(level_v) != TYPE_INT and typeof(level_v) != TYPE_FLOAT:
+		if not _is_int_like(level_v):
 			continue
-		items.append({"entity": String(entity_v), "level": _as_int(level_v, 0)})
+		items.append({"entity": String(entity_v), "level": int(level_v)})
 	return items
 
 
@@ -232,3 +254,13 @@ static func _as_int(value: Variant, fallback: int) -> int:
 		if is_finite(f):
 			return int(f)
 	return fallback
+
+
+## Godot JSON 把数字都解析成 float：TYPE_INT，或有限且等于 floor 的 float。
+static func _is_int_like(value: Variant) -> bool:
+	if typeof(value) == TYPE_INT:
+		return true
+	if typeof(value) != TYPE_FLOAT:
+		return false
+	var f := float(value)
+	return is_finite(f) and f == floor(f)

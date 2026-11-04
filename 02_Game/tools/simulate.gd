@@ -10,6 +10,7 @@ extends SceneTree
 
 const ProjectDoc := preload("res://core/project_doc.gd")
 const SimRunner := preload("res://core/sim/sim_runner.gd")
+const Validator := preload("res://core/validator.gd")
 
 
 func _initialize() -> void:
@@ -41,6 +42,16 @@ func _initialize() -> void:
 	var project = ProjectDoc.new()
 	if not project.load_file(resolved_project):
 		print("ERROR 加载项目失败: %s" % project.parse_error)
+		quit(1)
+		return
+
+	var validator = Validator.new()
+	validator.validate_project(project, null, true)
+	if not validator.errors.is_empty():
+		for err_v in validator.errors:
+			var err: Dictionary = err_v
+			print("ERROR %s: %s" % [String(err.get("path", "")), String(err.get("message", ""))])
+		print("结果: FAIL 项目校验失败")
 		quit(1)
 		return
 

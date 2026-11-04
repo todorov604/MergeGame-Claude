@@ -51,6 +51,16 @@ func refresh(snapshot_arg: Dictionary) -> void:
 	queue_redraw()
 
 
+func set_selection(selection_arg: Array) -> void:
+	selection = selection_arg
+	queue_redraw()
+
+
+func set_completed(completed_arg: Array) -> void:
+	completed = completed_arg
+	queue_redraw()
+
+
 func cell_center(x: int, y: int) -> Vector2:
 	return _cell_rect(x, y).get_center()
 
@@ -183,6 +193,8 @@ func _draw_obstacles() -> void:
 				_draw_web(x, y)
 			"bubble":
 				_draw_bubble(x, y)
+			"ice":
+				_draw_ice(x, y)
 
 
 func _draw_lock(x: int, y: int) -> void:
@@ -219,6 +231,21 @@ func _draw_bubble(x: int, y: int) -> void:
 	draw_arc(center, radius, 0.0, TAU, 48, Color(0.7, 0.88, 1.0, 0.8), 7.0, true)
 	draw_arc(center, radius * 0.72, PI * 1.12, PI * 1.62, 20, Color(1.0, 1.0, 1.0, 0.55), 5.0, true)
 	draw_circle(center + Vector2(-radius * 0.42, -radius * 0.46), radius * 0.12, Color(1.0, 1.0, 1.0, 0.85))
+
+
+func _draw_ice(x: int, y: int) -> void:
+	# 半透明冰蓝圆角覆盖 + 白色裂纹：与锁（灰）、蛛网（放射线）、泡泡（圆形）区分。
+	var rect := _cell_rect(x, y).grow(-CELL_INSET)
+	draw_style_box(_make_style(Color(0.55, 0.84, 1.0, 0.42), 16, Color(0.82, 0.95, 1.0, 0.9), 3), rect)
+	var line_color := Color(1.0, 1.0, 1.0, 0.85)
+	var crack_start := rect.position + rect.size * Vector2(0.2, 0.14)
+	var crack_end := rect.position + rect.size * Vector2(0.76, 0.74)
+	draw_line(crack_start, crack_end, line_color, 3.0, true)
+	var branch_a := crack_start.lerp(crack_end, 0.45)
+	draw_line(branch_a, branch_a + rect.size * Vector2(0.14, 0.26), line_color, 2.2, true)
+	var branch_b := crack_start.lerp(crack_end, 0.72)
+	draw_line(branch_b, branch_b + rect.size * Vector2(-0.18, 0.2), line_color, 2.2, true)
+	draw_line(crack_start, crack_start + rect.size * Vector2(0.22, -0.06), line_color, 2.0, true)
 
 
 func _draw_selection() -> void:

@@ -57,6 +57,10 @@ func setup(data: Dictionary, seed_in: int) -> void:
 func load_current_level() -> void:
 	var level: Dictionary = flow.current_level()
 	board.load_from_level(level)
+	var entities_v: Variant = project_data.get("entities", {})
+	if typeof(entities_v) == TYPE_DICTIONARY:
+		var entities: Dictionary = entities_v
+		board.clamp_levels(entities, 10)
 	orders.setup(level)
 	generators.reset()
 	level_complete = orders.all_claimed()

@@ -29,6 +29,24 @@ func load_from_level(level: Dictionary) -> void:
 	_load_obstacles(level.get("obstacles"))
 
 
+## 载入后把等级夹到 [1, min(hard_cap, 实体 maxLevel)]；M0 等级上限 10。
+func clamp_levels(entities: Dictionary, hard_cap: int) -> void:
+	for cell_key in cells.keys():
+		var cell: Dictionary = cells[cell_key]
+		var entity_id := ""
+		var entity_v: Variant = cell.get("entity")
+		if typeof(entity_v) == TYPE_STRING:
+			entity_id = String(entity_v)
+		var max_level := hard_cap
+		var def_v: Variant = entities.get(entity_id, {})
+		if typeof(def_v) == TYPE_DICTIONARY:
+			var def: Dictionary = def_v
+			var max_level_v: Variant = def.get("maxLevel")
+			if _is_int_like(max_level_v) and int(max_level_v) > 0:
+				max_level = mini(hard_cap, int(max_level_v))
+		cell["level"] = clampi(int(cell.get("level", 1)), 1, max_level)
+
+
 func key(x: int, y: int) -> String:
 	return "%d,%d" % [x, y]
 

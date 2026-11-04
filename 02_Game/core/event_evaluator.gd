@@ -21,18 +21,26 @@ func evaluate(timeline: Array) -> bool:
 	events.clear()
 
 	# 1) 基础检查 + 建立 id -> index 表（重复 id 报错，锚点解析用第一个）。
+	#    M0 §3.3：channel 必须显式，type 必须已注册；非法事件不进入 events。
 	var id_to_index: Dictionary = {}
+	var invalid_indices: Dictionary = {}
 	for i in range(timeline.size()):
 		var entry_v: Variant = timeline[i]
 		if typeof(entry_v) != TYPE_DICTIONARY:
 			errors.append({"index": i, "id": "", "message": "事件必须是对象"})
 			continue
-		var entry_id: Variant = (entry_v as Dictionary).get("id")
-		if typeof(entry_id) == TYPE_STRING and not String(entry_id).is_empty():
+		var entry: Dictionary = entry_v
+		var entry_id := ""
+		var entry_id_v: Variant = entry.get("id")
+		if typeof(entry_id_v) == TYPE_STRING:
+			entry_id = String(entry_id_v)
+		if not entry_id.is_empty():
 			if id_to_index.has(entry_id):
-				errors.append({"index": i, "id": String(entry_id), "message": "事件 ID 重复: %s" % entry_id})
+				errors.append({"index": i, "id": entry_id, "message": "事件 ID 重复: %s" % entry_id})
 			else:
 				id_to_index[entry_id] = i
+		if not _channel_type_ok(entry, i, entry_id, errors):
+			invalid_indices[i] = true
 
 	# 2) 递归解析 at（memo + visiting 循环检测）；失败的事件不进入 events。
 	var memo: Dictionary = {}
@@ -40,6 +48,8 @@ func evaluate(timeline: Array) -> bool:
 	for i in range(timeline.size()):
 		var entry_v: Variant = timeline[i]
 		if typeof(entry_v) != TYPE_DICTIONARY:
+			continue
+		if invalid_indices.has(i):
 			continue
 		var resolved: Dictionary = _resolve_index(i, timeline, id_to_index, memo, visiting)
 		if bool(resolved["ok"]):
@@ -82,6 +92,39 @@ static func channel_priority(ch: String) -> int:
 	if CHANNEL_PRIORITY.has(ch):
 		return int(CHANNEL_PRIORITY[ch])
 	return 99
+
+
+## M0 §3.3：channel ∈ sim/view/audio；type 必须是该通道注册表里已登记的类型。
+func _channel_type_ok(entry: Dictionary, index: int, entry_id: String, out_errors: Array) -> bool:
+	var channel_v: Variant = entry.get("channel")
+	var channel := ""
+	if typeof(channel_v) == TYPE_STRING:
+		channel = String(channel_v)
+	var channel_ok := CHANNEL_PRIORITY.has(channel)
+	if not channel_ok:
+		out_errors.append({"index": index, "id": entry_id, "message": "channel 必须是 sim/view/audio"})
+	var type_v: Variant = entry.get("type")
+	var type_text := ""
+	if typeof(type_v) == TYPE_STRING:
+		type_text = String(type_v)
+	var type_ok := not type_text.is_empty()
+	if not type_ok:
+		out_errors.append({"index": index, "id": entry_id, "message": "type 必须是非空字符串"})
+	elif channel_ok and not _is_registered_type(channel, type_text):
+		out_errors.append({"index": index, "id": entry_id, "message": "未注册的事件类型: %s" % type_text})
+		type_ok = false
+	return channel_ok and type_ok
+
+
+static func _is_registered_type(channel: String, type_text: String) -> bool:
+	match channel:
+		CHANNEL_SIM:
+			return type_text in SIM_TYPES
+		CHANNEL_VIEW:
+			return type_text in VIEW_TYPES
+		CHANNEL_AUDIO:
+			return type_text in AUDIO_TYPES
+	return false
 
 
 func _resolve_index(index: int, timeline: Array, id_to_index: Dictionary, memo: Dictionary, visiting: Dictionary) -> Dictionary:

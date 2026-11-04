@@ -19,13 +19,16 @@ func _test_sort_order(r) -> void:
 	var ok := evaluator.evaluate([
 		{"id": "v1", "channel": "view", "type": "text", "at": 5.0, "payload": {}},
 		{"id": "s1", "channel": "sim", "type": "tap", "at": 5.0, "payload": {}},
-		{"id": "a1", "channel": "audio", "type": "sfx", "at": 5.0, "payload": {}},
 		{"id": "s2", "channel": "sim", "type": "tap", "at": 5.0, "order": 1, "payload": {}},
 		{"id": "s0", "channel": "sim", "type": "tap", "at": 5.0, "track": 1, "payload": {}},
 		{"id": "s00", "channel": "sim", "type": "tap", "at": 5.0, "payload": {}},
 	])
 	r.check(ok, "合法事件应求值成功: " + _join(evaluator.errors))
-	r.eq(_ids(evaluator.events), ["s00", "s1", "s2", "s0", "v1", "a1"], "排序应为 at→channel→track→order→id")
+	r.eq(_ids(evaluator.events), ["s00", "s1", "s2", "s0", "v1"], "排序应为 at→channel→track→order→id")
+	# audio 通道当前没有注册类型，优先级只能直接验证
+	r.eq(EventEvaluator.channel_priority("sim"), 0, "sim 通道优先级 0")
+	r.eq(EventEvaluator.channel_priority("view"), 1, "view 通道优先级 1")
+	r.eq(EventEvaluator.channel_priority("audio"), 2, "audio 通道优先级 2")
 
 
 func _test_anchors(r) -> void:

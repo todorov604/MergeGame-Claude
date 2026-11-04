@@ -6,6 +6,7 @@ extends SceneTree
 const TestResults = preload("res://tests/test_results.gd")
 const TEST_SCRIPTS := [
 	preload("res://tests/test_event_evaluator.gd"),
+	preload("res://tests/test_core_defects.gd"),
 	preload("res://tests/test_validator.gd"),
 	preload("res://tests/test_resource_guard.gd"),
 	preload("res://tests/test_sim.gd"),

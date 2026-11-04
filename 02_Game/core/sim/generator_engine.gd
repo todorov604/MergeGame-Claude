@@ -87,7 +87,7 @@ func tap(project_data: Dictionary, board, slot: Array, at_time: float, rng) -> D
 			break
 
 	var entity := String(chosen["entity"])
-	var level := int(chosen["level"])
+	var level := clampi(int(chosen["level"]), 1, _entity_max_level(project_data, entity))
 	var direct_order := bool(chosen["direct_order"])
 	board.set_cell(int(empty[0]), int(empty[1]), entity, level)
 	state["charges"] = charges - 1
@@ -138,6 +138,18 @@ func _collect_entries(target: Array, items_v: Variant, is_rare: bool) -> float:
 		})
 		added += weight
 	return added
+
+
+func _entity_max_level(project_data: Dictionary, entity_id: String) -> int:
+	var entities_v: Variant = project_data.get("entities")
+	if typeof(entities_v) == TYPE_DICTIONARY:
+		var entities: Dictionary = entities_v
+		var def_v: Variant = entities.get(entity_id, {})
+		if typeof(def_v) == TYPE_DICTIONARY:
+			var max_level_v: Variant = (def_v as Dictionary).get("maxLevel")
+			if _is_int_like(max_level_v) and int(max_level_v) > 0:
+				return mini(10, int(max_level_v))
+	return 10
 
 
 func _is_generator(project_data: Dictionary, entity_id: String) -> bool:

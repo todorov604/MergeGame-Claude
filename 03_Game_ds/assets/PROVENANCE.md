@@ -83,6 +83,38 @@ M1 起 `chip_clean_*` 系列的 20 张真实棋子在工程内：Clean 家族 Ca
 - 处理：PIL 按 alpha 裁掉四周留白 → 透明 RGB 填白（避免缩放出黑边）→ 等比放入 256×256 画布（底边对齐）→ LANCZOS 缩放。原图另存为同目录 `cursor_hand_source.png` 备查。
 - 已在 `00_design/resource_manifest.json` v8 登记（2026-11-05，id 同名；原 CC0 记录已改为项目自有），`data/assets_local.json` 仍保留一条本地记录，因为本工程快照还是 v7/180 条；M2 重建快照后本地记录可删。
 - 用途：自由模式试玩窗口的手型光标（OS 光标隐藏，画在 `game_screen.gd` 的 `Cursor` 层）+ 成片光标 overlay（`src/render/movie_scene.gd` 的 `_draw_cursor()`），两处都按 **96×96** 绘制，热点 = 指尖（纹理比例 `0.135, 0.004`）。
+### 棋盘底 / 亮格（2026-11-05 改版，项目自有素材）
+
+| id | 源文件（工作区相对） | 工程内路径 | actual | usage | license | sha256 |
+|---|---|---|---|---|---|---|
+| `ui_board_plate` | `北京Icon/常用资产汇总/面板模板/素材/单独格子.png` | `assets/ui/board_plate.png` | 167×167（源画布 1080×1920） | PRODUCTION | 公司自有（北京Icon 资产汇总） | `825dad5f53dbbd462958996157f344030263bcd4024190bb3baf590b828ad9de` |
+| `ui_cell_light` | `北京Icon/常用资产汇总/棋盘界面拆解/浅色格.png` | `assets/ui/cell_light.png` | 256×256 | PRODUCTION | 公司自有（北京Icon 资产汇总） | `8376a77a4bbebadbd4a58a4c2868273a429b3deb9814f670f7b807c4a608f0b0` |
+
+- 大底：PIL 按 alpha 裁切出中间 167×167 的圆角格；运行时九宫格拉伸到 983×1263（`board_view._draw_plate` / `movie_scene._draw_plate`，角 30px 不缩放）。
+- 亮格：整字节复制；只在 `(x+y)%2==0` 的格位绘制，其余格子露出大底，形成棋盘格。
+- 原画布备份：`01_icon/HotelManor_icon/剩余图标/board_plate_source.png`（1080×1920，未裁切原图）。
+
+| `ui_exit_button` | `北京Icon/常用资产汇总/棋盘界面拆解/棋盘拆解_0000s_0017_返回按钮.png` | `assets/ui/exit_button.png` | 159×176 | PRODUCTION | 公司自有（北京Icon 资产汇总） | `ddf2a5a991cb5e99ca1b9a80304fc3d028cd063a73dbab9e59bd74b616ac04eb` |
+
+- 来源：项目方素材（蓝色返回按钮），整字节复制；运行时按 `LAYOUT_EXIT` 164×174 槽位等比适配，替换原程序化三角。
+- 已在 `00_design/resource_manifest.json` v8 登记（id `ui_exit_button`），`assets_local.json` 保留本地记录至 M2 快照重建。
+
+| `ui_bar_board` | `北京Icon/常用资产汇总/棋盘界面拆解/棋盘拆解_0000s_0019_任务背景板.png` | `assets/ui/bar_board.png` | 388×178 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 九宫格 28px 四角 |
+| `ui_coin_reward` | `北京Icon/常用资产汇总/棋盘界面拆解/棋盘拆解_0000s_0008_奖励金币领取.png` | `assets/ui/coin_reward.png` | 146×147 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 底栏金币按钮，按 124px 等比 |
+| `ui_reminder` | `北京Icon/常用资产汇总/棋盘界面拆解/提醒.png` | `assets/ui/reminder.png` | 58×58 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 底栏 ⓘ 提示图标 |
+
+### 显示字体（用户提供，未复制进 assets/）
+
+底栏两条文案使用 `font/源字体/中文-江城圆体600W/` 里的 **江城圆体 700W（标题，加粗）** 与 **400W（副标题）**。
+字体文件由操作者直接放进工程（`03_Game_ds/font/源字体/`，单文件 15 MB 级），
+运行时用 `FontFile.load_dynamic_font()` 从 `res://font/源字体/...` 直读，**不复制到 `assets/`**，
+因此不进入 52→55 载荷计数，也不参与 `AssetGuard` 登记；授权状态待操作者确认。
+
+| `ui_generator_icon` | `北京Icon/常用资产汇总/棋子icon/icon_20001010.png` | `assets/ui/generator_icon.png` | 182×182 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 生成器主图标，按 132px 与 chip 同尺寸 |
+| `ui_stamina` | `北京Icon/常用资产汇总/棋盘界面拆解/棋盘拆解_0000s_0005_体力.png` | `assets/ui/stamina.png` | 39×53 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 生成器左下角体力闪电，26×35 |
+
+| `ui_common_line` | `01_icon/HotelManor_icon/剩余图标/common_line.png`（原图未随包提供，按归档副本登记） | `assets/ui/common_line.png` | 10×4 | PRODUCTION | 公司自有（北京Icon 资产汇总） | 底栏标题/副标题之间 4px 分隔线，运行时拉伸到 420×4 |
+
 本地表只做**加法**：与快照同名的 id 一律拒绝并计入 `AssetGuard.local_override_rejected`，本地记录不会改写、升级或降级任何 manifest 记录。
 
 ### 快照已登记、本次才复制的布局文件（13 个文件 / 15 条记录）
@@ -105,6 +137,8 @@ M1 起 `chip_clean_*` 系列的 20 张真实棋子在工程内：Clean 家族 Ca
 | `ui_order_card` / `ui_order_card_done` | `01_icon/HotelManor_icon/界面切图/main_frame_message.png` | `assets/ui/main_frame_message.png` | 120×180 | PRODUCTION | 公司自有/自研 | `d4f3b016bdc803b42ed45b6d0b3a8046e9de621bd5b4c651918e0db5edfabe58` |
 | `obstacle_web` | `01_icon/HotelManor_icon/剩余图标/obstacle_web.png` | `assets/ui/obstacle_web.png` | 140×140 | PRODUCTION | 公司自有/自研 | `bbc786eb23730ac494826dc1e36a53465c2267f0ecf71e19a23419072879b791` |
 | `obstacle_ice` | `01_icon/HotelManor_icon/剩余图标/obstacle_ice.png` | `assets/ui/obstacle_ice.png` | 140×140 | PRODUCTION | 公司自有/自研 | `8c627b502a72de1acf4dd5af6b00d365eaa3ebd9db909d70e1f15d3e7fafb06e` |
+
+| `ui_common_line` | `01_icon/HotelManor_icon/剩余图标/common_line.png` | `assets/ui/common_line.png` | 10×4 | PRODUCTION | 公司自有（北京Icon 资产汇总） | `7f1979582d8f989d8c22422e4fde8e55c9688b41f842a62463fd800c18c0b1ea` |
 
 ## 未复制清单（M1 口径）
 

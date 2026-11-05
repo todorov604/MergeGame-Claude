@@ -11,6 +11,7 @@ extends RefCounted
 const TYPES := [
 	"tap",
 	"drag",
+	"swap",
 	"merge",
 	"deliver",
 	"order_claim",
@@ -41,6 +42,8 @@ static func apply(sim, event: Dictionary) -> Dictionary:
 	match type:
 		"tap":
 			return sim._do_tap(payload)
+		"swap":
+			return sim._do_swap(payload)
 		"merge", "drag":
 			return sim._do_merge(payload)
 		"deliver":

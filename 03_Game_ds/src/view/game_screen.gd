@@ -31,6 +31,7 @@ const SAMPLE_PROJECT := "res://data/sample_project.json"
 const MANIFEST_INDEX := "res://data/manifest_index.json"
 const TakeIo := preload("res://src/core/take_io.gd")
 const FreeMode := preload("res://src/core/free_mode.gd")
+const CompletedCells := preload("res://src/core/completed_cells.gd")
 ## Free-mode takes land in output/mov/ (gitignored): `take_<stamp>.take.json`
 ## next to the film it produced, `take_<stamp>.mp4`.
 const MOV_DIR := "res://output/mov"
@@ -57,6 +58,12 @@ const LAYOUT_BG_TOP := FilmLayout.LAYOUT_BG_TOP
 const LAYOUT_PART1 := FilmLayout.LAYOUT_PART1
 const LAYOUT_PART2 := FilmLayout.LAYOUT_PART2
 const LAYOUT_ITEMS := FilmLayout.LAYOUT_ITEMS
+const FONT_DISPLAY_BOLD := FilmLayout.FONT_DISPLAY_BOLD
+const FONT_DISPLAY_REGULAR := FilmLayout.FONT_DISPLAY_REGULAR
+const FONT_DISPLAY_NUM := FilmLayout.FONT_DISPLAY_NUM
+## Third bottom-bar label (reward count on the green coin button). Value + font both
+## live in the film's table so a preview shot and a delivered frame agree.
+const BAR_COIN_REWARD := FilmLayout.BAR_COIN_REWARD
 const LAYOUT_EXIT := FilmLayout.LAYOUT_EXIT
 const LAYOUT_BAG := FilmLayout.LAYOUT_BAG
 const LAYOUT_SHOP := FilmLayout.LAYOUT_SHOP
@@ -78,7 +85,8 @@ const HUD_RECT := Rect2(0.0, 0.0, 864.0, 148.0)
 ## board_view.gd and are logged there).
 const UI_KEYS := [
 	"bg_bottom", "bg_top", "level_badge", "level_badge_bg", "energy_timer",
-	"money_bg", "part1", "part2", "items", "exit", "bag", "shop",
+	"money_bg", "part1", "part2", "items", "bar_board", "reminder", "coin_reward", "line",
+	"exit", "bag", "shop",
 ]
 const DEFAULT_SEED := 7
 ## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
@@ -161,20 +169,77 @@ class Chrome extends Control:
 			draw_rect(Rect2(LAYOUT_SHOP.position + Vector2(26.0, 34.0),
 					Vector2(LAYOUT_SHOP.size.x - 52.0, 46.0)), Color(1, 1, 1, 0.85), true)
 
+	const BAR_TITLE := FilmLayout.BAR_TITLE
+	const BAR_SUBTITLE := FilmLayout.BAR_SUBTITLE
+	const BAR_COIN_REWARD := FilmLayout.BAR_COIN_REWARD
+	const FONT_DISPLAY_NUM := FilmLayout.FONT_DISPLAY_NUM
+	# 2026-11-05 底栏版式：几何/文案/颜色全部读成片表，两端口径一致。
+	const BAR_ICON_OFFSET := FilmLayout.BAR_ICON_OFFSET
+	const BAR_ICON_SIZE := FilmLayout.BAR_ICON_SIZE
+	const BAR_TITLE_OFFSET := FilmLayout.BAR_TITLE_OFFSET
+	const BAR_TITLE_SIZE := FilmLayout.BAR_TITLE_SIZE
+	const BAR_SUB_OFFSET := FilmLayout.BAR_SUB_OFFSET
+	const BAR_SUB_SIZE := FilmLayout.BAR_SUB_SIZE
+	const BAR_LINE_OFFSET_Y := FilmLayout.BAR_LINE_OFFSET_Y
+	const BAR_LINE_H := FilmLayout.BAR_LINE_H
+	const BAR_LINE_GAP := FilmLayout.BAR_LINE_GAP
+	const BAR_LINE_COLOR := FilmLayout.BAR_LINE_COLOR
+	const BAR_COIN_OFFSET_Y := FilmLayout.BAR_COIN_OFFSET_Y
+	const BAR_BUY := FilmLayout.BAR_BUY
+	const BAR_BUY_OFFSET_Y := FilmLayout.BAR_BUY_OFFSET_Y
+	const BAR_BUY_SIZE_Y := FilmLayout.BAR_BUY_SIZE_Y
+	const BAR_BUY_COLOR := FilmLayout.BAR_BUY_COLOR
+
 	func _draw_bottom_bar(snap: Dictionary) -> void:
-		if not draw_ui_stretch("items", LAYOUT_ITEMS):
-			rounded(LAYOUT_ITEMS, 24, Color(1, 1, 1, 0.92))
-		# items.png carries placeholder copy from the PSD; the live level/id text goes
-		# on a small plate that covers that copy instead of doubling it.
-		var plate := Rect2(LAYOUT_ITEMS.position + Vector2(52.0, 18.0), Vector2(470.0, 62.0))
-		rounded(plate, 18, Color(0.98, 0.99, 1.0, 1.0))
-		var level_line := "LEVEL %d / %s" % [int(snap.get("level_index", host._level_index)) + 1,
-				String(snap.get("level_id", host._level_static.get("id", "")))]
-		text_left(Rect2(plate.position + Vector2(18.0, 6.0), Vector2(plate.size.x - 36.0, 40.0)), level_line, 28, Color("#22303F"))
+		# 2026-11-05: layered bar instead of the flattened PSD slice.
+		# 1) 任务背景板 (9-sliced)  2) 提醒 icon  3) 奖励金币 button  + labels.
+		if not draw_plate("bar_board", LAYOUT_ITEMS, 28.0):
+			if not draw_ui_stretch("items", LAYOUT_ITEMS):
+				rounded(LAYOUT_ITEMS, 24, Color(1, 1, 1, 0.92))
+		var coin_size := 124.0
+		var coin_rect := Rect2(
+				LAYOUT_ITEMS.position.x + LAYOUT_ITEMS.size.x - 24.0 - coin_size,
+				LAYOUT_ITEMS.position.y + BAR_COIN_OFFSET_Y,
+				coin_size, coin_size)
+		# ① ⓘ 上移：顶部与标题同高。
+		draw_ui_fit("reminder", Rect2(LAYOUT_ITEMS.position + BAR_ICON_OFFSET, BAR_ICON_SIZE))
+		# ② label1（标题）。
+		text_left_font(host._font_display_bold,
+				Rect2(LAYOUT_ITEMS.position + BAR_TITLE_OFFSET, BAR_TITLE_SIZE),
+				BAR_TITLE, 38, Color("#2E4157"))
+		# ③ 分隔线：common_line 10×4 白色，调制到参考图取样色 #C4D7E2。
+		var line_left: float = LAYOUT_ITEMS.position.x + BAR_TITLE_OFFSET.x
+		var line_rect := Rect2(line_left, LAYOUT_ITEMS.position.y + BAR_LINE_OFFSET_Y,
+				maxf(coin_rect.position.x - BAR_LINE_GAP - line_left, 0.0), BAR_LINE_H)
+		if not draw_ui_tint("line", line_rect, BAR_LINE_COLOR):
+			rounded(line_rect, 2, BAR_LINE_COLOR)
+		# ④ label2 左移：ⓘ 下方左缘。
+		text_left_font(host._font_display_regular,
+				Rect2(LAYOUT_ITEMS.position + BAR_SUB_OFFSET, BAR_SUB_SIZE),
+				BAR_SUBTITLE, 28, Color("#4B6076"))
+		# ⑤ 金币按钮下移，上方放 "Buy" 标题。
+		draw_ui_fit("coin_reward", coin_rect)
+		text_center_font(host._font_display_num,
+				Rect2(coin_rect.position.x, LAYOUT_ITEMS.position.y + BAR_BUY_OFFSET_Y,
+						coin_rect.size.x, BAR_BUY_SIZE_Y),
+				BAR_BUY, 30, BAR_BUY_COLOR)
+		# ⑥ 第 3 个 label：奖励数量。
+		text_center_font(host._font_display_num,
+				Rect2(coin_rect.position.x, coin_rect.position.y + 76.0,
+						coin_rect.size.x, 40.0),
+				str(BAR_COIN_REWARD), 36, Color(1.0, 1.0, 1.0, 1.0), Color("#2F6B1E"))
 		if not draw_ui_fit("exit", LAYOUT_EXIT):
 			rounded(LAYOUT_EXIT.grow(-8.0), 30, Color(1, 1, 1, 0.92))
 		if not draw_ui_fit("bag", LAYOUT_BAG):
 			rounded(LAYOUT_BAG.grow(-6.0), 18, Color(1, 1, 1, 0.92))
+
+	## Stretch a ui slot to the exact rect with a tint (the common_line rule).
+	func draw_ui_tint(key: String, r: Rect2, tint: Color) -> bool:
+		var texture: Texture2D = host._ui(key)
+		if texture == null:
+			return false
+		draw_texture_rect(texture, r, false, tint)
+		return true
 
 	func draw_ui_stretch(key: String, r: Rect2) -> bool:
 		var texture: Texture2D = host._ui(key)
@@ -216,11 +281,61 @@ class Chrome extends Control:
 		box.set_border_width_all(0)
 		draw_style_box(box, r)
 
+	## 9-slice draw for a rounded plate: corners 1:1, edges/centre stretched.
+	func draw_plate(key: String, r: Rect2, corner: float) -> bool:
+		var texture: Texture2D = host._ui(key)
+		if texture == null:
+			return false
+		var source := texture.get_size()
+		var c := minf(corner, minf(source.x, source.y) * 0.5)
+		if c <= 0.0:
+			draw_texture_rect(texture, r, false)
+			return true
+		var inner_w := maxf(r.size.x - c * 2.0, 0.0)
+		var inner_h := maxf(r.size.y - c * 2.0, 0.0)
+		var src_w := source.x - c * 2.0
+		var src_h := source.y - c * 2.0
+		draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y, c, c), Rect2(0, 0, c, c))
+		draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y, c, c), Rect2(source.x - c, 0, c, c))
+		draw_texture_rect_region(texture, Rect2(r.position.x, r.end.y - c, c, c), Rect2(0, source.y - c, c, c))
+		draw_texture_rect_region(texture, Rect2(r.end.x - c, r.end.y - c, c, c),
+				Rect2(source.x - c, source.y - c, c, c))
+		draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y, inner_w, c),
+				Rect2(c, 0, src_w, c))
+		draw_texture_rect_region(texture, Rect2(r.position.x + c, r.end.y - c, inner_w, c),
+				Rect2(c, source.y - c, src_w, c))
+		draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y + c, c, inner_h),
+				Rect2(0, c, c, src_h))
+		draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y + c, c, inner_h),
+				Rect2(source.x - c, c, c, src_h))
+		draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y + c, inner_w, inner_h),
+				Rect2(c, c, src_w, src_h))
+		return true
+
+	func text_left_font(font: Font, r: Rect2, text: String, size_px: int, color: Color) -> void:
+		if font == null or text.is_empty():
+			return
+		var baseline := r.position + Vector2(0.0, r.size.y * 0.5 + float(size_px) * 0.36)
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
+
 	func text_left(r: Rect2, text: String, size_px: int, color: Color) -> void:
 		if host._font == null or text.is_empty():
 			return
 		var baseline := r.position + Vector2(0.0, r.size.y * 0.5 + float(size_px) * 0.36)
 		draw_string(host._font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
+
+	## Centred label with an optional outline, for text on top of art (the reward
+	## count on the green coin button). Mirrors movie_scene._text_center_font.
+	func text_center_font(font: Font, r: Rect2, text: String, size_px: int, color: Color,
+			outline_color: Color = Color(0, 0, 0, 0)) -> void:
+		if font == null or text.is_empty():
+			return
+		var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+		var baseline := r.position + Vector2((r.size.x - width) * 0.5, r.size.y * 0.5 + float(size_px) * 0.36)
+		if outline_color.a > 0.0:
+			draw_string_outline(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px,
+					int(maxf(2.0, float(size_px) * 0.16)), outline_color)
+		draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
 
 	func text_center(r: Rect2, text: String, size_px: int, color: Color) -> void:
 		if host._font == null or text.is_empty():
@@ -278,6 +393,9 @@ var _ui_tex: Dictionary = {}
 var _ui_ids: Array = []
 var _ui_id_by_key: Dictionary = {}
 var _font: Font = null
+var _font_display_bold: Font = null
+var _font_display_regular: Font = null
+var _font_display_num: Font = null
 
 var _clock: float = 0.0
 var _seed: int = DEFAULT_SEED
@@ -305,6 +423,15 @@ var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
 var _last_click_at: float = -1000.0
+## Gesture state: press -> (move > DRAG_THRESHOLD) drag -> release. A press without
+## movement is still a click, so both interaction styles coexist.
+const DRAG_THRESHOLD := 10.0
+var _pressing := false
+var _dragging := false
+var _press_point := Vector2.ZERO
+var _press_cell := Vector2i(-1, -1)
+var _drag_from := Vector2i(-1, -1)
+var _drag_grab := Vector2.ZERO
 ## `--no-render` records the take without starting the film (debug / test runs).
 var _auto_render: bool = true
 
@@ -334,6 +461,9 @@ func _ready() -> void:
 	var colors: Dictionary = theme_loader.colors()
 	var metrics: Dictionary = theme_loader.metrics
 	_font = _load_font()
+	_font_display_bold = _load_dynamic_font(FONT_DISPLAY_BOLD)
+	_font_display_regular = _load_dynamic_font(FONT_DISPLAY_REGULAR)
+	_font_display_num = _load_dynamic_font(FONT_DISPLAY_NUM)
 	# §20.5 layout art, resolved once before the first paint (textures are cached by
 	# ThemeLoader.texture_for, so no frame touches the disk).
 	_resolve_ui_art()
@@ -649,6 +779,18 @@ func _load_font() -> Font:
 	return ThemeDB.fallback_font
 
 
+## User-supplied display fonts live under res://font/源字体 (not assets/): they are
+## loaded straight off disk so no import cache is needed and the big TTFs are not
+## duplicated into the payload folder.
+func _load_dynamic_font(path: String) -> Font:
+	if not FileAccess.file_exists(path):
+		return null
+	var file := FontFile.new()
+	if file.load_dynamic_font(path) != OK:
+		return null
+	return file
+
+
 func _sync_from_sim() -> void:
 	if evaluator == null or evaluator.sim == null:
 		return
@@ -702,30 +844,7 @@ func _level_from_snapshot(snap: Dictionary) -> Dictionary:
 ## View-only derivation: a cell that satisfies an open mission item is marked as
 ## ready (green) so the delivery beat reads without extra art.
 func _completed_cells(snap: Dictionary) -> Array:
-	var wanted := {}
-	for raw in _as_array(snap.get("orders", [])):
-		if typeof(raw) != TYPE_DICTIONARY:
-			continue
-		var order: Dictionary = raw
-		if bool(order.get("done", false)):
-			continue
-		var mission := _as_array(order.get("mission", []))
-		for i in range(mission.size()):
-			var item = mission[i]
-			if typeof(item) != TYPE_ARRAY or (item as Array).size() < 3:
-				continue
-			if int((item as Array)[2]) >= 1:
-				continue
-			var key := "%s@%d" % [String((item as Array)[0]), int((item as Array)[1])]
-			wanted[key] = true
-	var out: Array = []
-	for row in _as_array(_as_dict(snap.get("board", {})).get("cells", [])):
-		if typeof(row) != TYPE_ARRAY or (row as Array).size() < 4:
-			continue
-		var key := "%s@%d" % [String((row as Array)[2]), int((row as Array)[3])]
-		if wanted.has(key):
-			out.append([int((row as Array)[0]), int((row as Array)[1])])
-	return out
+	return CompletedCells.from_snapshot(snap)
 
 
 ## Generator charges live in the sim, not in project.json; hand the board a copy
@@ -821,6 +940,8 @@ func _process(delta: float) -> void:
 	# The clock always runs: free mode needs it for the toast/fly animation, and the
 	# sim needs a real `at` for cooldowns. Only `--demo` drains the timeline.
 	_clock += delta
+	if board != null and board.has_method("set_ice_elapsed"):
+		board.set_ice_elapsed(_clock)
 	if _autoplay:
 		while evaluator.cursor < evaluator.events.size():
 			var ev: Dictionary = evaluator.events[evaluator.cursor]
@@ -895,11 +1016,87 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
-		if mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
-			_free_click()
+		if mouse.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mouse.pressed:
+			_begin_press()
+		else:
+			_end_press()
+	elif event is InputEventMouseMotion and _pressing:
+		_maybe_start_drag()
+		_update_drag()
 
 
 # ------------------------------------------------------------------ free mode
+
+## Press starts either a click or a drag. Nothing is applied until release, so a
+## gesture never both selects and merges by accident.
+func _begin_press() -> void:
+	_press_point = get_global_mouse_position()
+	_press_cell = _cell_at(_press_point)
+	_pressing = true
+	_dragging = false
+	_drag_from = Vector2i(-1, -1)
+
+
+## A press on a chip that moves more than DRAG_THRESHOLD becomes a drag: the chip and
+## its white frame follow the pointer (board_view renders both), selection is dropped.
+func _maybe_start_drag() -> void:
+	if not _pressing or _dragging:
+		return
+	if _press_point.distance_to(get_global_mouse_position()) < DRAG_THRESHOLD:
+		return
+	if evaluator == null or evaluator.sim == null or evaluator.sim.board == null:
+		return
+	if _press_cell.x < 0 or not evaluator.sim.board.has_item(_press_cell):
+		return
+	var item: Dictionary = evaluator.sim.board.item(_press_cell)
+	var entity_id := String(item.get("entity", ""))
+	if String(model.entity(entity_id).get("kind", "")) != "chip":
+		return
+	_dragging = true
+	_drag_from = _press_cell
+	var centre: Vector2 = board.cell_rect(_drag_from.x, _drag_from.y).get_center()
+	_drag_grab = centre - _press_point
+	_selected = Vector2i(-1, -1)
+	_sync_from_sim()
+	board.set_drag_state({"from": _drag_from, "pos": centre})
+
+
+func _update_drag() -> void:
+	if not _dragging:
+		return
+	board.set_drag_state({"from": _drag_from, "pos": get_global_mouse_position() + _drag_grab})
+
+
+## Release: a drag either merges (same entity+level) or cancels; a press without
+## movement stays the old click semantics (select / tap / claim / next).
+func _end_press() -> void:
+	if not _pressing:
+		return
+	var point := get_global_mouse_position()
+	if _dragging:
+		var to := _cell_at(point)
+		var action: Dictionary = FreeMode.drag_action(_drag_from, to, evaluator.sim, model,
+				Vector2i(-1, -1))
+		board.set_drag_state({})
+		_dragging = false
+		var from := _drag_from
+		_drag_from = Vector2i(-1, -1)
+		var kind := String(action.get("kind", ""))
+		if kind == FreeMode.ACTION_MERGE or kind == FreeMode.ACTION_SWAP:
+			_last_click_at = _clock
+			var event_type := "drag" if kind == FreeMode.ACTION_MERGE else "swap"
+			var result: Dictionary = _apply_free(event_type, action.get("payload", {}))
+			print("[game] drag %s %s -> %s ok=%s" % [event_type, str(from), str(to),
+					str(result.get("ok", false))])
+			_record_click(point, {"kind": event_type, "ok": bool(result.get("ok", false)),
+					"cell": [to.x, to.y]})
+		else:
+			_sync_from_sim()
+	else:
+		_free_click_at(_press_point)
+	_pressing = false
 
 ## One click: board first (tap a generator / select+merge a chip), then an order
 ## card (claim it), then "level complete → click to continue". Anything else drops
@@ -929,6 +1126,8 @@ func _free_click_at(point: Vector2) -> Dictionary:
 		out["kind"] = kind
 		if kind == FreeMode.ACTION_TAP:
 			out["ok"] = bool(_apply_free("tap", action.get("payload", {})).get("ok", false))
+			if out["ok"]:
+				board.start_fly(evaluator.sim.last_spawn, _clock)
 		elif kind == FreeMode.ACTION_MERGE:
 			out["ok"] = bool(_apply_free("merge", action.get("payload", {})).get("ok", false))
 		elif kind == FreeMode.ACTION_SELECT or kind == FreeMode.ACTION_CLEAR:

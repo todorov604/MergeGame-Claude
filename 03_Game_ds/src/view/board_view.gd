@@ -50,6 +50,16 @@ const BOARD_SIZE := Vector2(983.0, 1263.0)
 const CELL_W := 983.0 / 7.0
 const CELL_H := 1263.0 / 9.0
 const PAGE_SIZE := Vector2(1080.0, 1920.0)
+## 单独格子.png is a 167x167 rounded tile (border ~6px, corner radius ~28px); 30 keeps
+## the drawn radius and border thickness when it is 9-sliced over 983x1263.
+const PLATE_CORNER := 30.0
+## 单独格子 tile's blue border is 8px thick with a ~16px corner curve; light cells
+## must stay inside that band, otherwise the outer row/column paints over the border
+## (and past the rounded corner). 16px is the measured inner edge of the border.
+const PLATE_PAD := 16.0
+const UiFonts := preload("res://src/core/ui_fonts.gd")
+const IceCell := preload("res://src/core/ice_cell.gd")
+const FlyPath := preload("res://src/core/fly_path.gd")
 
 ## §20.6 item 1: main_bg_01_bottom is 1080x1536 at (0,384) and fills to the bottom,
 ## main_bg_01_top is 1080x400 and covers the top band.
@@ -66,17 +76,23 @@ const SHADOW_STEPS := 3
 const UI_BG_BOTTOM := "bg_bottom"
 const UI_BG_TOP := "bg_top"
 const UI_BOARD_FRAME := "board_frame"
+## 2026-11-05 棋盘底改版（用户给的电影票效果）：大底用 单独格子.png 九宫格拉伸，
+## 亮格用 浅色格.png 隔格铺一层。两者都是 PRODUCTION 资产，主题里给 id 即生效。
+const UI_BOARD_PLATE := "board_plate"
+const UI_CELL_LIGHT := "cell_light"
 const UI_CELL := "cell"
 const UI_SELECT := "select"
+const UI_FINISH := "finish"
+const UI_GENERATOR := "generator"
+const UI_STAMINA := "stamina"
 const UI_LOCK := "lock"
 const UI_WEB := "web"
 const UI_BUBBLE := "bubble"
 const UI_ICE := "ice"
 const UI_KEYS := [
-	UI_BG_BOTTOM, UI_BG_TOP, UI_BOARD_FRAME, UI_CELL, UI_SELECT,
-	UI_LOCK, UI_WEB, UI_BUBBLE, UI_ICE,
+	UI_BG_BOTTOM, UI_BG_TOP, UI_BOARD_FRAME, UI_BOARD_PLATE, UI_CELL_LIGHT, UI_CELL, UI_SELECT,
+	UI_FINISH, UI_GENERATOR, UI_STAMINA, UI_LOCK, UI_WEB, UI_BUBBLE, UI_ICE,
 ]
-const ICE_COUNTDOWN := "19:28"
 
 const COLOR_PAGE := Color("#E6EDF6")
 const COLOR_PANEL := Color("#A8BDD5")
@@ -132,6 +148,17 @@ var _items: Dictionary = {} # Vector2i -> {kind, entity, level, hue, label, char
 var _obstacles: Dictionary = {} # Vector2i -> type
 var _selected := Vector2i(-1, -1)
 var _completed: Dictionary = {} # Vector2i -> true
+## Live drag: {"from": Vector2i, "pos": Vector2} while a chip is under the pointer,
+## {} otherwise. The chip and its selection frame are painted at `pos` (page space),
+## the original cell is skipped, so the piece visibly follows the hand.
+var _drag: Dictionary = {}
+var _font_display: Font = null
+## Level time used by the ice countdown; the screen feeds its own clock, the film
+## feeds frame/FPS. Same input -> same label, so preview and film stay identical.
+var ice_elapsed: float = 0.0
+## Spawn flight: {"spawn": sim.last_spawn, "started": level time}. While it runs the
+## produced chip is drawn on the arc instead of its slot.
+var _fly: Dictionary = {}
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
@@ -260,6 +287,50 @@ func apply_state(state: Dictionary) -> void:
 			if _in_bounds(cell):
 				_completed[cell] = true
 	queue_redraw()
+
+
+## Live drag state from the screen: {"from": Vector2i, "pos": Vector2} while a chip is
+## under the pointer, {} to end. View-only — the sim is untouched until release, and
+## the board keeps repainting at pointer rate because the screen calls
+## queue_redraw() through this method.
+func set_drag_state(state: Dictionary) -> void:
+	if state.is_empty():
+		_drag = {}
+	else:
+		var from := _to_cell(state.get("from", [-1, -1]))
+		_drag = {
+			"from": from,
+			"pos": Vector2(state.get("pos", Vector2.ZERO)),
+		}
+	queue_redraw()
+
+
+## Level time for the ice countdown. Repaints only when the whole second changes.
+## Start the generator -> slot flight for the chip the sim just produced.
+func start_fly(spawn: Dictionary, started_at: float) -> void:
+	if spawn.is_empty():
+		return
+	_fly = {"spawn": spawn.duplicate(true), "started": started_at}
+	queue_redraw()
+
+
+func fly_active() -> bool:
+	return not _fly.is_empty()
+
+
+func set_ice_elapsed(value: float) -> void:
+	if is_equal_approx(value, ice_elapsed):
+		return
+	var was := IceCell.format_clock(int(floor(ice_elapsed)))
+	ice_elapsed = maxf(value, 0.0)
+	if IceCell.format_clock(int(floor(ice_elapsed))) != was:
+		queue_redraw()
+
+
+func drag_source() -> Vector2i:
+	if _drag.is_empty():
+		return Vector2i(-1, -1)
+	return Vector2i(_drag.get("from", Vector2i(-1, -1)))
 
 
 func debug_summary() -> String:
@@ -415,25 +486,39 @@ func _draw() -> void:
 	for y in board_height:
 		for x in board_width:
 			var cell := Vector2i(x, y)
-			if _completed.has(cell):
-				_rounded(cell_rect(x, y).grow(-float(CELL_GAP)), 18, COLOR_COMPLETE)
-
-	for y in board_height:
-		for x in board_width:
-			var cell := Vector2i(x, y)
 			if _obstacles.has(cell):
 				_draw_obstacle(cell, String(_obstacles[cell]))
+
+	# 2026-11-05: a mission-satisfied chip reads as green cell + finish badge.
+	# While the chip is being dragged its cell is skipped here — the green must not be
+	# left behind as an empty square; it lands on the target cell after the drop, when
+	# the snapshot recomputes the completed set.
+	for cell in _completed.keys():
+		if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
+			continue
+		_rounded(cell_rect(cell.x, cell.y).grow(-float(CELL_GAP)), 18, COLOR_COMPLETE)
 
 	for y in board_height:
 		for x in board_width:
 			var cell := Vector2i(x, y)
 			if _items.has(cell):
+				if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
+					continue
+				if not _fly.is_empty() and cell == _fly_target():
+					continue
 				_draw_item(cell, _items[cell])
 
 	for cell in _completed.keys():
+		if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
+			continue
 		_draw_complete_mark(cell)
 
-	if _selected.x >= 0:
+	if not _fly.is_empty() and not _draw_fly():
+		_fly = {}
+
+	if not _drag.is_empty():
+		_draw_drag()
+	elif _selected.x >= 0:
 		_draw_selected_item()
 		_draw_selection(_selected)
 
@@ -455,9 +540,16 @@ func _draw_background() -> void:
 		draw_texture_rect(top, BG_TOP_RECT, false)
 
 
-## §20.6 item 4: the 983x1263 board container at (48,466). Theme texture first, then
-## the PLACEHOLDER copy loaded in _ready(), then the procedural panel.
+## §20.6 item 4: the 983x1263 board container at (48,466). The 2026-11-05 redesign
+## paints 单独格子.png (a 167px rounded tile with the blue border) as the big base via
+## a 9-slice, so the corners keep their radius instead of being stretched 6x. Older
+## themes without `board_plate` fall back to the full-size frame texture, then to the
+## procedural panel.
 func _draw_container() -> void:
+	var plate := _ui_texture(UI_BOARD_PLATE)
+	if plate != null:
+		_draw_plate(plate, Rect2(BOARD_ORIGIN, BOARD_SIZE), PLATE_CORNER)
+		return
 	var texture := _ui_texture(UI_BOARD_FRAME)
 	if texture == null:
 		texture = _frame_texture
@@ -469,15 +561,104 @@ func _draw_container() -> void:
 	_rounded_outline(panel, 26, COLOR_PANEL_EDGE, 2)
 
 
-## §20.6 item 5: the 94x94 checkerboard tile, scaled to the cell minus a small gap.
+## Stretch one rounded tile over the whole board without stretching its corners:
+## 9 source regions, corners drawn 1:1, edges and centre stretched.
+func _draw_plate(texture: Texture2D, rect: Rect2, corner: float) -> void:
+	var source := texture.get_size()
+	var c := minf(corner, minf(source.x, source.y) * 0.5)
+	if c <= 0.0:
+		draw_texture_rect(texture, rect, false)
+		return
+	var inner_w := maxf(rect.size.x - c * 2.0, 0.0)
+	var inner_h := maxf(rect.size.y - c * 2.0, 0.0)
+	var src_inner_w := source.x - c * 2.0
+	var src_inner_h := source.y - c * 2.0
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := rect.position.x + c
+	var y1 := rect.position.y + c
+	# corners
+	draw_texture_rect_region(texture, Rect2(x0, y0, c, c), Rect2(0, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, y0, c, c), Rect2(source.x - c, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(x0, rect.end.y - c, c, c), Rect2(0, source.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, rect.end.y - c, c, c),
+			Rect2(source.x - c, source.y - c, c, c))
+	# edges
+	draw_texture_rect_region(texture, Rect2(x1, y0, inner_w, c), Rect2(c, 0, src_inner_w, c))
+	draw_texture_rect_region(texture, Rect2(x1, rect.end.y - c, inner_w, c),
+			Rect2(c, source.y - c, src_inner_w, c))
+	draw_texture_rect_region(texture, Rect2(x0, y1, c, inner_h), Rect2(0, c, c, src_inner_h))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, y1, c, inner_h),
+			Rect2(source.x - c, c, c, src_inner_h))
+	# centre
+	draw_texture_rect_region(texture, Rect2(x1, y1, inner_w, inner_h),
+			Rect2(c, c, src_inner_w, src_inner_h))
+
+
+## §20.6 item 5: light cells. With `cell_light` (2026-11-05 redesign) only every other
+## cell is painted, so the plate shows through and the board reads as a checkerboard.
+## Without it the theme's cell tile is drawn on every cell, exactly as before.
 func _draw_cell(x: int, y: int) -> void:
 	var r := cell_rect(x, y).grow(-float(CELL_GAP) * 0.5)
+	var light := _ui_texture(UI_CELL_LIGHT)
+	if light != null:
+		if (x + y) % 2 == 0:
+			draw_texture_rect(light, _inner_cell_rect(r), false)
+		return
 	var texture := _ui_texture(UI_CELL)
 	if texture != null:
 		draw_texture_rect(texture, r, false)
 		return
 	_rounded(r, 14, COLOR_CELL)
 	_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, COLOR_CELL_LIP)
+
+
+func _fly_target() -> Vector2i:
+	var to = (_fly.get("spawn", {}) as Dictionary).get("to", [])
+	if typeof(to) != TYPE_ARRAY or (to as Array).size() < 2:
+		return Vector2i(-1, -1)
+	return Vector2i(int((to as Array)[0]), int((to as Array)[1]))
+
+
+## Returns false once the flight is over, so the caller drops the state.
+func _draw_fly() -> bool:
+	var t := FlyPath.progress(float(_fly.get("started", 0.0)), _clock)
+	if t >= 1.0:
+		return false
+	var spawn: Dictionary = _fly.get("spawn", {})
+	var from = spawn.get("from", [])
+	var to = spawn.get("to", [])
+	if typeof(from) != TYPE_ARRAY or typeof(to) != TYPE_ARRAY:
+		return false
+	var a := Vector2i(int((from as Array)[0]), int((from as Array)[1]))
+	var b := Vector2i(int((to as Array)[0]), int((to as Array)[1]))
+	var start: Vector2 = cell_rect(a.x, a.y).get_center()
+	var end: Vector2 = cell_rect(b.x, b.y).get_center()
+	var at := FlyPath.point(start, end, t)
+	var base := cell_rect(b.x, b.y).grow(-float(CELL_GAP) * 0.5)
+	var half := base.size * 0.5
+	var item := {"entity": String(spawn.get("entity", "")), "level": int(spawn.get("level", 1))}
+	var texture := _chip_texture(item)
+	draw_set_transform(at, 0.0, Vector2.ONE)
+	if texture != null:
+		_draw_chip_texture(Rect2(-half, base.size), texture)
+	else:
+		_draw_chip(Rect2(-half, base.size), item)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	return true
+
+
+## Clamp a light-cell rect to the plate's inner area. Only the outer ring of cells is
+## affected (interior cells keep their 4px gap), so the checkerboard tiles never paint
+## over the 8px border or outside the rounded corners.
+func _inner_cell_rect(r: Rect2) -> Rect2:
+	var inner := Rect2(BOARD_ORIGIN + Vector2(PLATE_PAD, PLATE_PAD),
+			BOARD_SIZE - Vector2(PLATE_PAD * 2.0, PLATE_PAD * 2.0))
+	var left := maxf(r.position.x, inner.position.x)
+	var top := maxf(r.position.y, inner.position.y)
+	var right := minf(r.end.x, inner.end.x)
+	var bottom := minf(r.end.y, inner.end.y)
+	return Rect2(left, top, maxf(right - left, 0.0), maxf(bottom - top, 0.0))
 
 
 func _draw_item(key: Vector2i, item: Dictionary) -> void:
@@ -498,7 +679,6 @@ func _draw_chip(r: Rect2, item: Dictionary) -> void:
 	var texture := _chip_texture(item)
 	if texture != null:
 		_draw_chip_texture(r, texture)
-		_draw_level_capsule(r, int(item.get("level", 1)))
 		return
 	var hue: Color = item.get("hue", COLOR_HUE_FALLBACK)
 	_rounded(r, 18, hue)
@@ -506,7 +686,6 @@ func _draw_chip(r: Rect2, item: Dictionary) -> void:
 			Color(1.0, 1.0, 1.0, 0.18))
 	var label := String(item.get("label", "?"))
 	_text_shadow_center(_shift(r, Vector2(0.0, -6.0)), label, FONT_TITLE, COLOR_WHITE)
-	_draw_level_capsule(r, int(item.get("level", 1)))
 
 
 ## §20.6 item 6: the 182x182 source art is drawn at CHIP_DRAW_SIZE (132 px, inside
@@ -598,7 +777,14 @@ func _draw_ui_art(key: String, r: Rect2) -> bool:
 	return true
 
 
+## 2026-11-05: the generator is the project's own icon (猫形置物架) with the small
+## 体力 lightning in its bottom-left corner. The x<charges> badge is hidden for now.
 func _draw_generator(r: Rect2, item: Dictionary) -> void:
+	var icon := _ui_texture(UI_GENERATOR)
+	if icon != null:
+		_draw_chip_texture(r, icon)
+		_draw_stamina_badge(r)
+		return
 	var hue: Color = item.get("hue", COLOR_HUE_FALLBACK)
 	_rounded(r, 10, hue)
 	_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 30.0)), 8,
@@ -611,7 +797,22 @@ func _draw_generator(r: Rect2, item: Dictionary) -> void:
 	])
 	draw_colored_polygon(bolt, Color(1.0, 0.94, 0.55, 0.95))
 	draw_polyline(_closed(bolt), Color(1.0, 0.86, 0.28, 0.9), 2.0, true)
-	_text_bottom_right(r, "x%d" % int(item.get("charges", 0)), FONT_COUNTER, COLOR_WHITE, 12.0)
+	_draw_stamina_badge(r)
+
+
+## Small 体力 lightning pinned to the cell's bottom-left corner (39x53 source).
+func _draw_stamina_badge(r: Rect2) -> void:
+	var stamina := _ui_texture(UI_STAMINA)
+	if stamina == null:
+		return
+	var source := stamina.get_size()
+	if source.x <= 0.0 or source.y <= 0.0:
+		return
+	var size := Vector2(26.0, 26.0 * source.y / source.x)
+	# Clamp to the plate's inner area so the badge never sits on the blue border
+	# (the generator owns cell (0,0), whose corner is exactly on the border).
+	var inner := _inner_cell_rect(r)
+	draw_texture_rect(stamina, Rect2(inner.end.x - size.x - 2.0, inner.end.y - size.y - 2.0, size.x, size.y), false)
 
 
 func _draw_special(r: Rect2, item: Dictionary) -> void:
@@ -619,22 +820,11 @@ func _draw_special(r: Rect2, item: Dictionary) -> void:
 	_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 30.0)), 10,
 			Color(1.0, 1.0, 1.0, 0.22))
 	_text_center(_shift(r, Vector2(0.0, -8.0)), String(item.get("label", "?")), FONT_INK, COLOR_INK)
-	_draw_level_capsule(r, int(item.get("level", 1)))
-
-
-func _draw_level_capsule(r: Rect2, level: int) -> void:
-	if _font == null:
-		return
-	var text := "Lv.%d" % level
-	var w := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, FONT_CAPS).x + 16.0
-	var cap := Rect2(r.position + Vector2(8.0, r.size.y - 36.0), Vector2(w, 28.0))
-	_rounded(cap, 14, COLOR_CAPSULE)
-	_text_center(cap, text, FONT_CAPS, COLOR_WHITE)
 
 
 ## Obstacle semantics are unchanged (one type per cell, same four types); only the
 ## art source changes: themed texture when it resolves, procedural art otherwise.
-## The ice cell always carries the 19:28 countdown, texture or not.
+## An ice cell freezes a deterministic chip and labels its level (project font).
 func _draw_obstacle(key: Vector2i, type: String) -> void:
 	var r := cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5)
 	match type:
@@ -642,18 +832,57 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 			if not _draw_ui_art(UI_LOCK, r):
 				_draw_lock(r)
 		"web":
+			# 2026-11-05: same treatment as ice — a deterministic chip sits under the
+			# web so the cell is never empty behind the lines.
+			var webbed := IceCell.chip(_asset_project, key)
+			if not webbed.is_empty():
+				var web_tex := _chip_texture(webbed)
+				if web_tex != null:
+					_draw_chip_texture(r, web_tex)
+				else:
+					_draw_chip(r, webbed)
 			if not _draw_ui_art(UI_WEB, r):
 				_draw_web(r.get_center())
 		"bubble":
 			if not _draw_ui_art(UI_BUBBLE, r):
 				_draw_bubble(r.get_center())
 		"ice":
-			if _draw_ui_art(UI_ICE, r):
-				_text_bottom_center(r, ICE_COUNTDOWN, FONT_COUNTER, Color(1.0, 1.0, 1.0, 0.96), 10.0)
-			else:
+			# 2026-11-05: a deterministic chip is frozen under the ice and the timer
+			# placeholder is replaced by a real label (project display font).
+			var frozen := IceCell.chip(_asset_project, key)
+			if not frozen.is_empty():
+				var texture := _chip_texture(frozen)
+				if texture != null:
+					_draw_chip_texture(r, texture)
+				else:
+					_draw_chip(r, frozen)
+			if not _draw_ui_art(UI_ICE, r):
 				_draw_ice(r)
+			_draw_ice_label(key, r, frozen)
 		_:
 			_rounded(r, 14, Color(0.0, 0.0, 0.0, 0.25))
+
+
+## Countdown on an ice cell: mm:ss between 10:00 and 19:59, ticking once per second
+## of level time, drawn with the project display font (江城圆体 700W).
+func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
+	if frozen.is_empty():
+		return
+	if _font_display == null:
+		_font_display = UiFonts.load_font(UiFonts.DISPLAY_BOLD)
+	if _font_display == null:
+		return
+	var font := _font_display
+	var left := IceCell.remaining_seconds(key, ice_elapsed)
+	var text := IceCell.format_clock(left)
+	var size := 26
+	var baseline := Vector2(r.position.x, r.end.y - 8.0)
+	var width := r.size.x
+	# dark outline first, then white
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_CENTER, width, size,
+				Color(0.12, 0.20, 0.30, 0.85))
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, width, size, Color(1, 1, 1, 1))
 
 
 func _draw_lock(r: Rect2) -> void:
@@ -699,18 +928,33 @@ func _draw_ice(r: Rect2) -> void:
 	draw_line(c + Vector2(-34.0, -40.0), c + Vector2(-6.0, -6.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
 	draw_line(c + Vector2(6.0, 6.0), c + Vector2(34.0, 40.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
 	draw_line(c + Vector2(28.0, -38.0), c + Vector2(10.0, -12.0), Color(1.0, 1.0, 1.0, 0.35), 2.0, true)
-	_text_bottom_center(inner, ICE_COUNTDOWN, FONT_COUNTER, Color(1.0, 1.0, 1.0, 0.96), 10.0)
+
 
 
 func _draw_complete_mark(key: Vector2i) -> void:
-	var c := cell_rect(key.x, key.y).get_center()
-	var badge := c + Vector2(36.0, 34.0)
-	draw_circle(badge, 22.0, Color(0.25, 0.55, 0.20, 0.96), true, -1.0, true)
-	draw_circle(badge, 22.0, Color(1.0, 1.0, 1.0, 0.55), false, 2.0, true)
+	_draw_complete_mark_at(cell_rect(key.x, key.y).get_center(), 1.0)
+
+
+## Mission-satisfied badge: the project's own `main_icon_finish.png` (ui_icon_finish)
+## when the theme resolves it, otherwise the old procedural circle + check.
+func _draw_complete_mark_at(centre: Vector2, scale: float) -> void:
+	var texture := _ui_texture(UI_FINISH)
+	if texture != null:
+		var source := texture.get_size()
+		if source.x > 0.0 and source.y > 0.0:
+			var size := source * scale
+			var badge := centre + Vector2(36.0, 34.0) * scale
+			draw_texture_rect(texture, Rect2(badge - size * 0.5, size), false)
+			return
+	var badge := centre + Vector2(36.0, 34.0) * scale
+	var radius := 22.0 * scale
+	draw_circle(badge, radius, Color(0.25, 0.55, 0.20, 0.96), true, -1.0, true)
+	draw_circle(badge, radius, Color(1.0, 1.0, 1.0, 0.55), false, 2.0, true)
 	var check := PackedVector2Array([
-		badge + Vector2(-11.0, 1.0), badge + Vector2(-3.0, 9.0), badge + Vector2(11.0, -9.0),
+		badge + Vector2(-11.0, 1.0) * scale, badge + Vector2(-3.0, 9.0) * scale,
+		badge + Vector2(11.0, -9.0) * scale,
 	])
-	draw_polyline(check, Color(1.0, 1.0, 1.0, 1.0), 6.0, true)
+	draw_polyline(check, Color(1.0, 1.0, 1.0, 1.0), 6.0 * scale, true)
 
 
 ## §7: "选中提示：黄框 + 停留放大/靠近".
@@ -744,19 +988,23 @@ func _draw_selected_item() -> void:
 
 
 func _draw_selection(key: Vector2i) -> void:
-	var cell := cell_rect(key.x, key.y)
+	_draw_selection_at(cell_rect(key.x, key.y).get_center(), _selection_offset(key))
+
+
+## White corner frame centred on `center` (page space). Drag passes the pointer
+## position, so the same frame travels with the chip; the slot uses the cell centre.
+func _draw_selection_at(center: Vector2, offset: Vector2) -> void:
 	var texture := _ui_texture(UI_SELECT)
 	if texture != null:
 		# §20.6 item 7: the frame covers the whole cell, centred on it. The chip
 		# above still carries the lift/scale; the frame itself does not travel.
 		var frame_size := texture.get_size()
 		if frame_size.x > 0.0 and frame_size.y > 0.0:
-			draw_texture_rect(texture, Rect2(cell.get_center() - frame_size * 0.5, frame_size), false)
+			draw_texture_rect(texture, Rect2(center + offset - frame_size * 0.5, frame_size), false)
 			return
 
-	var tile := cell.grow(-float(CELL_GAP) * 0.5)
-	var offset := _selection_offset(key)
-	var r := Rect2(tile.position + offset, tile.size)
+	var tile_size := Vector2(CELL_W, CELL_H) - Vector2(CELL_GAP, CELL_GAP)
+	var r := Rect2(center + offset - tile_size * 0.5, tile_size)
 	_rounded_outline(r.grow(9.0), 22, Color(COLOR_SELECT.r, COLOR_SELECT.g, COLOR_SELECT.b, 0.26), 10)
 	_rounded_outline(r.grow(3.0), 19, Color(COLOR_SELECT.r, COLOR_SELECT.g, COLOR_SELECT.b, 0.85), 5)
 
@@ -775,6 +1023,24 @@ func _draw_selection(key: Vector2i) -> void:
 	]
 	for corner in corners:
 		draw_polyline(corner, ink, width, true)
+
+
+## Chip currently under the pointer: scaled like a selected chip, framed by the same
+## white brackets. The source cell is skipped in the item pass (see _draw).
+func _draw_drag() -> void:
+	var from := Vector2i(_drag.get("from", Vector2i(-1, -1)))
+	if not _items.has(from):
+		return
+	var pos: Vector2 = _drag.get("pos", Vector2.ZERO)
+	var cell := cell_rect(from.x, from.y)
+	var base := cell.grow(-float(CELL_GAP) * 0.5)
+	var half := base.size * 0.5
+	draw_set_transform(pos, 0.0, Vector2(SELECT_SCALE, SELECT_SCALE))
+	_draw_item_rect(Rect2(-half, base.size), _items[from])
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if _completed.has(from):
+		_draw_complete_mark_at(pos, SELECT_SCALE)
+	_draw_selection_at(pos, Vector2.ZERO)
 
 
 ## The level line sits in the free strip above the board container (466 - 46).

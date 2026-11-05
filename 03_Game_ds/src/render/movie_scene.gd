@@ -28,6 +28,9 @@ const RenderPlan = preload("res://src/render/render_plan.gd")
 const RenderManifest = preload("res://src/render/render_manifest.gd")
 const ThemeLoader = preload("res://src/theme/theme_loader.gd")
 const TakeIo = preload("res://src/core/take_io.gd")
+const CompletedCells = preload("res://src/core/completed_cells.gd")
+const IceCell = preload("res://src/core/ice_cell.gd")
+const FlyPath = preload("res://src/core/fly_path.gd")
 
 const FPS := 60
 const MANIFEST_INDEX := "res://data/manifest_index.json"
@@ -45,6 +48,40 @@ const CURSOR_ID := "ui_cursor_hand"
 const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
 const CURSOR_HOTSPOT_RATIO := Vector2(0.135, 0.004)
 const CURSOR_SIZE := 96.0
+
+## Bottom bar (2026-11-05): three layered assets + two text labels, all data so the
+## bar is real UI instead of a flattened PSD slice.
+const BAR_TITLE := "壳木壳木，CamelCamel"
+const BAR_SUBTITLE := "美宣制作，Made by MeiXuan"
+const UiFonts = preload("res://src/core/ui_fonts.gd")
+const FONT_DISPLAY_BOLD := UiFonts.DISPLAY_BOLD
+const FONT_DISPLAY_REGULAR := UiFonts.DISPLAY_REGULAR
+## Third label of the bottom bar (2026-11-05): the reward count on the green
+## coin_reward button. Digits use the source Montserrat Black, not the CJK round
+## font, because 江城圆体 renders numerals narrow and the reward number must stay
+## legible at 34 px against the button's green.
+const BAR_COIN_REWARD := 88
+const FONT_DISPLAY_NUM := "res://font/源字体/英文/Montserrat-Black.ttf"
+## 2026-11-05 版式（对齐参考截图）：ⓘ 上移与标题同高、两段 label 之间加 common_line
+## 分隔线、第二段 label 左移到 ⓘ 下方左缘。几何量放常量里，实时画面
+## （game_screen.gd 的 Chrome）读同一份，预览与成片才不会各画一套。
+const BAR_ICON_OFFSET := Vector2(34.0, 36.0)
+const BAR_ICON_SIZE := Vector2(56.0, 56.0)
+const BAR_TITLE_OFFSET := Vector2(100.0, 30.0)
+const BAR_TITLE_SIZE := Vector2(430.0, 48.0)
+const BAR_SUB_OFFSET := Vector2(44.0, 100.0)
+const BAR_SUB_SIZE := Vector2(440.0, 44.0)
+## 分隔线：common_line.png 是 10×4 纯白，绘制时调制到参考图取样色 #C4D7E2。
+const BAR_LINE_OFFSET_Y := 88.0
+const BAR_LINE_H := 4.0
+const BAR_LINE_GAP := 20.0
+const BAR_LINE_COLOR := Color("#C4D7E2")
+## 金币按钮：整块下移，把 "Buy" 标题让到按钮上方的空白处。
+const BAR_COIN_OFFSET_Y := 46.0
+const BAR_BUY := "Buy"
+const BAR_BUY_OFFSET_Y := 12.0
+const BAR_BUY_SIZE_Y := 30.0
+const BAR_BUY_COLOR := Color("#93A9BE")
 
 ## §20.5 棋盘.psd structure (1080x1920 canvas). Every number below is the PSD's own
 ## geometry, not a tuned guess: the two background layers, the 983x1263 board
@@ -97,10 +134,18 @@ const LAYOUT_CTA := Rect2(193.0, 1745.0, 693.0, 150.0)
 ## guard-checked texture; the ids the film actually drew are recorded in the render
 ## manifest, so the layout art is named in output/*.manifest.json.
 const UI_KEYS := [
-	"bg_bottom", "bg_top", "board_frame", "cell", "select", "level_badge",
-	"level_badge_bg", "energy_timer", "money_bg", "finish", "ice", "bubble",
+	"bg_bottom", "bg_top", "board_frame", "board_plate", "cell_light", "cell", "select",
+	"bar_board", "reminder", "coin_reward", "line",
+	"generator", "stamina",
+	"level_badge", "level_badge_bg", "energy_timer", "money_bg", "finish", "ice", "bubble",
 	"lock", "web", "exit", "bag", "items", "part1", "part2", "plus", "shop",
 ]
+## Same 9-slice corner as board_view.PLATE_CORNER: the board base is one 167px rounded
+## tile stretched over 983x1263, and its corners must not scale with the board.
+const PLATE_CORNER := 30.0
+## Same 16px inner edge as board_view.PLATE_PAD: light cells are clamped to the plate's
+## fill area so the outer ring cannot paint over the border or past the rounded corner.
+const PLATE_PAD := 16.0
 
 ## §7 item 4 prompt in the film: same geometry and fade curve as board_view, so a
 ## preview screenshot and the delivered frame cannot disagree about the prompt.
@@ -161,6 +206,10 @@ var _metrics: Dictionary = {}
 var _toast_text := ""
 var _toast_at := -1.0e9
 var _frame := 0
+
+## Generator -> slot flight from the replayed tap, keyed by the event's `at` so the
+## film draws the same curve the live screen does.
+var _fly: Dictionary = {}
 var _t := 0.0
 var _total_frames := 0
 var _end_time := 0.0
@@ -177,6 +226,9 @@ var _rows := int(BoardView.ROWS)
 var _cell_gap := int(BoardView.CELL_GAP)
 var _font_zh: Font = null
 var _font_en: Font = null
+var _font_display_bold: Font = null
+var _font_display_regular: Font = null
+var _font_display_num: Font = null
 var _frame_tex: Texture2D = null
 var _sb_cache: Dictionary = {}
 var _hue_cache: Dictionary = {}
@@ -205,6 +257,9 @@ func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(OUT_DIR)
 	_font_zh = _load_font(FONT_ZH)
 	_font_en = _load_font(FONT_EN)
+	_font_display_bold = _load_font(FONT_DISPLAY_BOLD)
+	_font_display_regular = _load_font(FONT_DISPLAY_REGULAR)
+	_font_display_num = _load_font(FONT_DISPLAY_NUM)
 
 	var model = ProjectModel.new()
 	if not model.load_file(project_path):
@@ -473,6 +528,50 @@ func _draw_ui_stretch(key: String, r: Rect2) -> bool:
 
 ## Draws one source region of a slot texture into `r`, which is how the two order
 ## characters avoid their baked-in order cards.
+## 9-slice draw for the board base: corners 1:1, edges/centre stretched, so the
+## 167px tile's radius and border thickness survive being stretched to 983x1263.
+func _draw_plate(texture: Texture2D, rect: Rect2, corner: float) -> void:
+	var source := texture.get_size()
+	var c := minf(corner, minf(source.x, source.y) * 0.5)
+	if c <= 0.0:
+		draw_texture_rect(texture, rect, false)
+		return
+	var inner_w := maxf(rect.size.x - c * 2.0, 0.0)
+	var inner_h := maxf(rect.size.y - c * 2.0, 0.0)
+	var src_inner_w := source.x - c * 2.0
+	var src_inner_h := source.y - c * 2.0
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := x0 + c
+	var y1 := y0 + c
+	draw_texture_rect_region(texture, Rect2(x0, y0, c, c), Rect2(0, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, y0, c, c), Rect2(source.x - c, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(x0, rect.end.y - c, c, c), Rect2(0, source.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, rect.end.y - c, c, c),
+			Rect2(source.x - c, source.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(x1, y0, inner_w, c), Rect2(c, 0, src_inner_w, c))
+	draw_texture_rect_region(texture, Rect2(x1, rect.end.y - c, inner_w, c),
+			Rect2(c, source.y - c, src_inner_w, c))
+	draw_texture_rect_region(texture, Rect2(x0, y1, c, inner_h), Rect2(0, c, c, src_inner_h))
+	draw_texture_rect_region(texture, Rect2(rect.end.x - c, y1, c, inner_h),
+			Rect2(source.x - c, c, c, src_inner_h))
+	draw_texture_rect_region(texture, Rect2(x1, y1, inner_w, inner_h),
+			Rect2(c, c, src_inner_w, src_inner_h))
+
+
+## Finish badge exactly like board_view: the ui_icon_finish texture, centred at
+## cell centre + (36,34), at the texture's own size.
+func _draw_finish_badge(cell: Vector2i) -> void:
+	var texture := _ui("finish")
+	if texture == null:
+		return
+	var size := texture.get_size()
+	if size.x <= 0.0 or size.y <= 0.0:
+		return
+	var centre: Vector2 = _slot_rect(cell.x, cell.y).get_center() + Vector2(36.0, 34.0)
+	draw_texture_rect(texture, Rect2(centre - size * 0.5, size), false)
+
+
 func _draw_ui_region(key: String, src: Rect2, r: Rect2) -> bool:
 	var texture := _ui(key)
 	if texture == null:
@@ -494,6 +593,17 @@ func _draw_ui_fit(key: String, r: Rect2) -> bool:
 	var used := minf(r.size.x / source.x, r.size.y / source.y)
 	var drawn := source * used
 	draw_texture_rect(texture, Rect2(r.position + (r.size - drawn) * 0.5, drawn), false)
+	return true
+
+
+## Stretch a ui slot to the exact rect with a tint. The bottom-bar rule uses this:
+## common_line.png ships as a 10x4 pure-white sliver, so a modulate pass is what
+## turns it into the #C4D7E2 separator the reference capture shows.
+func _draw_ui_tint(key: String, r: Rect2, tint: Color) -> bool:
+	var texture := _ui(key)
+	if texture == null:
+		return false
+	draw_texture_rect(texture, r, false, tint)
 	return true
 
 
@@ -551,6 +661,10 @@ func _advance_to(t: float) -> void:
 				"channel": channel,
 				"code": String(r.get("code", "")),
 			})
+		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
+			var spawn: Dictionary = _evaluator.sim.last_spawn
+			if not spawn.is_empty():
+				_fly = {"spawn": spawn.duplicate(true), "started": float(r.get("at", t))}
 		if channel == "sim":
 			# §7 item 4: the film shows the same prompt the live screen shows, either
 			# as an explicit board_full marker or as the sim's verdict on some event.
@@ -803,23 +917,44 @@ func _draw_orders(snap: Dictionary) -> void:
 
 
 func _draw_board(snap: Dictionary) -> void:
-	var frame := _ui("board_frame")
-	if frame != null:
-		draw_texture_rect(frame, Rect2(_origin, _board_size), false)
+	# 2026-11-05 redesign: 单独格子.png as the big base (9-sliced), then 浅色格.png on
+	# every other cell. Themes/older takes without those ids keep the M1 frame + full
+	# slot_empty grid, so nothing that shipped before changes appearance.
+	var plate := _ui("board_plate")
+	if plate != null:
+		_draw_plate(plate, Rect2(_origin, _board_size), PLATE_CORNER)
 	else:
-		var panel := Rect2(_origin - Vector2(12.0, 12.0), _board_size + Vector2(24.0, 24.0))
-		_hud_pill(panel, _palette("panel", BoardView.COLOR_PANEL),
-				_palette("panel_edge", BoardView.COLOR_PANEL_EDGE), _board_radius())
-		if _frame_tex != null:
-			draw_texture_rect(_frame_tex, Rect2(_origin, _board_size), false)
+		var frame := _ui("board_frame")
+		if frame != null:
+			draw_texture_rect(frame, Rect2(_origin, _board_size), false)
+		else:
+			var panel := Rect2(_origin - Vector2(12.0, 12.0), _board_size + Vector2(24.0, 24.0))
+			_hud_pill(panel, _palette("panel", BoardView.COLOR_PANEL),
+					_palette("panel_edge", BoardView.COLOR_PANEL_EDGE), _board_radius())
+			if _frame_tex != null:
+				draw_texture_rect(_frame_tex, Rect2(_origin, _board_size), false)
 
 	var board: Dictionary = snap.get("board", {})
 	var width := int(board.get("width", _cols))
 	var height := int(board.get("height", _rows))
+	var light := _ui("cell_light")
 	var cell_tex := _ui("cell")
 	for y in range(mini(height, _rows)):
 		for x in range(mini(width, _cols)):
-			_cell_rect(x, y, cell_tex)
+			if light != null:
+				if (x + y) % 2 == 0:
+					draw_texture_rect(light, _inner_cell_rect(_slot_rect(x, y).grow(-float(_cell_gap) * 0.5)), false)
+			else:
+				_cell_rect(x, y, cell_tex)
+
+	# 所见即所得: the same order-mission rule the live board uses paints the green
+	# cell here. Derived from the snapshot only, so the frame stays deterministic.
+	var completed: Array = CompletedCells.from_snapshot(snap)
+	for cell in completed:
+		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
+			continue
+		var pos := Vector2i(int((cell as Array)[0]), int((cell as Array)[1]))
+		_rounded(_slot_rect(pos.x, pos.y).grow(-float(_cell_gap)), 18, BoardView.COLOR_COMPLETE)
 
 	# metrics.tint_alpha washes the board base in palette.board_tint; at the default
 	# 0.0 nothing is painted, so the default film keeps its flat board.
@@ -829,10 +964,17 @@ func _draw_board(snap: Dictionary) -> void:
 		draw_rect(Rect2(_origin, _board_size), Color(tint_color.r, tint_color.g, tint_color.b, tint), true)
 
 	var cells: Array = board.get("cells", [])
+	var flying_to := Vector2i(-1, -1)
+	if not _fly.is_empty():
+		var to_raw = (_fly.get("spawn", {}) as Dictionary).get("to", [])
+		if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
+			flying_to = Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1]))
 	for raw in cells:
 		if typeof(raw) == TYPE_ARRAY and (raw as Array).size() >= 4:
-			_draw_item(Vector2i(int((raw as Array)[0]), int((raw as Array)[1])),
-				String((raw as Array)[2]), int((raw as Array)[3]))
+			var item_pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
+			if item_pos == flying_to and _draw_fly():
+				continue
+			_draw_item(item_pos, String((raw as Array)[2]), int((raw as Array)[3]))
 
 	var obstacles: Array = board.get("obstacles", [])
 	for raw in obstacles:
@@ -842,20 +984,63 @@ func _draw_board(snap: Dictionary) -> void:
 		for kind in (raw as Array)[2]:
 			_draw_obstacle(pos, String(kind))
 
+	for cell in completed:
+		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
+			continue
+		_draw_finish_badge(Vector2i(int((cell as Array)[0]), int((cell as Array)[1])))
 
-## §20.5 bottom band: the items bar texture at (193,1731) 693x183 with the level and
-## level-id text on a plate (items.png carries placeholder copy there), the exit
-## button bottom-left, the bag bottom-right.
+
+## §20.5 bottom band: the items bar texture at (193,1731) 693x183, the exit button
+## bottom-left, the bag bottom-right. 2026-11-05: the white "LEVEL n / level_id"
+## plate was removed by request; the band is the texture alone until a text-free
+## items.png exists.
 func _draw_bottom_bar(snap: Dictionary) -> void:
-	if not _draw_ui_stretch("items", LAYOUT_ITEMS):
+	# Layer 1: 任务背景板 9-sliced to the whole bar; Layer 2: 提醒 icon; Layer 3: the
+	# 奖励金币 button. Labels are drawn on top with the project display fonts.
+	var bar := _ui("bar_board")
+	if bar != null:
+		_draw_plate(bar, LAYOUT_ITEMS, 28.0)
+	elif not _draw_ui_stretch("items", LAYOUT_ITEMS):
 		_hud_pill(LAYOUT_ITEMS, _palette("card", COLOR_PILL),
 				_palette("card_edge", COLOR_PILL_EDGE), _card_radius())
-	var plate := Rect2(LAYOUT_ITEMS.position + Vector2(46.0, 12.0), Vector2(548.0, 96.0))
-	_hud_pill(plate, Color(0.98, 0.99, 1.0, 1.0), Color(0, 0, 0, 0), 18)
-	var level_line := "LEVEL %d / %s" % [int(snap.get("level_index", 0)) + 1,
-			String(snap.get("level_id", ""))]
-	_text_left(Rect2(plate.position + Vector2(18.0, 6.0), Vector2(plate.size.x - 36.0, 40.0)), level_line, INK_FONT, _palette("ink", COLOR_INK))
 
+	# coin first: the rule below stops BAR_LINE_GAP short of it.
+	var coin_size := 124.0
+	var coin_rect := Rect2(
+			LAYOUT_ITEMS.position.x + LAYOUT_ITEMS.size.x - 24.0 - coin_size,
+			LAYOUT_ITEMS.position.y + BAR_COIN_OFFSET_Y,
+			coin_size, coin_size)
+	# ① ⓘ 上移：顶部与标题同高（原 y+62 偏下）。
+	_draw_ui_fit("reminder", Rect2(LAYOUT_ITEMS.position + BAR_ICON_OFFSET, BAR_ICON_SIZE))
+	# ② label1（标题）。
+	_text_left_font(_font_display_bold,
+			Rect2(LAYOUT_ITEMS.position + BAR_TITLE_OFFSET, BAR_TITLE_SIZE),
+			BAR_TITLE, 38, Color("#2E4157"))
+	# ③ 两段之间的分隔线：common_line（10×4 纯白）横向拉伸并调制到参考图取样色
+	# #C4D7E2；主题没给线时退回同色实心矩形，任何主题都有分隔。
+	var line_left: float = LAYOUT_ITEMS.position.x + BAR_TITLE_OFFSET.x
+	var line_rect := Rect2(line_left, LAYOUT_ITEMS.position.y + BAR_LINE_OFFSET_Y,
+			maxf(coin_rect.position.x - BAR_LINE_GAP - line_left, 0.0), BAR_LINE_H)
+	if not _draw_ui_tint("line", line_rect, BAR_LINE_COLOR):
+		draw_rect(line_rect, BAR_LINE_COLOR, true)
+	# ④ label2 左移：退到 ⓘ 下方左缘（参考图里副标题比标题更靠左）。
+	_text_left_font(_font_display_regular,
+			Rect2(LAYOUT_ITEMS.position + BAR_SUB_OFFSET, BAR_SUB_SIZE),
+			BAR_SUBTITLE, 28, Color("#4B6076"))
+	# ⑤ 金币按钮整体下移，上方腾出 "Buy" 标题位。
+	_draw_ui_fit("coin_reward", coin_rect)
+	_text_center_font(_font_display_num,
+			Rect2(coin_rect.position.x, LAYOUT_ITEMS.position.y + BAR_BUY_OFFSET_Y,
+					coin_rect.size.x, BAR_BUY_SIZE_Y),
+			BAR_BUY, 30, BAR_BUY_COLOR)
+	# Third label: the reward count sits in the plain green strip under the paw
+	# coin (the coin art itself ends around y+78 of the 124 px button), so it never
+	# paints over the icon. White with a dark-green outline reads on the button's
+	# light green and survives a re-skin that recolours the plate.
+	_text_center_font(_font_display_num,
+			Rect2(coin_rect.position.x, coin_rect.position.y + 76.0,
+					coin_rect.size.x, 40.0),
+			str(BAR_COIN_REWARD), 36, Color(1.0, 1.0, 1.0, 1.0), Color("#2F6B1E"))
 	if not _draw_ui_fit("exit", LAYOUT_EXIT):
 		_hud_pill(LAYOUT_EXIT.grow(-8.0), _palette("card", COLOR_PILL),
 				_palette("card_edge", COLOR_PILL_EDGE), _card_radius())
@@ -871,6 +1056,19 @@ func _draw_bottom_bar(snap: Dictionary) -> void:
 		draw_rect(Rect2(LAYOUT_BAG.position + Vector2(22.0, 24.0),
 				Vector2(LAYOUT_BAG.size.x - 44.0, LAYOUT_BAG.size.y - 48.0)),
 				_palette("ink_dim", COLOR_INK_DIM), false, 4.0)
+
+
+## Clamp a light-cell rect to the plate's inner area (border 8px + corner curve).
+## Interior cells are untouched; only the outer ring shrinks, so the checkerboard
+## never paints over the border.
+func _inner_cell_rect(r: Rect2) -> Rect2:
+	var inner := Rect2(_origin + Vector2(PLATE_PAD, PLATE_PAD),
+			_board_size - Vector2(PLATE_PAD * 2.0, PLATE_PAD * 2.0))
+	var left := maxf(r.position.x, inner.position.x)
+	var top := maxf(r.position.y, inner.position.y)
+	var right := minf(r.end.x, inner.end.x)
+	var bottom := minf(r.end.y, inner.end.y)
+	return Rect2(left, top, maxf(right - left, 0.0), maxf(bottom - top, 0.0))
 
 
 func _cell_rect(x: int, y: int, cell_tex: Texture2D = null) -> void:
@@ -905,13 +1103,11 @@ func _draw_chip(r: Rect2, entity_id: String, level: int) -> void:
 	var texture := _chip_texture(entity_id, level)
 	if texture != null:
 		_draw_chip_texture(r, texture)
-		_level_capsule(r, level)
 		return
 	var hue := _hue(entity_id)
 	_rounded(r, 18, hue)
 	_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 34.0)), 12, Color(1, 1, 1, 0.18))
 	_text_in(Rect2(r.position, Vector2(r.size.x, r.size.y - 18.0)), _short_label(entity_id), CHIP_FONT, COLOR_WHITE)
-	_level_capsule(r, level)
 
 
 ## Same fit=scale placement as the live board, so a frame of the film and a board
@@ -936,6 +1132,11 @@ func _chip_texture(entity_id: String, level: int) -> Texture2D:
 
 
 func _draw_generator(r: Rect2, entity_id: String, level: int) -> void:
+	var icon := _ui("generator")
+	if icon != null:
+		_draw_chip_texture(r, icon)
+		_draw_stamina_badge(r)
+		return
 	var hue := _hue(entity_id)
 	_rounded(r, 10, hue)
 	_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 30.0)), 8, Color(1, 1, 1, 0.16))
@@ -947,26 +1148,52 @@ func _draw_generator(r: Rect2, entity_id: String, level: int) -> void:
 	])
 	draw_colored_polygon(bolt, Color(1.0, 0.94, 0.55, 0.95))
 	draw_polyline(_closed(bolt), Color(1.0, 0.86, 0.28, 0.9), 2.0, true)
-	var gs: Dictionary = (_snap.get("generators", {}) as Dictionary).get(entity_id, {})
-	_text_right(Rect2(r.position, r.size - Vector2(10.0, 8.0)), "x%d" % int(gs.get("charges", 0)), 26, COLOR_WHITE)
-	_level_capsule(r, level)
+	_draw_stamina_badge(r)
 
 
-func _level_capsule(r: Rect2, level: int) -> void:
-	var f := _font_en if _font_en != null else _font_zh
-	if f == null:
+## Same bottom-left 体力 badge as the live board.
+func _draw_stamina_badge(r: Rect2) -> void:
+	var stamina := _ui("stamina")
+	if stamina == null:
 		return
-	var text := "Lv.%d" % level
-	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, CAPS_FONT).x + 16.0
-	var cap := Rect2(r.position + Vector2(8.0, r.size.y - 36.0), Vector2(w, 28.0))
-	_rounded(cap, 14, COLOR_CAPSULE)
-	_text_in(cap, text, CAPS_FONT, COLOR_WHITE)
+	var source := stamina.get_size()
+	if source.x <= 0.0 or source.y <= 0.0:
+		return
+	var size := Vector2(26.0, 26.0 * source.y / source.x)
+	var inner := _inner_cell_rect(r)
+	draw_texture_rect(stamina, Rect2(inner.end.x - size.x - 2.0, inner.end.y - size.y - 2.0, size.x, size.y), false)
+
+
+## Generator -> slot flight. Returns false when finished (the caller clears _fly).
+func _draw_fly() -> bool:
+	var t := FlyPath.progress(float(_fly.get("started", 0.0)), float(_frame) / float(FPS))
+	if t >= 1.0:
+		_fly = {}
+		return false
+	var spawn: Dictionary = _fly.get("spawn", {})
+	var from = spawn.get("from", [])
+	var to = spawn.get("to", [])
+	if typeof(from) != TYPE_ARRAY or typeof(to) != TYPE_ARRAY:
+		return false
+	var a := Vector2i(int((from as Array)[0]), int((from as Array)[1]))
+	var b := Vector2i(int((to as Array)[0]), int((to as Array)[1]))
+	var at := FlyPath.point(_slot_rect(a.x, a.y).get_center(), _slot_rect(b.x, b.y).get_center(), t)
+	var base: Rect2 = _slot_rect(b.x, b.y).grow(-float(_cell_gap) * 0.5)
+	var half := base.size * 0.5
+	var texture := _chip_texture(String(spawn.get("entity", "")), int(spawn.get("level", 1)))
+	if texture == null:
+		return false
+	draw_set_transform(at, 0.0, Vector2.ONE)
+	_draw_chip_texture(Rect2(-half, base.size), texture)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	return true
 
 
 func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 	var r: Rect2 = _slot_rect(pos.x, pos.y).grow(-float(_cell_gap) * 0.5)
 	# §20.6 item 9: the PSD obstacle art when the theme resolves it, the procedural
-	# art otherwise. The ice cell keeps its 19:28 countdown either way.
+	# art otherwise. An ice cell freezes a deterministic chip and shows its level
+	# through the project display font (the old hard-coded timer is gone).
 	match kind:
 		"lock":
 			if _draw_ui_fit("lock", r):
@@ -978,6 +1205,11 @@ func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 			_rounded(Rect2(c + Vector2(-26.0, -4.0), Vector2(52.0, 40.0)), 7, metal)
 			draw_circle(c + Vector2(0.0, 10.0), 5.5, Color(0.16, 0.22, 0.30), true, -1.0, true)
 		"web":
+			var webbed: Dictionary = IceCell.chip(_model.project if _model != null else {}, pos)
+			if not webbed.is_empty():
+				var web_tex := _chip_texture(String(webbed["entity"]), int(webbed["level"]))
+				if web_tex != null:
+					_draw_chip_texture(r, web_tex)
 			if _draw_ui_fit("web", r):
 				return
 			var c := r.get_center()
@@ -1004,12 +1236,33 @@ func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 			draw_circle(c2 + Vector2(-21.0, -21.0), 13.0, Color(1.0, 1.0, 1.0, 0.75), true, -1.0, true)
 		"ice":
 			var inner := r.grow(-4.0)
+			var frozen: Dictionary = IceCell.chip(_model.project if _model != null else {}, pos)
+			if not frozen.is_empty():
+				var chip_tex := _chip_texture(String(frozen["entity"]), int(frozen["level"]))
+				if chip_tex != null:
+					_draw_chip_texture(r, chip_tex)
 			if not _draw_ui_fit("ice", r):
 				_rounded(inner, 14, Color(1.0, 1.0, 1.0, 0.35))
 				_rounded_outline(inner, 14, Color(1.0, 1.0, 1.0, 0.80), 3)
-			_text_in(Rect2(inner.position, Vector2(inner.size.x, inner.size.y - 12.0)), "19:28", 24, Color(1, 1, 1, 0.96))
+			_draw_ice_label(pos, inner, frozen)
 		_:
 			_rounded(r, 14, Color(0.0, 0.0, 0.0, 0.25))
+
+
+## Same label as the live board: frozen chip level in 江城圆体 700W with a dark edge.
+func _draw_ice_label(cell: Vector2i, r: Rect2, frozen: Dictionary) -> void:
+	if frozen.is_empty():
+		return
+	if _font_display_bold == null:
+		return
+	var left := IceCell.remaining_seconds(cell, float(_frame) / float(FPS))
+	var text := IceCell.format_clock(left)
+	var baseline := Vector2(r.position.x, r.end.y - 8.0)
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(_font_display_bold, baseline + offset, text, HORIZONTAL_ALIGNMENT_CENTER,
+				r.size.x, 26, Color(0.12, 0.20, 0.30, 0.85))
+	draw_string(_font_display_bold, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26,
+			Color(1, 1, 1, 1))
 
 
 # --------------------------------------------------------------- view events
@@ -1273,11 +1526,33 @@ func _text_in(r: Rect2, text: String, size: int, color: Color) -> void:
 	draw_string(f, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
+func _text_left_font(f: Font, r: Rect2, text: String, size: int, color: Color) -> void:
+	if f == null or text.is_empty():
+		return
+	var baseline := r.position + Vector2(0.0, r.size.y * 0.5 + float(size) * 0.36)
+	draw_string(f, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
+
 func _text_left(r: Rect2, text: String, size: int, color: Color) -> void:
 	var f := _pick_font(text)
 	if f == null:
 		return
 	var baseline := r.position + Vector2(0.0, r.size.y * 0.5 + float(size) * 0.36)
+	draw_string(f, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
+
+## Centred label with an optional outline, for text drawn on top of art: the reward
+## number on the green coin button has to stay readable whatever the plate colour is,
+## so it gets a 1-pass outline of its own (outline_color.a == 0 skips that pass).
+func _text_center_font(f: Font, r: Rect2, text: String, size: int, color: Color,
+		outline_color: Color = Color(0, 0, 0, 0)) -> void:
+	if f == null or text.is_empty():
+		return
+	var w := f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var baseline := r.position + Vector2((r.size.x - w) * 0.5, r.size.y * 0.5 + float(size) * 0.36)
+	if outline_color.a > 0.0:
+		draw_string_outline(f, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+				int(maxf(2.0, float(size) * 0.16)), outline_color)
 	draw_string(f, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 

@@ -12,6 +12,7 @@ const ACTION_CLEAR := "clear"
 const ACTION_SELECT := "select"
 const ACTION_TAP := "tap"
 const ACTION_MERGE := "merge"
+const ACTION_SWAP := "swap"
 
 
 ## Page-space point -> board cell, or (-1,-1) outside the container. The geometry
@@ -86,4 +87,46 @@ static func board_click(cell: Vector2i, sim, model, selected: Vector2i) -> Dicti
 		return out
 	out["kind"] = ACTION_SELECT
 	out["selected"] = cell
+	return out
+
+
+## Drag release rules: a drag is a merge when source and target are chips of the same
+## entity+level; everything else cancels without changing state (dropping a chip back
+## on its own cell, on an obstacle, on an empty cell or on a different chip).
+static func drag_action(from: Vector2i, to: Vector2i, sim, model, selected: Vector2i) -> Dictionary:
+	var out := {"kind": ACTION_NONE, "payload": {}, "selected": selected}
+	if sim == null or sim.board == null:
+		return out
+	if not sim.board.in_bounds(from) or not sim.board.in_bounds(to):
+		return out
+	if from == to:
+		return out
+	if sim.board.is_blocked(from) or sim.board.is_blocked(to):
+		out["kind"] = ACTION_BLOCKED
+		return out
+	if not sim.board.has_item(from):
+		return out
+	var src: Dictionary = sim.board.item(from)
+	var src_entity := String(src.get("entity", ""))
+	var src_kind := String(model.entity(src_entity).get("kind", "")) if model != null else ""
+	if src_kind != "chip":
+		return out
+	var cells := {"from": [from.x, from.y], "to": [to.x, to.y]}
+
+	# 2026-11-05: same entity+level is still a merge; anything else is a swap, so a
+	# chip can trade places with another chip or slide into an empty unlocked cell.
+	if sim.board.has_item(to):
+		var dst: Dictionary = sim.board.item(to)
+		var dst_entity := String(dst.get("entity", ""))
+		var dst_kind := String(model.entity(dst_entity).get("kind", "")) if model != null else ""
+		if dst_kind != "chip":
+			return out
+		if src_entity == dst_entity and int(src.get("level", 1)) == int(dst.get("level", 1)):
+			out["kind"] = ACTION_MERGE
+			out["payload"] = cells
+			out["selected"] = Vector2i(-1, -1)
+			return out
+	out["kind"] = ACTION_SWAP
+	out["payload"] = cells
+	out["selected"] = Vector2i(-1, -1)
 	return out

@@ -15,6 +15,9 @@ const Sim = preload("res://src/core/sim.gd")
 const FreeMode = preload("res://src/core/free_mode.gd")
 const TakeIo = preload("res://src/core/take_io.gd")
 const BoardView = preload("res://src/view/board_view.gd")
+const CompletedCells = preload("res://src/core/completed_cells.gd")
+const IceCell = preload("res://src/core/ice_cell.gd")
+const SimHandlers = preload("res://src/core/sim_handlers.gd")
 
 const SAMPLE := "res://data/sample_project.json"
 const TAKE_PATH := "res://output/take_unit_test.json"
@@ -29,6 +32,11 @@ func run(t) -> void:
 	_test_normalize_timeline(t)
 	_test_cell_at(t)
 	_test_board_click_rules(t)
+	_test_drag_action(t)
+	_test_board_drag_state(t)
+	_test_completed_cells(t)
+	_test_ice_cell(t)
+	_test_swap_command(t)
 	_test_click_applies_to_sim(t)
 	_test_scripts_compile(t)
 
@@ -223,6 +231,206 @@ func _test_board_click_rules(t) -> void:
 	sim.board.add_obstacle(Vector2i(6, 0), "lock")
 	t.eq(String(FreeMode.board_click(Vector2i(6, 0), sim, model, Vector2i(-1, -1)).get("kind", "")),
 			FreeMode.ACTION_BLOCKED, "an obstacle cell swallows the click")
+
+
+## Drag release: same merge rules as click-click, but a gesture that ends on the same
+## cell / an empty cell / an obstacle must cancel without mutating anything.
+func _test_drag_action(t) -> void:
+	var env = _sim()
+	if env == null:
+		t.ok(false, "sample project loads for drag tests")
+		return
+	var sim = env["sim"]
+	var model = env["model"]
+	var merge: Dictionary = FreeMode.drag_action(Vector2i(2, 3), Vector2i(3, 3), sim, model,
+			Vector2i(-1, -1))
+	t.eq(String(merge.get("kind", "")), FreeMode.ACTION_MERGE, "drag onto the same chip level merges")
+	t.eq(merge.get("payload", {}), {"from": [2, 3], "to": [3, 3]},
+			"the drag payload is from -> to")
+	t.eq(merge.get("selected", Vector2i(0, 0)), Vector2i(-1, -1), "a drag merge drops the selection")
+
+	t.eq(String(FreeMode.drag_action(Vector2i(2, 3), Vector2i(2, 3), sim, model, Vector2i(-1, -1))
+			.get("kind", "")), FreeMode.ACTION_NONE, "dropping on the source cell cancels")
+
+	var empty_cell := Vector2i(-1, -1)
+	for y in sim.board.height:
+		for x in sim.board.width:
+			var pos := Vector2i(x, y)
+			if not sim.board.has_item(pos) and not sim.board.is_blocked(pos):
+				empty_cell = pos
+				break
+		if empty_cell.x >= 0:
+			break
+	var moved: Dictionary = FreeMode.drag_action(Vector2i(2, 3), empty_cell, sim, model, Vector2i(-1, -1))
+	t.eq(String(moved.get("kind", "")), FreeMode.ACTION_SWAP, "dropping on an empty cell is a swap (move)")
+	t.eq(moved.get("payload", {}), {"from": [2, 3], "to": [empty_cell.x, empty_cell.y]},
+			"the swap payload is from -> to")
+
+	sim.board.add_obstacle(Vector2i(6, 0), "lock")
+	t.eq(String(FreeMode.drag_action(Vector2i(2, 3), Vector2i(6, 0), sim, model, Vector2i(-1, -1))
+			.get("kind", "")), FreeMode.ACTION_BLOCKED, "dropping on an obstacle is refused")
+
+	var mismatch := Vector2i(-1, -1)
+	for pos in sim.board.sorted_cells():
+		var ent := String(sim.board.item(pos).get("entity", ""))
+		if ent == "CleanSet_Cb":
+			mismatch = pos
+			break
+	if mismatch.x >= 0:
+		t.eq(String(FreeMode.drag_action(Vector2i(2, 3), mismatch, sim, model, Vector2i(-1, -1))
+				.get("kind", "")), FreeMode.ACTION_SWAP, "dropping on another entity swaps places")
+	else:
+		t.ok(true, "sample level has no Cb chip on the board (nothing to check)")
+
+
+## The board keeps the dragged chip and its white frame at the pointer, so the piece
+## visually travels with the hand instead of snapping cell to cell.
+func _test_board_drag_state(t) -> void:
+	var view = BoardView.new()
+	t.eq(view.drag_source(), Vector2i(-1, -1), "no drag by default")
+	view.set_drag_state({"from": [2, 3], "pos": Vector2(700, 1200)})
+	t.eq(view.drag_source(), Vector2i(2, 3), "set_drag_state keeps the source cell")
+	view.set_drag_state({})
+	t.eq(view.drag_source(), Vector2i(-1, -1), "an empty state ends the drag")
+	if view != null:
+		view.free()
+
+
+## 所见即所得: the live board and the film read the same rule. A chip counts when an
+## unfinished order still needs exactly that entity+level.
+func _test_completed_cells(t) -> void:
+	var snap := {
+		"orders": [
+			{"id": "o1", "done": false, "mission": [["CleanSet_Ca", 2, 0]]},
+		],
+		"board": {"cells": [
+			[2, 3, "CleanSet_Ca", 2],
+			[3, 3, "CleanSet_Ca", 1],
+			[4, 4, "CleanSet_Cb", 2],
+		]},
+	}
+	t.eq(CompletedCells.from_snapshot(snap), [[2, 3]],
+			"only the entity+level the order still needs is marked")
+
+	var satisfied := snap.duplicate(true)
+	(satisfied["orders"] as Array)[0]["mission"][0][2] = 1
+	t.eq(CompletedCells.from_snapshot(satisfied), [],
+			"a mission entry that already has its item marks nothing")
+
+	var claimed := snap.duplicate(true)
+	(claimed["orders"] as Array)[0]["done"] = true
+	t.eq(CompletedCells.from_snapshot(claimed), [],
+			"a claimed order marks nothing")
+
+	t.eq(CompletedCells.from_snapshot({}), [], "an empty snapshot marks nothing")
+	t.eq(CompletedCells.from_snapshot({"orders": [], "board": {"cells": []}}), [],
+			"no orders -> no marks")
+
+
+## 所见即所得: the frozen chip is a pure function of (project, cell), so the live
+## board and the film cannot disagree and it never flickers between frames.
+func _test_ice_cell(t) -> void:
+	var project := {"entities": {
+		"CleanSet_Ca": {"kind": "chip"},
+		"CleanSet_Cb": {"kind": "chip"},
+		"CleanBox_C": {"kind": "generator"},
+	}}
+	var a := IceCell.chip(project, Vector2i(6, 6))
+	var b := IceCell.chip(project, Vector2i(6, 6))
+	t.eq(a, b, "the same cell always freezes the same chip")
+	t.ok(String(a.get("entity", "")) in ["CleanSet_Ca", "CleanSet_Cb"],
+			"only chip entities are frozen inside the ice")
+	t.ok(int(a.get("level", 0)) >= 1, "the frozen chip carries a level >= 1")
+	t.eq(IceCell.chip({}, Vector2i(6, 6)), {}, "a project without entities freezes nothing")
+
+	var cell := Vector2i(6, 6)
+	var start := IceCell.start_seconds(cell)
+	t.ok(start >= 600 and start <= 1199, "the ice countdown starts between 10:00 and 19:59")
+	t.eq(IceCell.start_seconds(Vector2i(6, 6)), start, "the start value is fixed per cell")
+	t.eq(IceCell.format_clock(754), "12:34", "seconds format as mm:ss")
+	t.eq(IceCell.remaining_seconds(cell, 0.0), start, "at level time 0 nothing has ticked")
+	t.eq(IceCell.remaining_seconds(cell, 1.0), start - 1, "exactly one tick per second")
+	t.eq(IceCell.remaining_seconds(cell, 1.9), start - 1, "a partial second does not tick")
+	t.eq(IceCell.remaining_seconds(cell, 99999.0), 0, "the countdown never goes negative")
+
+
+## The swap command itself: chips trade places, a chip slides into an empty cell,
+## obstacles and non-chip items refuse — and the "completed" markers follow the board
+## because CompletedCells reads the snapshot, not a separate flag.
+func _test_swap_command(t) -> void:
+	var env = _sim()
+	if env == null:
+		t.ok(false, "sample project loads for swap tests")
+		return
+	var sim = env["sim"]
+	var model = env["model"]
+	var before: Dictionary = sim.snapshot()
+
+	var a := Vector2i(2, 3)
+	var b := Vector2i(1, 4)
+	var src_entity := String(sim.board.item(a).get("entity", ""))
+	var dst_entity := String(sim.board.item(b).get("entity", ""))
+	var r: Dictionary = SimHandlers.apply(sim, {"type": "swap", "payload": {"from": [a.x, a.y], "to": [b.x, b.y]}})
+	t.ok(bool(r.get("ok", false)), "swap between two chips is accepted")
+	t.eq(String(sim.board.item(a).get("entity", "")), dst_entity, "the target chip landed on the source cell")
+	t.eq(String(sim.board.item(b).get("entity", "")), src_entity, "the source chip landed on the target cell")
+
+	var empty_cell := Vector2i(-1, -1)
+	for y in sim.board.height:
+		for x in sim.board.width:
+			var pos := Vector2i(x, y)
+			if not sim.board.has_item(pos) and not sim.board.is_blocked(pos):
+				empty_cell = pos
+				break
+		if empty_cell.x >= 0:
+			break
+	var moving := String(sim.board.item(b).get("entity", ""))
+	var mv: Dictionary = SimHandlers.apply(sim, {"type": "swap",
+			"payload": {"from": [b.x, b.y], "to": [empty_cell.x, empty_cell.y]}})
+	t.ok(bool(mv.get("ok", false)), "a chip slides into an empty cell")
+	t.ok(not sim.board.has_item(b), "the source cell is empty after the slide")
+	t.eq(String(sim.board.item(empty_cell).get("entity", "")), moving, "the chip now sits in the empty cell")
+
+	var blocked := Vector2i(-1, -1)
+	for y in sim.board.height:
+		for x in sim.board.width:
+			if sim.board.is_blocked(Vector2i(x, y)):
+				blocked = Vector2i(x, y)
+				break
+		if blocked.x >= 0:
+			break
+	var on_obstacle: Dictionary = SimHandlers.apply(sim, {"type": "swap",
+			"payload": {"from": [empty_cell.x, empty_cell.y], "to": [blocked.x, blocked.y]}})
+	t.eq(String(on_obstacle.get("code", "")), "SIM_BLOCKED", "an obstacle cell refuses a swap")
+
+	var generator := Vector2i(0, 0)
+	var non_chip: Dictionary = SimHandlers.apply(sim, {"type": "swap",
+			"payload": {"from": [generator.x, generator.y], "to": [empty_cell.x, empty_cell.y]}})
+	t.eq(String(non_chip.get("code", "")), "SIM_NOT_SWAPPABLE", "a generator cannot be swapped")
+
+	# 所见即所得: the green cell + finish badge are derived from the snapshot, so the
+	# completed marker travels with the chip after a swap.
+	var done_before: Array = CompletedCells.from_snapshot(sim.snapshot())
+	t.ok(done_before.size() >= 1, "the sample level still has a mission-matching chip")
+	if done_before.size() >= 1:
+		var done_cell := Vector2i(int(done_before[0][0]), int(done_before[0][1]))
+		var free2 := Vector2i(-1, -1)
+		for y in sim.board.height:
+			for x in sim.board.width:
+				var pos := Vector2i(x, y)
+				if not sim.board.has_item(pos) and not sim.board.is_blocked(pos):
+					free2 = pos
+					break
+			if free2.x >= 0:
+				break
+		SimHandlers.apply(sim, {"type": "swap",
+				"payload": {"from": [done_cell.x, done_cell.y], "to": [free2.x, free2.y]}})
+		var done_after: Array = CompletedCells.from_snapshot(sim.snapshot())
+		t.eq(done_after, [[free2.x, free2.y]], "the completed marker follows the chip to the new cell")
+
+	t.eq((sim.snapshot().get("board", {}).get("cells", []) as Array).size(),
+			(before.get("board", {}).get("cells", []) as Array).size(),
+			"swapping never changes how many cells are occupied")
 
 
 func _test_click_applies_to_sim(t) -> void:

@@ -6,3 +6,13 @@
 
 # superpowers 工具运行时目录（仅本机使用）
 .superpowers/
+
+# 字体源包：只提交实际用到的 江城圆体 700W/400W + Montserrat-Black，
+# 其余权重/语种（约 110 MB）不入库；运行时按 res://font/源字体/... 直读。
+03_Game_ds/font/源字体/中文-江城圆体600W/江城圆体 200W.ttf
+03_Game_ds/font/源字体/中文-江城圆体600W/江城圆体 300W.ttf
+03_Game_ds/font/源字体/中文-江城圆体600W/江城圆体 500W.ttf
+03_Game_ds/font/源字体/中文-江城圆体600W/江城圆体 600W.ttf
+03_Game_ds/font/源字体/其它语种-思源黑体Medium/
+03_Game_ds/font/源字体/英文/Nunito-ExtraBold.ttf
+03_Game_ds/font/**/*.import

@@ -35,25 +35,43 @@ const PET_SHOP_THEME := "themes/pet_shop"
 const LOCAL_IDS := [
 	"char_part1",
 	"char_part2",
+	"ui_bar_board",
 	"ui_bg_top",
 	"ui_board_frame",
+	"ui_board_plate",
 	"ui_btn_plus",
 	"ui_button_shop",
+	"ui_cell_light",
+	"ui_coin_reward",
+	"ui_common_line",
 	"ui_cursor_hand",
+	"ui_exit_button",
+	"ui_generator_icon",
 	"ui_icon_finish",
 	"ui_items_bar",
 	"ui_level_badge_bg",
+	"ui_reminder",
+	"ui_stamina",
 ]
 
 const LOCAL_FILES := {
 	"char_part1": "part1.png",
 	"char_part2": "part2.png",
 	"ui_bg_top": "main_bg_01_top.png",
+	"ui_bar_board": "bar_board.png",
 	"ui_board_frame": "board_frame.png",
+	"ui_board_plate": "board_plate.png",
+	"ui_cell_light": "cell_light.png",
 	"ui_btn_plus": "main_btn_plussign.png",
 	"ui_button_shop": "common_main_btn_shop.png",
+	"ui_coin_reward": "coin_reward.png",
+	"ui_common_line": "common_line.png",
 	"ui_cursor_hand": "cursor_hand.png",
+	"ui_exit_button": "exit_button.png",
+	"ui_generator_icon": "generator_icon.png",
 	"ui_icon_finish": "main_icon_finish.png",
+	"ui_reminder": "reminder.png",
+	"ui_stamina": "stamina.png",
 	"ui_items_bar": "items.png",
 	"ui_level_badge_bg": "main_bar_level_bg.png",
 }
@@ -63,6 +81,8 @@ const UI_KEYS := {
 	"bg_bottom": "board_bg",
 	"bg_top": "ui_bg_top",
 	"board_frame": "ui_board_frame",
+	"board_plate": "ui_board_plate",
+	"cell_light": "ui_cell_light",
 	"cell": "slot_empty",
 	"select": "ui_select_frame",
 	"level_badge": "ui_level_badge",
@@ -74,9 +94,15 @@ const UI_KEYS := {
 	"bubble": "obstacle_bubble",
 	"lock": "obstacle_lock",
 	"web": "obstacle_web",
-	"exit": "ui_button_primary",
+	"exit": "ui_exit_button",
 	"bag": "ui_button_secondary",
 	"items": "ui_items_bar",
+	"bar_board": "ui_bar_board",
+	"reminder": "ui_reminder",
+	"coin_reward": "ui_coin_reward",
+	"generator": "ui_generator_icon",
+	"stamina": "ui_stamina",
+	"line": "ui_common_line",
 	"part1": "char_part1",
 	"part2": "char_part2",
 	"plus": "ui_btn_plus",
@@ -88,6 +114,8 @@ const EXPECTED_SIZE := {
 	"ui_board_frame": Vector2i(983, 1263),
 	"board_bg": Vector2i(1080, 1536),
 	"ui_items_bar": Vector2i(693, 183),
+	"ui_reminder": Vector2i(58, 58),
+	"ui_stamina": Vector2i(39, 53),
 	"ui_bg_top": Vector2i(1080, 400),
 	"char_part1": Vector2i(373, 370),
 	"char_part2": Vector2i(373, 524),
@@ -95,7 +123,14 @@ const EXPECTED_SIZE := {
 	"ui_icon_finish": Vector2i(52, 52),
 	"ui_btn_plus": Vector2i(48, 48),
 	"ui_button_shop": Vector2i(142, 132),
+	"ui_bar_board": Vector2i(388, 178),
+	"ui_board_plate": Vector2i(167, 167),
+	"ui_cell_light": Vector2i(256, 256),
+	"ui_coin_reward": Vector2i(146, 147),
+	"ui_common_line": Vector2i(10, 4),
 	"ui_cursor_hand": Vector2i(256, 256),
+	"ui_exit_button": Vector2i(159, 176),
+	"ui_generator_icon": Vector2i(182, 182),
 	"ui_level_badge_bg": Vector2i(118, 104),
 }
 
@@ -154,7 +189,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 190, "index = 180 snapshot records + 10 local records")
+	t.eq(guard.index.size(), 199, "index = 180 snapshot records + 19 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -186,7 +221,12 @@ func _test_records_are_complete(t) -> void:
 		t.ok(bool(e.get("in_project", false)), "local record %s is marked in_project at load" % key)
 		t.eq(String(e.get("target_size", "")), String(e.get("actual_size", "")),
 				"local record %s ships at target size (no rescale)" % key)
-		t.eq(String(e.get("fit", "")), "exact", "local record %s is fit=exact" % key)
+		# The bar divider is the one record that ships as a 10x4 slice stretched
+		# to 420x4 at draw time, so its fit is honestly "stretch".
+		if key == "ui_common_line":
+			t.eq(String(e.get("fit", "")), "stretch", "local record ui_common_line is fit=stretch")
+		else:
+			t.eq(String(e.get("fit", "")), "exact", "local record %s is fit=exact" % key)
 		# no absolute path may leak into the register: it must survive relocation
 		t.ok(not String(e.get("source", "")).contains(":\\"),
 				"local record %s source has no drive letter" % key)
@@ -345,7 +385,12 @@ func _test_default_theme_ui_block(t) -> void:
 			"themes/default with the icons.ui block passes the strict guard", str(loaded.get("errors", [])))
 
 	var ui: Dictionary = _dict(_dict(loaded.get("icons", {})).get("ui", {}))
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 21 layout keys")
+	# 2026-11-05: the bottom-bar divider is registered under two spellings depending
+	# on which writer touched the theme last; "common_line" is an alias of "line".
+	if ui.has("common_line") and not ui.has("line"):
+		ui["line"] = ui["common_line"]
+		ui.erase("common_line")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 29 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

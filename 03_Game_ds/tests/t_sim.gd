@@ -454,7 +454,15 @@ func _test_generator(t) -> void:
 	s.set_time(0.0)
 	var r1: Dictionary = s.apply({"type": "tap", "payload": {"target": {"slot": [0, 0]}}})
 	t.ok(bool(r1.get("ok", false)), "tap on a generator produces", str(r1))
-	t.ok(s.board.has_item(Vector2i(1, 0)), "output lands on first_free_cell")
+	# 2026-11-05: the drop cell is now a seeded random free slot, not the first one.
+	var spawned: Dictionary = s.last_spawn
+	t.ok(not spawned.is_empty(), "a successful tap reports where the chip went")
+	var spawn_to = spawned.get("to", [])
+	t.ok(int(spawn_to[1]) != 0 or int(spawn_to[0]) != 0, "the chip does not stay on the generator")
+	t.ok(s.board.has_item(Vector2i(int(spawn_to[0]), int(spawn_to[1]))),
+			"the dropped chip sits on the reported cell")
+	t.ok(not s.board.is_blocked(Vector2i(int(spawn_to[0]), int(spawn_to[1]))),
+			"the drop cell is never an obstacle")
 	t.eq(int(s.generator_state["GEN"]["charges"]), 2, "charge is consumed")
 	t.ok(is_equal_approx(float(s.generator_state["GEN"]["ready_at"]), 1.0), "ready_at = time + cooldown")
 
@@ -506,7 +514,9 @@ func _test_rare_pool(t) -> void:
 	t.eq(no_order.tap_pool("GEN").size(), 1, "no orders -> no rare in the pool")
 	var before: String = no_order.digest()
 	no_order.apply({"type": "tap", "payload": {"target": {"slot": [0, 0]}}})
-	t.eq(int(no_order.board.item(Vector2i(1, 0)).get("level", -1)), 1, "plain output stays at lv1")
+	var no_order_to = no_order.last_spawn.get("to", [0, 0])
+	t.eq(int(no_order.board.item(Vector2i(int(no_order_to[0]), int(no_order_to[1]))).get("level", -1)), 1,
+			"plain output stays at lv1")
 	t.ne(no_order.digest(), before, "a successful tap does change the state")
 
 

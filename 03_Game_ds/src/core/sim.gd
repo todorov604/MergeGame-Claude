@@ -23,6 +23,9 @@ var board
 var rng
 var level_index: int = 0
 var time: float = 0.0
+## Last accepted generator drop: {"from", "to", "entity", "level"}. The views use it
+## to fly the chip in; empty on a rejected tap.
+var last_spawn: Dictionary = {}
 var hud: Dictionary = {}
 var orders: Array = []
 var generator_state: Dictionary = {}
@@ -291,7 +294,21 @@ func _rare_is_wanted(entity_id: String, level: int) -> bool:
 	return false
 
 
+## Free (unoccupied, unobstructed) cells, in board order. The generator picks one of
+## them with the sim RNG so a drop no longer always lands on the first free slot.
+func _free_cells() -> Array:
+	var out: Array = []
+	for y in board.height:
+		for x in board.width:
+			var pos := Vector2i(x, y)
+			if board.has_item(pos) or board.is_blocked(pos):
+				continue
+			out.append(pos)
+	return out
+
+
 func _do_tap(payload: Dictionary) -> Dictionary:
+	last_spawn = {}
 	var target = payload.get("target", null)
 	var pos := INVALID_POS
 	if typeof(target) == TYPE_DICTIONARY:
@@ -315,10 +332,11 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 		return _err("SIM_COOLDOWN", "\"" + entity_id + "\" ready at " + str(gs["ready_at"]))
 	# Check for space BEFORE drawing from the RNG: a rejected command must not
 	# consume randomness, otherwise later drops shift and the digest cannot see it.
-	var free: Vector2i = board.first_free_cell()
-	if free.x < 0:
+	var free_cells := _free_cells()
+	if free_cells.is_empty():
 		board_full_pending = true
 		return _err("SIM_BOARD_FULL", "board is full; charge kept")
+	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
 	var pool: Array = tap_pool(entity_id)
 	if pool.is_empty():
 		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no usable output")
@@ -329,6 +347,8 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 	var spawn_entity := String(picked["entity"])
 	var spawn_level: int = clampi(int(picked["level"]), 1, _level_cap(spawn_entity))
 	board.put(free, spawn_entity, spawn_level)
+	last_spawn = {"from": [pos.x, pos.y], "to": [free.x, free.y],
+			"entity": spawn_entity, "level": spawn_level}
 	gs["charges"] = int(gs["charges"]) - 1
 	gs["ready_at"] = time + float(cfg.get("cooldown", 0.0))
 	return _ok("spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
@@ -374,6 +394,41 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 	board.put(to, se, next_level)
 	board.take(from)
 	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
+
+
+## Drag-and-drop swap (2026-11-05): a chip trades places with another chip on an
+## unlocked cell, or slides into an empty one. A same entity+level drop is a merge
+## instead — that decision is made by FreeMode.drag_action before this command runs.
+func _do_swap(payload: Dictionary) -> Dictionary:
+	var from := _to_pos(payload.get("from", null))
+	var to := _to_pos(payload.get("to", null))
+	if from == INVALID_POS or to == INVALID_POS:
+		return _err("SIM_SLOT_OOB", "swap needs two [x, y] cells")
+	if from == to:
+		return _err("SIM_SAME_CELL", "from and to are the same cell")
+	if not board.in_bounds(from) or not board.in_bounds(to):
+		return _err("SIM_SLOT_OOB", "swap endpoint is outside the board")
+	if board.is_blocked(from) or board.is_blocked(to):
+		return _err("SIM_BLOCKED", "an obstacle covers one of the cells")
+	if not board.has_item(from):
+		return _err("SIM_SOURCE_EMPTY", "source cell is empty")
+	var src: Dictionary = board.item(from)
+	var src_entity := String(src.get("entity", ""))
+	var src_level := int(src.get("level", 1))
+	if String(model.entity(src_entity).get("kind", "")) != "chip":
+		return _err("SIM_NOT_SWAPPABLE", src_entity + " is not a chip; only chips swap")
+	if not board.has_item(to):
+		board.take(from)
+		board.put(to, src_entity, src_level)
+		return _ok("moved " + src_entity + " to " + str(to))
+	var dst: Dictionary = board.item(to)
+	var dst_entity := String(dst.get("entity", ""))
+	var dst_level := int(dst.get("level", 1))
+	if String(model.entity(dst_entity).get("kind", "")) != "chip":
+		return _err("SIM_NOT_SWAPPABLE", dst_entity + " is not a chip; only chips swap")
+	board.put(to, src_entity, src_level)
+	board.put(from, dst_entity, dst_level)
+	return _ok("swapped " + src_entity + " and " + dst_entity)
 
 
 # ------------------------------------------------------------ deliver / claim

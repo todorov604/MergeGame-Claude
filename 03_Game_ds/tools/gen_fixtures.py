@@ -168,8 +168,10 @@ def m_hud_missing(p):
     p["hud"].pop("star")
 
 
-def m_ref_only(p):
-    p["entities"]["A"]["visual"]["icon"] = "chip_clean_ca_lv01"
+def m_unknown_icon(p):
+    # M1: chip_clean_ca_lv01 is PRODUCTION now (the icon really is in the project), so the
+    # guard-refusal fixture uses an id the manifest never declares.
+    p["entities"]["A"]["visual"]["icon"] = "no_such_resource_icon"
 
 
 def m_placeholder_no_flag(p):
@@ -211,7 +213,7 @@ BROKEN_CASES = {
     "bad_dup_event_id.json": (m_dup_event_id, "EV_DUP_ID", False, True),
     "bad_meta_duration.json": (m_meta_duration, "META_DURATION_PRESENT", True, True),
     "bad_hud_missing.json": (m_hud_missing, "HUD_MISSING_FIELD", False, True),
-    "bad_ref_only.json": (m_ref_only, "ASSET_REFERENCE_ONLY", False, True),
+    "bad_unknown_icon.json": (m_unknown_icon, "ASSET_UNKNOWN", False, True),
     "bad_placeholder_no_flag.json": (m_placeholder_no_flag, "ASSET_PLACEHOLDER_BLOCKED", False, False),
     "bad_todo_audio.json": (m_todo_audio, "ASSET_TODO", False, True),
     "bad_theme_missing.json": (m_theme_missing, "THEME_MISSING", False, True),

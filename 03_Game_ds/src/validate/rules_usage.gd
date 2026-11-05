@@ -1,6 +1,7 @@
 extends RefCounted
 ## Usage rules (资源守卫) — every resource id a project touches goes through AssetGuard:
-##   theme icons, entity visual.icon, character idle/done, audio payloads.
+##   theme icons + theme chip_icons, entity visual.icon + visual.icons[<level>],
+##   character idle/done, audio payloads.
 ##
 ## REFERENCE_ONLY -> error. PLACEHOLDER -> error unless allow_placeholders. TODO -> error.
 ## Unknown id or a declared-but-missing file -> error.
@@ -68,6 +69,14 @@ static func _check_theme(ctx, refs: Array) -> void:
 		ctx.err("THEME_PARSE", "theme.icons", "theme icons must be an object")
 		return
 	_collect_icon_leaves(icons, "theme.icons", refs)
+	# chip_icons.<entity>.<level> is a second, per-level icon table. Walking it here is
+	# what keeps the pre-render gate complete: without it a theme could point a chip at
+	# a TODO/PLACEHOLDER/unknown id and only the movie scene would notice.
+	var chip_icons = root.get("chip_icons", {})
+	if typeof(chip_icons) == TYPE_DICTIONARY:
+		_collect_icon_leaves(chip_icons, "theme.chip_icons", refs)
+	elif chip_icons != null:
+		ctx.err("THEME_PARSE", "theme.chip_icons", "theme chip_icons must be an object")
 
 
 static func _collect_icon_leaves(node, path: String, refs: Array) -> void:
@@ -97,6 +106,12 @@ static func _collect_entity_icons(ctx, refs: Array) -> void:
 		var icon = (vis as Dictionary).get("icon", null)
 		if typeof(icon) == TYPE_STRING:
 			refs.append({"id": String(icon), "path": "entities.%s.visual.icon" % str(eid)})
+		# Per-level project override: ThemeLoader.resolve_chip_icon reads
+		# visual.icons[str(level)] before visual.icon, so those leaves are asset refs
+		# too. A non-object value is a schema matter, not a usage matter.
+		var per_level = (vis as Dictionary).get("icons", null)
+		if typeof(per_level) == TYPE_DICTIONARY:
+			_collect_icon_leaves(per_level, "entities.%s.visual.icons" % str(eid), refs)
 
 
 static func _collect_character_icons(ctx, refs: Array) -> void:

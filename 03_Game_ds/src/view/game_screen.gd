@@ -12,6 +12,7 @@ extends Control
 ##   3. presentation time (clock -> FlyAnim), which never feeds back into the sim
 
 const BoardScene := preload("res://src/view/board_view.tscn")
+const BoardView := preload("res://src/view/board_view.gd")
 const HudView := preload("res://src/view/hud_view.gd")
 const OrderPanel := preload("res://src/view/order_panel.gd")
 const FlyAnim := preload("res://src/view/fly_anim.gd")
@@ -19,31 +20,216 @@ const ProjectModel := preload("res://src/core/project_model.gd")
 const EventEvaluator := preload("res://src/core/event_evaluator.gd")
 const AssetGuardScript := preload("res://src/assets/asset_guard.gd")
 const ThemeLoader := preload("res://src/theme/theme_loader.gd")
+## §20.5 棋盘.psd layout. The film (movie_scene.gd) owns the numbers — both screens
+## must agree pixel for pixel — so the live screen reads the same table instead of
+## keeping a second copy that can drift. The board rect comes from BoardView, whose
+## container is the 983x1263 at (48,466) the layout is built around.
+const FilmLayout := preload("res://src/render/movie_scene.gd")
 
 const SAMPLE_PROJECT := "res://data/sample_project.json"
 const MANIFEST_INDEX := "res://data/manifest_index.json"
 const PAGE := Vector2(1080.0, 1920.0)
-const BOARD_RECT := Rect2(50.0, 450.0, 980.0, 1260.0)
-const HUD_RECT := Rect2(0.0, 0.0, 1080.0, 185.0)
-const ORDER_RECT := Rect2(0.0, 182.0, 1080.0, 250.0)
+const BOARD_RECT := Rect2(BoardView.BOARD_ORIGIN, BoardView.BOARD_SIZE)
+const LAYOUT_BG_BOTTOM := FilmLayout.LAYOUT_BG_BOTTOM
+const LAYOUT_BG_TOP := FilmLayout.LAYOUT_BG_TOP
+const LAYOUT_PART1 := FilmLayout.LAYOUT_PART1
+const LAYOUT_PART2 := FilmLayout.LAYOUT_PART2
+const LAYOUT_ITEMS := FilmLayout.LAYOUT_ITEMS
+const LAYOUT_EXIT := FilmLayout.LAYOUT_EXIT
+const LAYOUT_BAG := FilmLayout.LAYOUT_BAG
+const LAYOUT_SHOP := FilmLayout.LAYOUT_SHOP
+const LAYOUT_LEVEL_BADGE := FilmLayout.LAYOUT_LEVEL_BADGE
+const LAYOUT_LEVEL_BADGE_BG := FilmLayout.LAYOUT_LEVEL_BADGE_BG
+const LAYOUT_ENERGY := FilmLayout.LAYOUT_ENERGY
+const LAYOUT_COIN := FilmLayout.LAYOUT_COIN
+const LAYOUT_STAR := FilmLayout.LAYOUT_STAR
+const LAYOUT_GEM := FilmLayout.LAYOUT_GEM
+## The order band sits between the money bar and the board: 210..460, i.e. above the
+## 466 container top and below the y≈0..120 money bar.
+const ORDER_RECT := Rect2(0.0, 210.0, 1080.0, 250.0)
+## hud_view.gd draws a 1080x185 layout with hardcoded local pill rects. Scaling the
+## control 0.8 keeps that view untouched while making the bar 864x148, which leaves
+## the top-right corner free for the §20.5 shop button at x=930.
+const HUD_SCALE := 0.8
+const HUD_RECT := Rect2(0.0, 0.0, 864.0, 148.0)
+## §20.5 logical ui slots the live screen draws itself (the board slots belong to
+## board_view.gd and are logged there).
+const UI_KEYS := [
+	"bg_bottom", "bg_top", "level_badge", "level_badge_bg", "energy_timer",
+	"money_bg", "part1", "part2", "items", "exit", "bag", "shop",
+]
 const DEFAULT_SEED := 7
 ## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
 const TOAST_SECONDS := 1.5
+
+## Draws the chrome (characters, money bar, bottom bar) above the board but below
+## the HUD / order cards. A plain child Control cannot do that from game_screen's
+## own _draw(): a parent CanvasItem paints before all of its children, and
+## board_view paints an opaque page over the whole canvas. The drawing has to run on
+## *this* CanvasItem (draw_* is node-scoped), so the whole chrome painter lives here
+## and reads its data/textures from the screen it belongs to.
+class Chrome extends Control:
+	## One source of truth for the §20.5 numbers: the film's own layout table. The
+	## inner class cannot read the enclosing script's constants, so it preloads the
+	## same table itself.
+	const FilmLayout := preload("res://src/render/movie_scene.gd")
+	const PAGE := Vector2(1080.0, 1920.0)
+	const LAYOUT_BG_BOTTOM := FilmLayout.LAYOUT_BG_BOTTOM
+	const LAYOUT_BG_TOP := FilmLayout.LAYOUT_BG_TOP
+	const LAYOUT_PART1 := FilmLayout.LAYOUT_PART1
+	const LAYOUT_PART2 := FilmLayout.LAYOUT_PART2
+	const PART1_CHAR_SRC := FilmLayout.PART1_CHAR_SRC
+	const PART2_CHAR_SRC := FilmLayout.PART2_CHAR_SRC
+	const PART1_CHAR_RECT := FilmLayout.PART1_CHAR_RECT
+	const PART2_CHAR_RECT := FilmLayout.PART2_CHAR_RECT
+	const LAYOUT_LEVEL_BADGE_BG := FilmLayout.LAYOUT_LEVEL_BADGE_BG
+	const LAYOUT_LEVEL_BADGE := FilmLayout.LAYOUT_LEVEL_BADGE
+	const LAYOUT_SHOP := FilmLayout.LAYOUT_SHOP
+	const LAYOUT_ITEMS := FilmLayout.LAYOUT_ITEMS
+	const LAYOUT_EXIT := FilmLayout.LAYOUT_EXIT
+	const LAYOUT_BAG := FilmLayout.LAYOUT_BAG
+
+	var host = null
+	var _boxes: Dictionary = {}
+
+	func _draw() -> void:
+		if host == null:
+			return
+		var snap: Dictionary = host._snapshot()
+		draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
+		draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+		_draw_topbar(snap)
+		_draw_bottom_bar(snap)
+
+	func _draw_topbar(snap: Dictionary) -> void:
+		var values: Dictionary = host._hud_values(snap)
+		# The HUD (hud_view.gd) keeps its own pill rects; the chrome paints the §20.5
+		# plates underneath them instead of moving its numbers around, and the
+		# transparent pill palette in the screen leaves the fills to this layer.
+		for key in ["energy", "coin", "gem", "star"]:
+			rounded(host._hud_pill_page(key), 22, Color(1, 1, 1, 0.82))
+		var level_rect: Rect2 = host._hud_pill_page("level")
+		var badge_drawn := draw_ui_fit("level_badge_bg", level_rect)
+		badge_drawn = draw_ui_fit("level_badge", level_rect) or badge_drawn
+		if not badge_drawn:
+			rounded(level_rect, 22, Color("#5B8DEF"))
+		# main_money_bg is the PSD currency base: a 68x66 plate behind each icon,
+		# shrunk to the HUD's own pill height.
+		for key2 in ["energy", "coin", "star", "gem"]:
+			var centre: Vector2 = host._hud_counter_page(key2)
+			draw_ui_stretch("money_bg", Rect2(centre - Vector2(27.0, 26.0), Vector2(54.0, 52.0)))
+		if host._ui("energy_timer") != null:
+			draw_ui_stretch("energy_timer", Rect2(Vector2(856.0, 12.0), Vector2(52.0, 52.0)))
+		# Digits live here in chrome mode (hud_view is hidden): level inside the badge,
+		# the four counters inside their pills, mm:ss under the energy timer.
+		text_center(level_rect.grow(-6.0), str(int(values.get("level", 1))), 36, Color("#22303F") if badge_drawn else Color(1, 1, 1, 0.96))
+		var energy_rect: Rect2 = host._hud_pill_page("energy")
+		text_left(Rect2(energy_rect.position.x + 58.0, energy_rect.position.y + 10.0,
+				energy_rect.size.x - 74.0, 34.0), str(int(values.get("energy", 0))), 30, Color("#22303F"))
+		text_left(Rect2(energy_rect.position.x + 58.0, energy_rect.position.y + 42.0,
+				energy_rect.size.x - 74.0, 24.0),
+				host._mmss(int(values.get("energyTickSeconds", 0))), 18, Color("#5C6B7D"))
+		for key3 in ["coin", "star", "gem"]:
+			var counter_rect: Rect2 = host._hud_pill_page(key3)
+			text_left(Rect2(counter_rect.position.x + 58.0, counter_rect.position.y,
+					counter_rect.size.x - 66.0, counter_rect.size.y),
+					str(int(values.get(key3, 0))), 30, Color("#22303F"))
+		if not draw_ui_fit("shop", LAYOUT_SHOP):
+			rounded(LAYOUT_SHOP, 30, Color("#5B8DEF"))
+			draw_rect(Rect2(LAYOUT_SHOP.position + Vector2(26.0, 34.0),
+					Vector2(LAYOUT_SHOP.size.x - 52.0, 46.0)), Color(1, 1, 1, 0.85), true)
+
+	func _draw_bottom_bar(snap: Dictionary) -> void:
+		if not draw_ui_stretch("items", LAYOUT_ITEMS):
+			rounded(LAYOUT_ITEMS, 24, Color(1, 1, 1, 0.92))
+		# items.png carries placeholder copy from the PSD; the live level/id text goes
+		# on a small plate that covers that copy instead of doubling it.
+		var plate := Rect2(LAYOUT_ITEMS.position + Vector2(52.0, 18.0), Vector2(470.0, 62.0))
+		rounded(plate, 18, Color(0.98, 0.99, 1.0, 1.0))
+		var level_line := "LEVEL %d / %s" % [int(snap.get("level_index", host._level_index)) + 1,
+				String(snap.get("level_id", host._level_static.get("id", "")))]
+		text_left(Rect2(plate.position + Vector2(18.0, 6.0), Vector2(plate.size.x - 36.0, 40.0)), level_line, 28, Color("#22303F"))
+		if not draw_ui_fit("exit", LAYOUT_EXIT):
+			rounded(LAYOUT_EXIT.grow(-8.0), 30, Color(1, 1, 1, 0.92))
+		if not draw_ui_fit("bag", LAYOUT_BAG):
+			rounded(LAYOUT_BAG.grow(-6.0), 18, Color(1, 1, 1, 0.92))
+
+	func draw_ui_stretch(key: String, r: Rect2) -> bool:
+		var texture: Texture2D = host._ui(key)
+		if texture == null:
+			return false
+		draw_texture_rect(texture, r, false)
+		return true
+
+	func draw_ui_region(key: String, src: Rect2, r: Rect2) -> bool:
+		var texture: Texture2D = host._ui(key)
+		if texture == null:
+			return false
+		draw_texture_rect_region(texture, r, src)
+		return true
+
+	func draw_ui_fit(key: String, r: Rect2) -> bool:
+		var texture: Texture2D = host._ui(key)
+		if texture == null:
+			return false
+		var source := texture.get_size()
+		if source.x <= 0.0 or source.y <= 0.0:
+			return false
+		var used := minf(r.size.x / source.x, r.size.y / source.y)
+		var drawn := source * used
+		draw_texture_rect(texture, Rect2(r.position + (r.size - drawn) * 0.5, drawn), false)
+		return true
+
+	func rounded(r: Rect2, radius: int, color: Color) -> void:
+		if r.size.x <= 1.0 or r.size.y <= 1.0:
+			return
+		var box: StyleBoxFlat = _boxes.get(radius)
+		if box == null:
+			box = StyleBoxFlat.new()
+			box.set_corner_radius_all(radius)
+			box.anti_aliasing = true
+			_boxes[radius] = box
+		box.bg_color = color
+		box.border_color = Color(0, 0, 0, 0)
+		box.set_border_width_all(0)
+		draw_style_box(box, r)
+
+	func text_left(r: Rect2, text: String, size_px: int, color: Color) -> void:
+		if host._font == null or text.is_empty():
+			return
+		var baseline := r.position + Vector2(0.0, r.size.y * 0.5 + float(size_px) * 0.36)
+		draw_string(host._font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
+
+	func text_center(r: Rect2, text: String, size_px: int, color: Color) -> void:
+		if host._font == null or text.is_empty():
+			return
+		var width: float = host._font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+		var baseline := r.position + Vector2((r.size.x - width) * 0.5, r.size.y * 0.5 + float(size_px) * 0.36)
+		draw_string(host._font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
 
 var board
 var hud
 var orders
 var fly
+var chrome
 var model
 var evaluator
 var guard
 var theme_loader
+var _chrome_owns_hud: bool = false
 
 var allow_placeholders: bool = false
 var theme_name: String = ""
 var theme_ok: bool = false
 var sim_rejected: int = 0
 var view_events: Dictionary = {}
+
+## "bg_bottom" -> Texture2D or null, resolved once in _ready(). _draw_chrome() only
+## reads this cache: no frame does IO.
+var _ui_tex: Dictionary = {}
+var _ui_ids: Array = []
+var _ui_id_by_key: Dictionary = {}
+var _font: Font = null
 
 var _clock: float = 0.0
 var _seed: int = DEFAULT_SEED
@@ -81,21 +267,53 @@ func _ready() -> void:
 	theme_ok = bool(theme_result.get("ok", false))
 	var colors: Dictionary = theme_loader.colors()
 	var metrics: Dictionary = theme_loader.metrics
+	_font = _load_font()
+	# §20.5 layout art, resolved once before the first paint (textures are cached by
+	# ThemeLoader.texture_for, so no frame touches the disk).
+	_resolve_ui_art()
 
 	board = BoardScene.instantiate()
 	board.position = Vector2.ZERO
 	add_child(board)
+	# The theme is already loaded above, so the board can draw real chip icons on
+	# its very first paint instead of flashing procedural chips.
+	board.set_chip_icons(theme_loader, model.project)
+
+	# Chrome (background characters, money bar, bottom items bar) has to paint above
+	# the board but below the HUD and the order cards, so it is its own child added
+	# right after the board instead of being drawn by this control's _draw().
+	chrome = Chrome.new()
+	chrome.host = self
+	chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	chrome.position = Vector2.ZERO
+	chrome.size = PAGE
+	add_child(chrome)
 
 	hud = HudView.new()
 	hud.position = HUD_RECT.position
-	hud.size = HUD_RECT.size
+	hud.size = Vector2(1080.0, 185.0)
+	# hud_view.gd keeps its own 1080-wide pill layout; scaling it down 0.8 is what
+	# makes room for the top-right shop button without editing that view.
+	hud.scale = Vector2(HUD_SCALE, HUD_SCALE)
 	add_child(hud)
-	hud.set_palette(colors)
+	# The §20.5 art draws the pills, so the HUD keeps only its numbers/icons: a
+	# transparent panel colour erases its procedural pill fills.
+	hud.set_palette(_transparent_pills(colors))
+	# §20.5 chrome paints the whole money row (plates + digits). Leaving hud_view visible
+	# would double-draw translucent pills and a second set of numbers over the art, so it
+	# is hidden in chrome mode; its rects still feed the chrome.
+	_chrome_owns_hud = _ui("items") != null and _ui("part1") != null
+	if _chrome_owns_hud:
+		hud.visible = false
+		board.show_debug_labels = false
 
 	orders = OrderPanel.new()
 	orders.position = ORDER_RECT.position
 	orders.size = ORDER_RECT.size
-	orders.set_palette(colors)
+	# order_panel paints an opaque page-coloured strip behind its cards; the §20.5
+	# band sits on top of the order characters, so that strip goes transparent and
+	# lets the part1/part2 art show between the cards.
+	orders.set_palette(_transparent_page(colors))
 	orders.set_metrics(metrics)
 	orders.set_project(model.project)
 	add_child(orders)
@@ -104,7 +322,10 @@ func _ready() -> void:
 	fly.position = Vector2.ZERO
 	fly.size = PAGE
 	fly.set_palette(colors)
-	fly.set_metrics(metrics)
+	# fly_anim's backdrop paints an opaque band at the bottom of the page; the §20.5
+	# items bar owns that band now, so the flight layer keeps only its board outline
+	# and the moving coins/stars.
+	fly.set_metrics(_flight_metrics(metrics))
 	add_child(fly)
 
 	_apply_static_level(0)
@@ -137,6 +358,8 @@ func _ready() -> void:
 		theme_name, str(theme_ok),
 	])
 	print("[game] " + String(theme_loader.summary()))
+	print("[game] chip icons resolved=%d of %d items" % [int(board.chip_icon_count()), int(board.item_count())])
+	print("[game] ui " + String(ui_summary()))
 	print("[game] " + String(hud.debug_summary()))
 	print("[game] " + String(orders.debug_summary()))
 	print("[game] freeze=%s autoplay=%s clock=%.2f t=%.2f" % [
@@ -185,6 +408,140 @@ func _first_order_id(level: Dictionary) -> String:
 		if typeof(raw) == TYPE_DICTIONARY:
 			return String((raw as Dictionary).get("id", ""))
 	return ""
+
+
+# --------------------------------------------------------------- §20.5 chrome
+
+## Background layers behind the board (the board view paints the same two layers;
+## this keeps the live screen's own stacking complete if the board is ever shown
+## without its background). Drawn before every child, i.e. under the board.
+func _draw() -> void:
+	draw_rect(Rect2(Vector2.ZERO, PAGE), Color("#E6EDF6"), true)
+	_draw_ui_stretch("bg_bottom", LAYOUT_BG_BOTTOM)
+	_draw_ui_stretch("bg_top", LAYOUT_BG_TOP)
+
+
+## The HUD dictionary as plain values (the rail the chrome reads its text from).
+func _hud_values(snap: Dictionary) -> Dictionary:
+	var values: Dictionary = _as_dict(snap.get("hud", {}))
+	if values.is_empty() and hud != null:
+		values = hud.values
+	return values
+
+
+## hud_view.gd's own pill rect, mapped from its local space into page space through
+## the 0.8 scale. The chrome paints the §20.5 plates *under* those rects, so the HUD
+## keeps its numbers and the layout keeps one source of truth for the text.
+func _hud_pill_page(key: String) -> Rect2:
+	var local = hud._pill_rect(key)
+	if typeof(local) != TYPE_RECT2:
+		return Rect2()
+	var rect: Rect2 = local
+	return Rect2(rect.position * hud.scale + hud.position, rect.size * hud.scale)
+
+
+## Where the HUD thinks one counter's icon sits, in page space.
+func _hud_counter_page(key: String) -> Vector2:
+	return hud.counter_center(key) * hud.scale + hud.position
+
+
+# ------------------------------------------------------------------ ui lookups
+
+## Resolves every §20.5 slot once. The ids that produced a texture are what
+## ui_summary() prints and what the screenshot log names.
+func _resolve_ui_art() -> void:
+	_ui_tex = {}
+	_ui_ids = []
+	_ui_id_by_key = {}
+	for raw_key in UI_KEYS:
+		var key := String(raw_key)
+		var id := ""
+		if theme_loader != null and theme_loader.has_method("resolve_ui"):
+			var resolved = theme_loader.resolve_ui(key, model.project)
+			if typeof(resolved) == TYPE_DICTIONARY:
+				id = String((resolved as Dictionary).get("id", ""))
+		var texture: Texture2D = null
+		if not id.is_empty() and theme_loader != null and theme_loader.has_method("texture_for"):
+			var loaded = theme_loader.texture_for(id)
+			if loaded is Texture2D:
+				texture = loaded
+		_ui_tex[key] = texture
+		if texture != null:
+			_ui_ids.append(id)
+			_ui_id_by_key[key] = id
+
+
+func _ui(key: String) -> Texture2D:
+	var value = _ui_tex.get(key, null)
+	return value if value is Texture2D else null
+
+
+## key -> manifest id, only for the slots whose texture really loaded.
+func ui_ids() -> Dictionary:
+	return _ui_id_by_key.duplicate(true)
+
+
+## "[game] ui resolved=N of M key=id ..." naming the layout art this screen drew.
+func ui_summary() -> String:
+	var parts: Array = []
+	for raw_key in UI_KEYS:
+		var key := String(raw_key)
+		parts.append("%s=%s" % [key, String(_ui_id_by_key.get(key, "-"))])
+	return "resolved=%d of %d %s" % [_ui_ids.size(), UI_KEYS.size(), " ".join(parts)]
+
+
+func _draw_ui_stretch(key: String, r: Rect2) -> bool:
+	var texture := _ui(key)
+	if texture == null:
+		return false
+	draw_texture_rect(texture, r, false)
+	return true
+
+
+## Palette copy with invisible pill fills: the §20.5 art is the pill background now.
+func _transparent_pills(colors: Dictionary) -> Dictionary:
+	var out := colors.duplicate(true)
+	out["panel"] = Color(0, 0, 0, 0)
+	out["panel_edge"] = Color(0, 0, 0, 0)
+	return out
+
+
+## order_panel's own background strip goes transparent so the characters show.
+func _transparent_page(colors: Dictionary) -> Dictionary:
+	var out := colors.duplicate(true)
+	out["page"] = Color(0, 0, 0, 0)
+	return out
+
+
+## fly_anim's backdrop band would cover the §20.5 items bar; zero it so the flight
+## layer only draws its board outline and the moving coins/stars.
+func _flight_metrics(metrics: Dictionary) -> Dictionary:
+	var out := metrics.duplicate(true)
+	out["band_height"] = 0.0
+	return out
+
+
+func _snapshot() -> Dictionary:
+	if evaluator == null or evaluator.sim == null:
+		return {}
+	return evaluator.sim.snapshot()
+
+
+func _mmss(seconds: int) -> String:
+	var total := maxi(0, seconds)
+	return "%02d:%02d" % [total / 60, total % 60]
+
+
+# -------------------------------------------------------------------- text/box
+
+func _load_font() -> Font:
+	var bytes := FileAccess.get_file_as_bytes("res://assets/fonts/font_zh.otf")
+	if bytes.size() > 0:
+		var file := FontFile.new()
+		file.data = bytes
+		if file.get_string_size("0", HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x > 0.0:
+			return file
+	return ThemeDB.fallback_font
 
 
 func _sync_from_sim() -> void:
@@ -301,9 +658,11 @@ func _refresh_anchors() -> void:
 	var coin_local: Vector2 = hud.counter_center("coin")
 	var star_local: Vector2 = hud.counter_center("star")
 	var gem_local: Vector2 = hud.counter_center("gem")
-	table["hud:coin"] = coin_local + hud.position
-	table["hud:star"] = star_local + hud.position
-	table["hud:gem"] = gem_local + hud.position
+	# The HUD is scaled down to make room for the §20.5 shop button, so its local
+	# anchors reach page space through the same scale.
+	table["hud:coin"] = coin_local * hud.scale + hud.position
+	table["hud:star"] = star_local * hud.scale + hud.position
+	table["hud:gem"] = gem_local * hud.scale + hud.position
 	fly.set_anchors(table)
 	fly.set_clock(_clock)
 

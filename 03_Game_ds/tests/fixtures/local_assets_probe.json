@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "note": "probe registry for tests/t_local_assets.gd. board_frame tries to upgrade a PLACEHOLDER snapshot record and font_zh tries to downgrade a PRODUCTION one; both must be rejected (the snapshot always wins). probe_local_ok is a genuine local record so the accept path is exercised too.",
+  "resources": {
+    "board_frame": {
+      "usage": "PRODUCTION",
+      "license": "probe-upgrade-attempt",
+      "file_name": "board_frame.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/board_frame.png",
+      "pending_manifest": true
+    },
+    "font_zh": {
+      "usage": "PLACEHOLDER",
+      "license": "probe-downgrade-attempt",
+      "file_name": "font_zh.otf",
+      "source": "01_icon/HotelManor_icon/剩余图标/font_zh.otf",
+      "pending_manifest": true
+    },
+    "probe_local_ok": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "file_name": "ui_icon_star.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/ui_icon_star.png",
+      "pending_manifest": true
+    }
+  }
+}

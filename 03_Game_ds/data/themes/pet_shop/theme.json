@@ -1,7 +1,7 @@
 {
   "version": 1,
   "name": "pet-shop-wood",
-  "note": "Second theme, data only: warm wood palette, larger card/board radius and gap, thicker bottom band. No icon ids, so the strictest guard mode still passes. Select it with --theme=themes/pet_shop or by pointing project.theme at it.",
+  "note": "Second theme, data only: warm wood palette, larger card/board radius and gap, thicker bottom band. chip_icons stays empty on purpose: this is the procedural-chip side of the theme-switch proof (default ships real chip icons, pet_shop ships none). Select it with --theme=themes/pet_shop or by pointing project.theme at it.",
   "palette": {
     "page": "#F3E3C8",
     "panel": "#B98B5E",
@@ -28,5 +28,6 @@
     "band_height": 210.0,
     "tint_alpha": 0.10
   },
-  "icons": {}
+  "icons": {},
+  "chip_icons": {}
 }

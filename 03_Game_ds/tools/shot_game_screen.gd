@@ -127,6 +127,16 @@ func _capture(viewport: SubViewport, path: String, expected: Vector2i, label: St
 			print("[shot] panel " + String(panel.call("debug_summary")))
 	if _screen != null and _screen.has_method("debug_summary"):
 		print("[shot] " + String(_screen.call("debug_summary")))
+	if _screen != null and _screen.has_method("ui_summary"):
+		# §20.5 layout art the screen resolved (the film prints the same line).
+		print("[shot] ui " + String(_screen.call("ui_summary")))
+	if _screen != null:
+		# The screen wires ThemeLoader + AssetGuard + board.set_chip_icons itself, so
+		# this line is the proof that the shot really drew theme chip icons.
+		var board = _screen.get("board")
+		if board != null and board.has_method("chip_icon_count"):
+			print("[shot] chip_icons resolved=%d of %d items" % [
+					int(board.call("chip_icon_count")), int(board.call("item_count"))])
 	return true
 
 

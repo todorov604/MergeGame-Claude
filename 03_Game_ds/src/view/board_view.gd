@@ -1,15 +1,25 @@
 extends Control
-## M0 static board view: 7x9 grid of 140 px cells inside a 1080x1920 screen.
+## M1 static board view: the 棋盘.psd geometry as a 7x9 grid of 140.428571 x
+## 140.333333 px cells inside the 983x1263 container at (48,466), on a 1080x1920
+## canvas (§20.5 / §20.6).
 ##
-## Every visual on the board is drawn procedurally (draw_rect / draw_circle /
-## draw_polyline / draw_string). Chip, generator, special, obstacle, selection
-## bracket and completion mark all come from code, so the default build renders
-## with zero textures: the manifest ids for chips, obstacles and board art are
-## REFERENCE_ONLY and must never enter res:// or a render.
+## Two drawing layers, picked per element at draw time:
+##
+##   themed    the AssetGuard + ThemeLoader pair attached through set_asset_theme()
+##             resolves `bg_bottom`, `bg_top`, `board_frame`, `cell`, `select`,
+##             `lock`, `web`, `bubble`, `ice` to real textures, and each chip
+##             resolves through chip_texture(entity, level)
+##   procedural  every one of those falls back to the code below when the loader is
+##             absent, the id does not resolve, or the file is missing, so a
+##             relocated copy without the copies renders the same layout with no
+##             texture at all
+##
+## `_draw()` never loads anything: all IO happens in set_asset_theme() or in the
+## theme loader.
 ##
 ## A PLACEHOLDER branch exists for the board frame, but it is only reachable when
 ## `allow_placeholders` is true (`--allow-placeholders` on the command line) and it
-## still asks the asset guard first. `_draw()` never loads anything.
+## still asks the asset guard first.
 ##
 ## No global type name here on purpose: several agents work in this project at the
 ## same time, so this file is preloaded by whoever needs it.
@@ -20,13 +30,53 @@ const SAMPLE_PROJECT := "res://data/sample_project.json"
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const FRAME_ID := "board_frame"
 
-const CELL := 140
 const COLS := 7
 const ROWS := 9
+## §20.5: the board container `board_frame` is 983x1263 at (48,466), so one cell is
+## 983/7 x 1263/9 = 140.428571 x 140.333333. CELL_W / CELL_H carry that exact
+## fraction and cell_rect() derives every edge from the container, so the 63 cells
+## tile the container with no remainder and cell (6,8) ends exactly at (1031,1729).
+##
+## CELL stays the plain integer 140 on purpose: movie_scene.gd does
+## `float(BoardView.CELL)` and derives its origin, board size and every cell
+## position from BOARD_ORIGIN / BOARD_SIZE / CELL, and all cell-index math here is
+## integer Vector2i. Keeping CELL an int means the renderer and the view agree on
+## the column/row step without either side rounding a fraction, while the view's
+## own geometry uses the exact fractional size.
+const CELL := 140
 const CELL_GAP := 4
-const BOARD_ORIGIN := Vector2(50.0, 450.0)
-const BOARD_SIZE := Vector2(980.0, 1260.0) # COLS*CELL x ROWS*CELL
+const BOARD_ORIGIN := Vector2(48.0, 466.0)
+const BOARD_SIZE := Vector2(983.0, 1263.0)
+const CELL_W := 983.0 / 7.0
+const CELL_H := 1263.0 / 9.0
 const PAGE_SIZE := Vector2(1080.0, 1920.0)
+
+## §20.6 item 1: main_bg_01_bottom is 1080x1536 at (0,384) and fills to the bottom,
+## main_bg_01_top is 1080x400 and covers the top band.
+const BG_BOTTOM_RECT := Rect2(0.0, 384.0, 1080.0, 1536.0)
+const BG_TOP_RECT := Rect2(0.0, 0.0, 1080.0, 400.0)
+
+## §20.6 item 6: 182x182 chip art drawn at 132-140 px, bottom-aligned in the cell,
+## over a soft shadow. 132 keeps the 4 px cell gap readable at this cell size.
+const CHIP_DRAW_SIZE := 132.0
+const SHADOW_STEPS := 3
+
+## §20.6 logical slots handed to ThemeLoader.resolve_ui(). The ids stay opaque to
+## this file: it only ever asks the loader for a key and draws what comes back.
+const UI_BG_BOTTOM := "bg_bottom"
+const UI_BG_TOP := "bg_top"
+const UI_BOARD_FRAME := "board_frame"
+const UI_CELL := "cell"
+const UI_SELECT := "select"
+const UI_LOCK := "lock"
+const UI_WEB := "web"
+const UI_BUBBLE := "bubble"
+const UI_ICE := "ice"
+const UI_KEYS := [
+	UI_BG_BOTTOM, UI_BG_TOP, UI_BOARD_FRAME, UI_CELL, UI_SELECT,
+	UI_LOCK, UI_WEB, UI_BUBBLE, UI_ICE,
+]
+const ICE_COUNTDOWN := "19:28"
 
 const COLOR_PAGE := Color("#E6EDF6")
 const COLOR_PANEL := Color("#A8BDD5")
@@ -39,13 +89,14 @@ const COLOR_INK := Color("#22303F")
 const COLOR_WHITE := Color(1.0, 1.0, 1.0)
 const COLOR_HUE_FALLBACK := Color("#94A3B8")
 const COLOR_GLOW := Color(0.35, 0.84, 0.42)
-## §7 asks for a yellow selection frame; the gear icon in the PSD reference uses
-## white brackets, so the frame carries both: yellow brackets + yellow glow.
+## §7 asks for a yellow selection frame; the PSD reference wears white corner
+## brackets, so the procedural frame carries both: yellow brackets + yellow glow.
 const COLOR_SELECT := Color("#FFC427")
 const SELECT_SCALE := 1.08
 const SELECT_LIFT := Vector2(0.0, -5.0)
 const SELECT_TOWARD := 7.0
 const COLOR_CAPSULE := Color(0.10, 0.15, 0.21, 0.82)
+const COLOR_SHADOW := Color(0.04, 0.08, 0.14)
 
 const FONT_TITLE := 40
 const FONT_INK := 30
@@ -59,13 +110,18 @@ const DEFAULT_COMPLETED := [[1, 4]]
 ## §7 item 4 "board full prompt": a procedural toast strip, so the prompt needs no
 ## .tscn edit and no asset. The manifest id ui_board_full_toast stays REFERENCE_ONLY
 ## and is deliberately never referenced here; the strip is drawn from code like
-## every other board element.
+## every other board element. The rect sits above the §20.5 items bar (193,1731) and
+## stays fully inside the 1080x1920 canvas.
 const TOAST_SECONDS := 1.5
 const TOAST_FADE := 0.25
-const TOAST_RECT := Rect2(190.0, 1802.0, 700.0, 84.0)
+const TOAST_RECT := Rect2(190.0, 1600.0, 700.0, 84.0)
 const COLOR_TOAST := Color(0.10, 0.15, 0.21, 0.86)
 
 var allow_placeholders: bool = false
+## The level caption and the kind legend are debug affordances for a standalone
+## board: a composed screen (game_screen) owns that space with its own order cards
+## and §20.5 items bar, so it can switch them off with one assignment.
+var show_debug_labels: bool = true
 var project_path: String = ""
 var level_index: int = 0
 var level_id: String = ""
@@ -83,6 +139,14 @@ var _clock: float = 0.0
 var _toast_text: String = ""
 var _toast_start: float = 0.0
 var _toast_seconds: float = TOAST_SECONDS
+## The theme pair attached through set_asset_theme() (and its M1 alias
+## set_chip_icons()). Null means "no theme attached": every chip keeps its
+## procedural drawing and every UI slot resolves to "".
+var _asset_loader = null
+var _asset_project: Dictionary = {}
+## "bg_bottom" -> Texture2D / null. One resolve per key per attach; _draw() runs
+## up to 63 cell lookups per frame and must not walk the theme dictionaries there.
+var _ui_tex_cache: Dictionary = {}
 
 
 func _ready() -> void:
@@ -208,8 +272,15 @@ func debug_summary() -> String:
 	]
 
 
+## §20.5 geometry. Every edge is computed from the container edge, not accumulated
+## from CELL_W, so the last cell ends exactly at (1031,1729) and the 63 cells tile
+## the 983x1263 container with zero remainder.
 func cell_rect(x: int, y: int) -> Rect2:
-	return Rect2(BOARD_ORIGIN + Vector2(x * CELL, y * CELL), Vector2(CELL, CELL))
+	var left := BOARD_ORIGIN.x + BOARD_SIZE.x * float(x) / float(COLS)
+	var right := BOARD_ORIGIN.x + BOARD_SIZE.x * float(x + 1) / float(COLS)
+	var top := BOARD_ORIGIN.y + BOARD_SIZE.y * float(y) / float(ROWS)
+	var bottom := BOARD_ORIGIN.y + BOARD_SIZE.y * float(y + 1) / float(ROWS)
+	return Rect2(left, top, right - left, bottom - top)
 
 
 func obstacle_types() -> Array:
@@ -227,6 +298,56 @@ func item_count() -> int:
 
 func obstacle_count() -> int:
 	return _obstacles.size()
+
+
+## Attaches the theme's asset table: the per-(entity, level) chip icons *and* the
+## board container's own UI textures. Passing a loader is what turns the board from
+## procedural blobs into real art; without this call the board renders exactly as
+## before (the tests rely on both branches).
+func set_asset_theme(loader, project: Dictionary) -> void:
+	_asset_loader = loader
+	_asset_project = project
+	_ui_tex_cache.clear()
+	queue_redraw()
+
+
+## M1 entry point, kept for game_screen.gd and shot_board.gd: the chip icons and
+## the UI textures live on the same loader, so this is the same attachment.
+func set_chip_icons(loader, project: Dictionary) -> void:
+	set_asset_theme(loader, project)
+
+
+## How many items currently resolve to a texture (tests, tools, debug summary).
+func chip_icon_count() -> int:
+	if _asset_loader == null:
+		return 0
+	var count := 0
+	for item in _items.values():
+		if _chip_texture(item) != null:
+			count += 1
+	return count
+
+
+## key -> resolved manifest id, only for the slots that resolve. Empty without a
+## loader, which is what the relocated-copy test leans on.
+func ui_ids() -> Dictionary:
+	var out := {}
+	for key in UI_KEYS:
+		var id := _ui_id(String(key))
+		if not id.is_empty():
+			out[String(key)] = id
+	return out
+
+
+## One ASCII line naming every UI slot, for the screenshot tool's log.
+func ui_summary() -> String:
+	var ids := ui_ids()
+	if ids.is_empty():
+		return ""
+	var parts: Array = []
+	for key in UI_KEYS:
+		parts.append("%s=%s" % [String(key), String(ids.get(String(key), "-"))])
+	return " ".join(parts)
 
 
 # --------------------------------------------------------------------- toast API
@@ -281,16 +402,11 @@ func toast_active_at(t: float) -> bool:
 
 # ------------------------------------------------------------------------ drawing
 
+## §20.6 paint order: page background -> board container -> cells -> obstacles ->
+## items/chips -> selection -> legend/caption -> toast.
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, PAGE_SIZE), COLOR_PAGE, true)
-
-	var panel := Rect2(BOARD_ORIGIN - Vector2(12.0, 12.0), BOARD_SIZE + Vector2(24.0, 24.0))
-	_rounded(panel, 26, COLOR_PANEL)
-	_rounded_outline(panel, 26, COLOR_PANEL_EDGE, 2)
-
-	if _frame_texture != null:
-		var frame_rect := Rect2(BOARD_ORIGIN, BOARD_SIZE)
-		draw_texture_rect(_frame_texture, frame_rect, false)
+	_draw_background()
+	_draw_container()
 
 	for y in board_height:
 		for x in board_width:
@@ -298,41 +414,74 @@ func _draw() -> void:
 
 	for y in board_height:
 		for x in board_width:
-			if _completed.has(Vector2i(x, y)):
-				_rounded(cell_rect(x, y).grow(-4.0), 18, COLOR_COMPLETE)
+			var cell := Vector2i(x, y)
+			if _completed.has(cell):
+				_rounded(cell_rect(x, y).grow(-float(CELL_GAP)), 18, COLOR_COMPLETE)
 
 	for y in board_height:
 		for x in board_width:
-			var key := Vector2i(x, y)
-			if _items.has(key):
-				_draw_item(key, _items[key])
+			var cell := Vector2i(x, y)
+			if _obstacles.has(cell):
+				_draw_obstacle(cell, String(_obstacles[cell]))
 
 	for y in board_height:
 		for x in board_width:
-			var key := Vector2i(x, y)
-			if _obstacles.has(key):
-				_draw_obstacle(key, String(_obstacles[key]))
+			var cell := Vector2i(x, y)
+			if _items.has(cell):
+				_draw_item(cell, _items[cell])
 
-	for key in _completed.keys():
-		_draw_complete_mark(key)
+	for cell in _completed.keys():
+		_draw_complete_mark(cell)
 
 	if _selected.x >= 0:
 		_draw_selected_item()
 		_draw_selection(_selected)
 
-	_draw_legend()
-	_draw_caption()
+	if show_debug_labels:
+		_draw_caption()
+		_draw_legend()
 	_draw_toast()
 
 
+## §20.6 item 1. The flat page colour stays underneath, so a build without the two
+## background textures is byte-identical to the procedural board.
+func _draw_background() -> void:
+	draw_rect(Rect2(Vector2.ZERO, PAGE_SIZE), COLOR_PAGE, true)
+	var bottom := _ui_texture(UI_BG_BOTTOM)
+	if bottom != null:
+		draw_texture_rect(bottom, BG_BOTTOM_RECT, false)
+	var top := _ui_texture(UI_BG_TOP)
+	if top != null:
+		draw_texture_rect(top, BG_TOP_RECT, false)
+
+
+## §20.6 item 4: the 983x1263 board container at (48,466). Theme texture first, then
+## the PLACEHOLDER copy loaded in _ready(), then the procedural panel.
+func _draw_container() -> void:
+	var texture := _ui_texture(UI_BOARD_FRAME)
+	if texture == null:
+		texture = _frame_texture
+	if texture != null:
+		draw_texture_rect(texture, Rect2(BOARD_ORIGIN, BOARD_SIZE), false)
+		return
+	var panel := Rect2(BOARD_ORIGIN - Vector2(12.0, 12.0), BOARD_SIZE + Vector2(24.0, 24.0))
+	_rounded(panel, 26, COLOR_PANEL)
+	_rounded_outline(panel, 26, COLOR_PANEL_EDGE, 2)
+
+
+## §20.6 item 5: the 94x94 checkerboard tile, scaled to the cell minus a small gap.
 func _draw_cell(x: int, y: int) -> void:
 	var r := cell_rect(x, y).grow(-float(CELL_GAP) * 0.5)
+	var texture := _ui_texture(UI_CELL)
+	if texture != null:
+		draw_texture_rect(texture, r, false)
+		return
 	_rounded(r, 14, COLOR_CELL)
 	_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, COLOR_CELL_LIP)
 
 
 func _draw_item(key: Vector2i, item: Dictionary) -> void:
-	_draw_item_rect(cell_rect(key.x, key.y).grow(-6.0), item)
+	_draw_item_rect(cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5), item)
 
 
 func _draw_item_rect(r: Rect2, item: Dictionary) -> void:
@@ -346,6 +495,11 @@ func _draw_item_rect(r: Rect2, item: Dictionary) -> void:
 
 
 func _draw_chip(r: Rect2, item: Dictionary) -> void:
+	var texture := _chip_texture(item)
+	if texture != null:
+		_draw_chip_texture(r, texture)
+		_draw_level_capsule(r, int(item.get("level", 1)))
+		return
 	var hue: Color = item.get("hue", COLOR_HUE_FALLBACK)
 	_rounded(r, 18, hue)
 	_rounded(Rect2(r.position + Vector2(8.0, 8.0), Vector2(r.size.x - 16.0, 34.0)), 12,
@@ -353,6 +507,95 @@ func _draw_chip(r: Rect2, item: Dictionary) -> void:
 	var label := String(item.get("label", "?"))
 	_text_shadow_center(_shift(r, Vector2(0.0, -6.0)), label, FONT_TITLE, COLOR_WHITE)
 	_draw_level_capsule(r, int(item.get("level", 1)))
+
+
+## §20.6 item 6: the 182x182 source art is drawn at CHIP_DRAW_SIZE (132 px, inside
+## the 132-140 band), centred horizontally and standing on the bottom edge of the
+## cell, over a deterministic soft shadow. No Tween and no wall clock: the same
+## call paints the same pixels in a screenshot and in the film.
+func _draw_chip_texture(r: Rect2, texture: Texture2D) -> void:
+	var source := texture.get_size()
+	if source.x <= 0.0 or source.y <= 0.0:
+		return
+	var scale := minf(CHIP_DRAW_SIZE, minf(r.size.x, r.size.y)) / maxf(source.x, source.y)
+	var drawn := source * scale
+	var pos := Vector2(r.position.x + (r.size.x - drawn.x) * 0.5, r.end.y - drawn.y)
+	_draw_soft_shadow(Rect2(pos, drawn))
+	draw_texture_rect(texture, Rect2(pos, drawn), false)
+
+
+## A stack of translucent flattened ellipses: a soft floor shadow without a shader,
+## a blur pass or any randomness. Kept tight (a little wider than the art and only
+## under its bottom third) so it reads as contact shadow, not as a grey box.
+func _draw_soft_shadow(rect: Rect2) -> void:
+	var centre := Vector2(rect.get_center().x, rect.end.y - rect.size.y * 0.10)
+	for i in SHADOW_STEPS:
+		var spread := 1.0 - float(i) * 0.26
+		var alpha := 0.07 - float(i) * 0.017
+		_ellipse(centre, Vector2(rect.size.x * 0.40 * spread, rect.size.y * 0.12 * spread),
+				Color(COLOR_SHADOW.r, COLOR_SHADOW.g, COLOR_SHADOW.b, alpha))
+
+
+func _ellipse(centre: Vector2, radii: Vector2, color: Color) -> void:
+	var points := PackedVector2Array()
+	var steps := 28
+	for i in steps:
+		var a := TAU * float(i) / float(steps)
+		points.append(centre + Vector2(cos(a) * radii.x, sin(a) * radii.y))
+	draw_colored_polygon(points, color)
+
+
+## The loader owns the disk read and the per-"entity@level" cache; the view only
+## maps one item onto that lookup. Null keeps the procedural chip.
+func _chip_texture(item: Dictionary) -> Texture2D:
+	if _asset_loader == null or not _asset_loader.has_method("chip_texture"):
+		return null
+	var entity_id := String(item.get("entity", ""))
+	if entity_id.is_empty():
+		return null
+	var texture = _asset_loader.chip_texture(entity_id, int(item.get("level", 1)),
+			_asset_project)
+	return texture if texture is Texture2D else null
+
+
+## One UI slot, resolved through the theme loader and cached for this attachment.
+func _ui_texture(key: String) -> Texture2D:
+	if _ui_tex_cache.has(key):
+		var cached = _ui_tex_cache[key]
+		return cached if cached is Texture2D else null
+	var texture: Texture2D = null
+	var id := _ui_id(key)
+	if not id.is_empty() and _asset_loader.has_method("texture_for"):
+		var loaded = _asset_loader.texture_for(id)
+		if loaded is Texture2D:
+			texture = loaded
+	_ui_tex_cache[key] = texture
+	return texture
+
+
+## theme > project > default, exactly like the chip lookup: "" means "draw it".
+func _ui_id(key: String) -> String:
+	if _asset_loader == null or not _asset_loader.has_method("resolve_ui"):
+		return ""
+	var resolved = _asset_loader.resolve_ui(key, _asset_project)
+	if typeof(resolved) == TYPE_DICTIONARY:
+		return String((resolved as Dictionary).get("id", ""))
+	return ""
+
+
+## Fits `texture` inside `r` with its aspect kept and returns false when there is
+## nothing to draw, so the caller can fall back to the procedural art.
+func _draw_ui_art(key: String, r: Rect2) -> bool:
+	var texture := _ui_texture(key)
+	if texture == null:
+		return false
+	var source := texture.get_size()
+	if source.x <= 0.0 or source.y <= 0.0:
+		return false
+	var scale := minf(r.size.x / source.x, r.size.y / source.y)
+	var drawn := source * scale
+	draw_texture_rect(texture, Rect2(r.position + (r.size - drawn) * 0.5, drawn), false)
+	return true
 
 
 func _draw_generator(r: Rect2, item: Dictionary) -> void:
@@ -389,17 +632,26 @@ func _draw_level_capsule(r: Rect2, level: int) -> void:
 	_text_center(cap, text, FONT_CAPS, COLOR_WHITE)
 
 
+## Obstacle semantics are unchanged (one type per cell, same four types); only the
+## art source changes: themed texture when it resolves, procedural art otherwise.
+## The ice cell always carries the 19:28 countdown, texture or not.
 func _draw_obstacle(key: Vector2i, type: String) -> void:
 	var r := cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5)
 	match type:
 		"lock":
-			_draw_lock(r)
+			if not _draw_ui_art(UI_LOCK, r):
+				_draw_lock(r)
 		"web":
-			_draw_web(r.get_center())
+			if not _draw_ui_art(UI_WEB, r):
+				_draw_web(r.get_center())
 		"bubble":
-			_draw_bubble(r.get_center())
+			if not _draw_ui_art(UI_BUBBLE, r):
+				_draw_bubble(r.get_center())
 		"ice":
-			_draw_ice(r)
+			if _draw_ui_art(UI_ICE, r):
+				_text_bottom_center(r, ICE_COUNTDOWN, FONT_COUNTER, Color(1.0, 1.0, 1.0, 0.96), 10.0)
+			else:
+				_draw_ice(r)
 		_:
 			_rounded(r, 14, Color(0.0, 0.0, 0.0, 0.25))
 
@@ -447,7 +699,7 @@ func _draw_ice(r: Rect2) -> void:
 	draw_line(c + Vector2(-34.0, -40.0), c + Vector2(-6.0, -6.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
 	draw_line(c + Vector2(6.0, 6.0), c + Vector2(34.0, 40.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
 	draw_line(c + Vector2(28.0, -38.0), c + Vector2(10.0, -12.0), Color(1.0, 1.0, 1.0, 0.35), 2.0, true)
-	_text_bottom_center(inner, "19:28", FONT_COUNTER, Color(1.0, 1.0, 1.0, 0.96), 10.0)
+	_text_bottom_center(inner, ICE_COUNTDOWN, FONT_COUNTER, Color(1.0, 1.0, 1.0, 0.96), 10.0)
 
 
 func _draw_complete_mark(key: Vector2i) -> void:
@@ -463,7 +715,8 @@ func _draw_complete_mark(key: Vector2i) -> void:
 
 ## §7: "选中提示：黄框 + 停留放大/靠近".
 ## The selected chip is redrawn lifted toward the board centre and scaled up 8%,
-## then framed with a yellow glow and yellow corner brackets.
+## then framed: the themed `select` frame sits centred on the cell (§20.6 item 7),
+## and the procedural fallback keeps the yellow glow + corner brackets.
 func _selection_offset(key: Vector2i) -> Vector2:
 	var centre := cell_rect(key.x, key.y).get_center()
 	var board_centre := BOARD_ORIGIN + BOARD_SIZE * 0.5
@@ -477,20 +730,33 @@ func _draw_selected_item() -> void:
 	if not _items.has(_selected):
 		return
 	var cell := cell_rect(_selected.x, _selected.y)
-	var base := cell.grow(-6.0)
+	var base := cell.grow(-float(CELL_GAP) * 0.5)
 	var half := base.size * 0.5
 	var origin := cell.get_center() + _selection_offset(_selected)
-	draw_set_transform(origin + Vector2(0.0, 12.0), 0.0, Vector2(SELECT_SCALE, SELECT_SCALE))
-	_rounded(Rect2(-half, base.size), 20, Color(0.05, 0.09, 0.14, 0.18))
+	# A themed chip is transparent art: the lift shadow would read as a grey box
+	# around the icon, so it stays on the procedural chip only.
+	if _chip_texture(_items[_selected]) == null:
+		draw_set_transform(origin + Vector2(0.0, 12.0), 0.0, Vector2(SELECT_SCALE, SELECT_SCALE))
+		_rounded(Rect2(-half, base.size), 20, Color(0.05, 0.09, 0.14, 0.18))
 	draw_set_transform(origin, 0.0, Vector2(SELECT_SCALE, SELECT_SCALE))
 	_draw_item_rect(Rect2(-half, base.size), _items[_selected])
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_selection(key: Vector2i) -> void:
-	var cell := cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5)
+	var cell := cell_rect(key.x, key.y)
+	var texture := _ui_texture(UI_SELECT)
+	if texture != null:
+		# §20.6 item 7: the frame covers the whole cell, centred on it. The chip
+		# above still carries the lift/scale; the frame itself does not travel.
+		var frame_size := texture.get_size()
+		if frame_size.x > 0.0 and frame_size.y > 0.0:
+			draw_texture_rect(texture, Rect2(cell.get_center() - frame_size * 0.5, frame_size), false)
+			return
+
+	var tile := cell.grow(-float(CELL_GAP) * 0.5)
 	var offset := _selection_offset(key)
-	var r := Rect2(cell.position + offset, cell.size)
+	var r := Rect2(tile.position + offset, tile.size)
 	_rounded_outline(r.grow(9.0), 22, Color(COLOR_SELECT.r, COLOR_SELECT.g, COLOR_SELECT.b, 0.26), 10)
 	_rounded_outline(r.grow(3.0), 19, Color(COLOR_SELECT.r, COLOR_SELECT.g, COLOR_SELECT.b, 0.85), 5)
 
@@ -511,6 +777,7 @@ func _draw_selection(key: Vector2i) -> void:
 		draw_polyline(corner, ink, width, true)
 
 
+## The level line sits in the free strip above the board container (466 - 46).
 func _draw_caption() -> void:
 	if _font == null:
 		return
@@ -519,6 +786,9 @@ func _draw_caption() -> void:
 	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0.30, 0.40, 0.52, 0.85))
 
 
+## Debug affordance for a standalone board: the kind legend stays below the
+## container, where a composed screen (game_screen draws its own items bar and
+## footer band on top) can cover it — the top band belongs to the order cards.
 func _draw_legend() -> void:
 	if _font == null:
 		return
@@ -530,12 +800,12 @@ func _draw_legend() -> void:
 	]
 	for entry in entries:
 		var label := String(entry[1])
-		var w := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 20).x
-		var swatch := Rect2(Vector2(x, y - 12.0), Vector2(22.0, 16.0))
+		var w := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+		var swatch := Rect2(Vector2(x, y - 11.0), Vector2(20.0, 14.0))
 		_rounded(swatch, 5, _legend_color(String(entry[0])))
-		draw_string(_font, Vector2(x + 30.0, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 20,
+		draw_string(_font, Vector2(x + 26.0, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18,
 				Color(0.32, 0.41, 0.51, 0.9))
-		x += 30.0 + w + 22.0
+		x += 26.0 + w + 18.0
 
 
 ## §7 item 4: half-transparent rounded strip + centred text, painted only while the

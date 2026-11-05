@@ -1,6 +1,56 @@
 {
   "version": 1,
   "name": "default-procedural",
-  "note": "零图标引用：棋盘/chip/障碍/选中/完成全部程序化绘制，因此最严格的校验模式也能通过。",
-  "icons": {}
+  "note": "icons.ui 是 M1 视觉目标（§20.5/§20.6）的逻辑槽位表：棋盘背景两层、棋盘容器、格子底、选中框、顶栏等级/能量/货币、完成对号、冰冻/气泡/锁/蛛网障碍、退出/背包/商店按钮、底部信息条、订单角色 part1/part2。全部 PRODUCTION 且必须在 strict 模式通过 AssetGuard（棋盘容器走本地 PRODUCTION 记录 ui_board_frame，不用快照里那条 PLACEHOLDER 的 board_frame）。chip_icons 把 (entity, level) 映射到 manifest id：Ca/Cb 各 1-10 级走真实图标。未映射的逻辑槽位仍回落到程序化绘制。",
+  "icons": {
+    "ui": {
+      "bg_bottom": "board_bg",
+      "bg_top": "ui_bg_top",
+      "board_frame": "ui_board_frame",
+      "cell": "slot_empty",
+      "select": "ui_select_frame",
+      "level_badge": "ui_level_badge",
+      "level_badge_bg": "ui_level_badge_bg",
+      "energy_timer": "ui_energy_timer",
+      "money_bg": "ui_topbar",
+      "finish": "ui_icon_finish",
+      "ice": "obstacle_ice",
+      "bubble": "obstacle_bubble",
+      "lock": "obstacle_lock",
+      "web": "obstacle_web",
+      "exit": "ui_button_primary",
+      "bag": "ui_button_secondary",
+      "items": "ui_items_bar",
+      "part1": "char_part1",
+      "part2": "char_part2",
+      "plus": "ui_btn_plus",
+      "shop": "ui_button_shop"
+    }
+  },
+  "chip_icons": {
+    "CleanSet_Ca": {
+      "1": "chip_clean_ca_lv01",
+      "2": "chip_clean_ca_lv02",
+      "3": "chip_clean_ca_lv03",
+      "4": "chip_clean_ca_lv04",
+      "5": "chip_clean_ca_lv05",
+      "6": "chip_clean_ca_lv06",
+      "7": "chip_clean_ca_lv07",
+      "8": "chip_clean_ca_lv08",
+      "9": "chip_clean_ca_lv09",
+      "10": "chip_clean_ca_lv10"
+    },
+    "CleanSet_Cb": {
+      "1": "chip_clean_cb_lv01",
+      "2": "chip_clean_cb_lv02",
+      "3": "chip_clean_cb_lv03",
+      "4": "chip_clean_cb_lv04",
+      "5": "chip_clean_cb_lv05",
+      "6": "chip_clean_cb_lv06",
+      "7": "chip_clean_cb_lv07",
+      "8": "chip_clean_cb_lv08",
+      "9": "chip_clean_cb_lv09",
+      "10": "chip_clean_cb_lv10"
+    }
+  }
 }

@@ -37,7 +37,7 @@ func _test_good_projects(t) -> void:
 	var rs = ProjectValidator.validate_file(SAMPLE, _guard(false), true)
 	t.ok(bool(rs.ok), "sample_project.json validates in strict mode without placeholders", str(rs.codes()))
 	t.eq(rs.errors.size(), 0, "sample has zero errors")
-	t.eq(rs.warnings.size(), 0, "sample has zero warnings in the procedural theme")
+	t.eq(rs.warnings.size(), 0, "sample has zero warnings with the default (chip-icon) theme")
 
 
 func _test_sample_stats(t) -> void:
@@ -46,7 +46,10 @@ func _test_sample_stats(t) -> void:
 	t.eq(int(r.stats.get("events", -1)), 21, "sample declares 21 events")
 	t.ok(is_equal_approx(float(r.stats.get("end_time", -1.0)), 30.0), "sample timeline ends at 30.0s", str(r.stats.get("end_time")))
 	t.eq(int(r.stats.get("entities", -1)), 6, "sample declares 6 entities")
-	t.eq(int(r.stats.get("asset_refs", -1)), 0, "procedural theme references no manifest asset")
+	# M1: data/themes/default ships chip_icons for CleanSet_Ca and CleanSet_Cb, ten
+	# levels each (20 refs), plus the icons.ui layout block (21 refs) the visual
+	# fidelity goal added, so the usage rule must see 41 theme asset refs.
+	t.eq(int(r.stats.get("asset_refs", -1)), 41, "default theme references its 20 chip icons + 21 layout icons")
 
 
 func _test_broken_fixtures(t) -> void:
@@ -72,6 +75,18 @@ func _test_placeholder_channel(t) -> void:
 	var denied = ProjectValidator.validate_file(OK_PLACEHOLDER, _guard(false), false)
 	t.ok(not bool(denied.ok), "placeholder theme is rejected without the flag")
 	t.has_code(denied.errors, "ASSET_PLACEHOLDER_BLOCKED", "denial reports ASSET_PLACEHOLDER_BLOCKED")
+	# The theme also carries a chip_icons leaf (box_safe_x for CleanSet_Ca Lv1); the
+	# usage rule has to walk that block too, otherwise a chip icon would be the one
+	# asset family the pre-render gate never looks at.
+	var chip_paths := _paths_under(denied.errors, "theme.chip_icons")
+	t.ok(chip_paths.size() >= 1, "PLACEHOLDER chip_icons leaf reaches the usage rule",
+			"paths=" + str(_paths_of(denied.errors)))
+	# A per-level project override (`entities.<id>.visual.icons.<level>`) is the third
+	# precedence layer ThemeLoader reads; it must be walked too, otherwise a bad id
+	# there passes `validate --strict` and the view silently falls back to procedural.
+	var entity_paths := _paths_under(denied.errors, "entities.A.visual.icons")
+	t.ok(entity_paths.size() >= 1, "project per-level chip icon reaches the usage rule",
+			"paths=" + str(_paths_of(denied.errors)))
 
 	var allowed = ProjectValidator.validate_file(OK_PLACEHOLDER, _guard(true), false)
 	t.ok(bool(allowed.ok), "placeholder theme is accepted with --allow-placeholders", str(allowed.codes()))
@@ -106,3 +121,20 @@ func _test_io_errors(t) -> void:
 	var arr = ProjectValidator.validate_file("res://tests/fixtures/array_root.json", _guard(true), false)
 	t.ok(not bool(arr.ok), "non-object root fails")
 	t.has_code(arr.errors, "JSON_ROOT", "non-object root reports JSON_ROOT")
+
+
+func _paths_under(errors: Array, prefix: String) -> Array:
+	var out: Array = []
+	for e in errors:
+		if typeof(e) == TYPE_DICTIONARY and String(e.get("path", "")).begins_with(prefix):
+			out.append(String(e.get("path", "")))
+	return out
+
+
+func _paths_of(errors: Array) -> Array:
+	var out: Array = []
+	for e in errors:
+		if typeof(e) == TYPE_DICTIONARY:
+			out.append(String(e.get("path", "")))
+	return out
+

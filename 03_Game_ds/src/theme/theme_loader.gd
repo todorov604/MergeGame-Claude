@@ -50,7 +50,20 @@ var theme_path: String = ""
 var palette: Dictionary = {}
 var metrics: Dictionary = {}
 var icons: Dictionary = {}
+## entity id -> level string -> manifest id. A chip is addressed by
+## (entity, level), which the `icons` table cannot express, so it gets its own
+## block with its own guard walk.
+var chip_icons: Dictionary = {}
 var errors: Array = []
+
+## "entity@level" -> Texture2D (or null when nothing resolves). A 1800-frame film
+## asks for the same chip thousands of times; without this cache every frame would
+## re-read the PNG from disk.
+var _chip_textures: Dictionary = {}
+
+## manifest id -> Texture2D (or null). The generic UI cache behind texture_for(); the
+## layout views ask for the same handful of background/blocks every frame.
+var _textures: Dictionary = {}
 
 
 func setup(guard_in, allow_placeholders_in: bool = false) -> void:
@@ -66,6 +79,11 @@ func _reset() -> void:
 	palette = DEFAULT_PALETTE.duplicate(true)
 	metrics = DEFAULT_METRICS.duplicate(true)
 	icons = {}
+	chip_icons = {}
+	# The texture cache belongs to the theme that produced it: switching themes must
+	# not serve the previous theme's PNG for the same entity@level pair.
+	_chip_textures.clear()
+	_textures.clear()
 	errors = []
 
 
@@ -77,6 +95,7 @@ func result() -> Dictionary:
 		"palette": palette.duplicate(true),
 		"metrics": metrics.duplicate(true),
 		"icons": icons.duplicate(true),
+		"chip_icons": chip_icons.duplicate(true),
 		"errors": errors.duplicate(true),
 	}
 
@@ -130,6 +149,11 @@ func ingest(data: Dictionary, project: Dictionary, path: String = "") -> Diction
 		icons = (raw_icons as Dictionary).duplicate(true)
 	elif raw_icons != null:
 		errors.append(_err("THEME_PARSE", "icons", "", "icons must be an object"))
+	var raw_chip_icons = data.get("chip_icons", null)
+	if typeof(raw_chip_icons) == TYPE_DICTIONARY:
+		chip_icons = (raw_chip_icons as Dictionary).duplicate(true)
+	elif raw_chip_icons != null:
+		errors.append(_err("THEME_PARSE", "chip_icons", "", "chip_icons must be an object"))
 	_check_icons(project, errors)
 	ok = errors.is_empty()
 	return result()
@@ -138,6 +162,9 @@ func ingest(data: Dictionary, project: Dictionary, path: String = "") -> Diction
 func _check_icons(project: Dictionary, out: Array) -> void:
 	var leaves: Array = []
 	_collect_leaves(icons, "theme.icons", leaves)
+	# chip_icons.<entity>.<level> leaves take part in the same gate, so a theme can
+	# never point a chip at an id the manifest has not cleared for use.
+	_collect_leaves(chip_icons, "theme.chip_icons", leaves)
 	for ref in leaves:
 		_check_one(String(ref["id"]), String(ref["path"]), out)
 	# project-level icon overrides take part in the same gate
@@ -208,6 +235,120 @@ func resolve_icon(kind: String, key: String, project: Dictionary) -> Dictionary:
 	return {"id": "", "source": "default"}
 
 
+## Generic UI slot lookup — the layer both layout views call:
+##
+##   theme    icons.ui.<key>        e.g. "bg_top" -> "ui_bg_top"
+##   project  project.icons.<key>   project-level override of the same slot
+##   default  "" -> the view draws that element procedurally (no asset at all)
+##
+## Resolution only names an id; texture_for() is the gate that actually loads it.
+func resolve_ui(key: String, project: Dictionary) -> Dictionary:
+	var themed := _dig(icons, "ui", key)
+	if not themed.is_empty():
+		return {"id": themed, "source": "theme"}
+	var from_project = _dict(project.get("icons", {})).get(key, null)
+	if typeof(from_project) == TYPE_STRING and not String(from_project).is_empty():
+		return {"id": String(from_project), "source": "project"}
+	return {"id": "", "source": "default"}
+
+
+## Per-level chip lookup. Same three-layer order as resolve_icon, but a level is
+## part of the key, and the project side has two granularities:
+##
+##   theme    chip_icons[entity][str(level)]
+##   project  entities[entity].visual.icons[str(level)] -> visual.icon
+##   default  "" -> the view draws today's procedural chip
+func resolve_chip_icon(entity_id: String, level: int, project: Dictionary) -> Dictionary:
+	var level_key := str(level)
+	var themed := _dig(chip_icons, entity_id, level_key)
+	if not themed.is_empty():
+		return {"id": themed, "source": "theme"}
+	var visual := _dict(_dict(_dict(project.get("entities", {})).get(entity_id, {})).get("visual", {}))
+	var per_level := _dict(visual.get("icons", {}))
+	var from_level = per_level.get(level_key, null)
+	if typeof(from_level) == TYPE_STRING and not String(from_level).is_empty():
+		return {"id": String(from_level), "source": "project"}
+	var from_entity := String(visual.get("icon", ""))
+	if not from_entity.is_empty():
+		return {"id": from_entity, "source": "project"}
+	return {"id": "", "source": "default"}
+
+
+## Resolves the chip texture for one (entity, level) pair, or null when nothing
+## resolves / the guard rejects the id / the file is absent / the image fails.
+## Reads the PNG straight off disk (Image.load_from_file + ImageTexture), so a
+## relocated copy without an import cache renders identically, and no `.import`
+## sidecar is ever required. Cached per "entity@level".
+func chip_texture(entity_id: String, level: int, project: Dictionary) -> Texture2D:
+	var key := "%s@%d" % [entity_id, level]
+	if _chip_textures.has(key):
+		var cached = _chip_textures[key]
+		return cached if cached is Texture2D else null
+	var texture := _load_chip_texture(entity_id, level, project)
+	_chip_textures[key] = texture
+	return texture
+
+
+func _load_chip_texture(entity_id: String, level: int, project: Dictionary) -> Texture2D:
+	var id := String(resolve_chip_icon(entity_id, level, project).get("id", ""))
+	if id.is_empty() or guard == null:
+		return null
+	if not String(guard.check_ref(id)).is_empty():
+		return null
+	var path := String(guard.local_path(id))
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return null
+	return _image_texture(path)
+
+
+## Generic id -> texture path, used by every layout view. Guard-checked (so a
+## REFERENCE_ONLY / TODO id can never load, and a PLACEHOLDER id needs
+## allow_placeholders=true), cached per id with null cached too, and read straight off
+## disk so a relocated copy without an import cache renders identically — no `.import`
+## sidecar is ever required.
+func texture_for(id: String) -> Texture2D:
+	if _textures.has(id):
+		var cached = _textures[id]
+		return cached if cached is Texture2D else null
+	var texture := _load_texture(id)
+	_textures[id] = texture
+	return texture
+
+
+func _load_texture(id: String) -> Texture2D:
+	if id.is_empty() or guard == null:
+		return null
+	if not String(guard.check_ref(id)).is_empty():
+		return null
+	var path := String(guard.local_path(id))
+	if path.is_empty() or not FileAccess.file_exists(path):
+		return null
+	return _image_texture(path)
+
+
+## The single disk -> Texture2D step shared by texture_for() and chip_texture().
+func _image_texture(path: String) -> Texture2D:
+	var image := Image.load_from_file(path)
+	if image == null or image.is_empty():
+		return null
+	return ImageTexture.create_from_image(image)
+
+
+## Sorted unique manifest ids the chip_icons block points at: this is what the
+## render manifest records so the film log names the icon set it used.
+func chip_refs() -> Array:
+	var leaves: Array = []
+	_collect_leaves(chip_icons, "chip_icons", leaves)
+	var seen := {}
+	for ref in leaves:
+		var id := String(ref["id"])
+		if not id.is_empty():
+			seen[id] = true
+	var out: Array = seen.keys()
+	out.sort()
+	return out
+
+
 func colors() -> Dictionary:
 	var out := {}
 	for key in palette.keys():
@@ -236,8 +377,9 @@ func apply_palette(root: Node) -> int:
 
 
 func summary() -> String:
-	return "theme=%s ok=%s palette=%d metrics=%d icons=%d errors=%d" % [
-		theme_name, str(ok), palette.size(), metrics.size(), _leaf_count(icons), errors.size(),
+	return "theme=%s ok=%s palette=%d metrics=%d icons=%d chip_icons=%d errors=%d" % [
+		theme_name, str(ok), palette.size(), metrics.size(), _leaf_count(icons),
+		_leaf_count(chip_icons), errors.size(),
 	]
 
 

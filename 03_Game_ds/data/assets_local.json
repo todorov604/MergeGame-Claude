@@ -1,0 +1,116 @@
+{
+  "schema": 1,
+  "note": "local PRODUCTION register for M1 layout art; candidates to fold into 00_design/resource_manifest.json",
+  "resources": {
+    "ui_bg_top": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "棋盘背景上层（1080×400 顶图）",
+      "file_name": "main_bg_01_top.png",
+      "source": "01_icon/HotelManor_icon/界面切图/main_bg_01_top.png",
+      "target_size": "1080×400",
+      "actual_size": "1080×400",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_level_badge_bg": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "等级徽章底（main_bar_level 的底板）",
+      "file_name": "main_bar_level_bg.png",
+      "source": "01_icon/HotelManor_icon/界面切图/main_bar_level_bg.png",
+      "target_size": "118×104",
+      "actual_size": "118×104",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_icon_finish": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "完成态对号，叠在订单卡/完成物品上",
+      "file_name": "main_icon_finish.png",
+      "source": "01_icon/HotelManor_icon/界面切图/main_icon_finish.png",
+      "target_size": "52×52",
+      "actual_size": "52×52",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_btn_plus": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "加号按钮（顶栏资源条、关卡导航）",
+      "file_name": "main_btn_plussign.png",
+      "source": "01_icon/HotelManor_icon/界面切图/main_btn_plussign.png",
+      "target_size": "48×48",
+      "actual_size": "48×48",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_button_shop": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "商店按钮（ui_button_secondary 的商店专用变体）",
+      "file_name": "common_main_btn_shop.png",
+      "source": "01_icon/HotelManor_icon/界面切图/common_main_btn_shop.png",
+      "target_size": "142×132",
+      "actual_size": "142×132",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "char_part1": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "角色",
+      "use": "订单角色切片 part1（棋盘.psd 导出）",
+      "file_name": "part1.png",
+      "source": "00_design/images/psd_slices/part1.png",
+      "target_size": "373×370",
+      "actual_size": "373×370",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "char_part2": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "角色",
+      "use": "订单角色切片 part2（棋盘.psd 导出）",
+      "file_name": "part2.png",
+      "source": "00_design/images/psd_slices/part2.png",
+      "target_size": "373×524",
+      "actual_size": "373×524",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_items_bar": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "界面",
+      "use": "底部信息条（棋盘.psd items, (193,1731)）",
+      "file_name": "items.png",
+      "source": "00_design/images/psd_slices/items.png",
+      "target_size": "693×183",
+      "actual_size": "693×183",
+      "fit": "exact",
+      "pending_manifest": true
+    },
+    "ui_board_frame": {
+      "usage": "PRODUCTION",
+      "license": "公司自有/自研",
+      "category": "棋盘",
+      "use": "§20.5 棋盘容器 983×1263，位置 (48,466)",
+      "file_name": "board_frame.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/board_frame.png",
+      "target_size": "983×1263",
+      "actual_size": "983×1263",
+      "fit": "exact",
+      "pending_manifest": true,
+      "supersedes": "board_frame",
+      "supersedes_note": "快照把 board_frame 登记为 PLACEHOLDER（PIL 生成）；§20.5 容器必须在 strict 渲染里出现，所以本地另立 PRODUCTION 记录指向同一张 PNG。这是提交给 00_design 的 usage 升级建议，不是本地越权改快照。"
+    }
+  }
+}

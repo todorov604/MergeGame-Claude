@@ -122,8 +122,8 @@
       "allow_placeholders": true
     },
     {
-      "file": "res://tests/fixtures/broken/bad_ref_only.json",
-      "code": "ASSET_REFERENCE_ONLY",
+      "file": "res://tests/fixtures/broken/bad_unknown_icon.json",
+      "code": "ASSET_UNKNOWN",
       "strict": false,
       "allow_placeholders": true
     },

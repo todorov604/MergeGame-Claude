@@ -15,10 +15,26 @@ const MOVIE_SCENE := "res://src/render/movie_scene.gd"
 
 func run(t) -> void:
 	_defaults(t)
+	_placement(t)
 	_show_and_expire(t)
 	_custom_duration(t)
 	_clock_drives_lifetime(t)
 	_source_wiring(t)
+
+
+## §20.5 moved the board down to y=466 and the items bar starts at y=1731, so the
+## toast strip has to sit above the bar and stay inside the 1080x1920 canvas.
+func _placement(t) -> void:
+	var bar: Rect2 = BoardView.TOAST_RECT
+	t.eq(bar.size, Vector2(700, 84), "toast strip keeps its 700x84 size")
+	t.ok(Rect2(0.0, 0.0, 1080.0, 1920.0).encloses(bar), "TOAST_RECT is fully inside 1080x1920",
+			str(bar))
+	t.ok(bar.end.y <= 1731.0, "toast sits above the items bar (y=1731)", str(bar.end.y))
+	t.ok(bar.position.y >= BoardView.BOARD_ORIGIN.y, "toast is drawn over the board container",
+			str(bar.position.y))
+	t.ok(bar.position.y < BoardView.BOARD_ORIGIN.y + BoardView.BOARD_SIZE.y,
+			"toast starts above the container bottom edge", str(bar.position.y))
+	t.ok(absf(bar.get_center().x - 540.0) < 0.5, "toast is horizontally centred", str(bar.get_center()))
 
 
 func _defaults(t) -> void:

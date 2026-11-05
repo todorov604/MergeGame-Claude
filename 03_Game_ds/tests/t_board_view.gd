@@ -1,33 +1,110 @@
 extends RefCounted
-## Static board view tests: parsing, geometry, view state, and the copyright red
-## line (no REFERENCE_ONLY asset id may appear in the view sources).
+## Static board view tests: §20.5 geometry (棋盘.psd), parsing, view state, the
+## theme-wired chip/UI textures, the no-theme degraded path, and the copyright red
+## line (no banned manifest literal may appear in the view sources).
 ##
-## Headless-safe: nothing here renders or loads a texture. `build_from_project`
-## only parses JSON; fonts and the optional PLACEHOLDER branch live in _ready(),
-## which never runs for an instance that is not added to the tree.
+## Headless-safe: nothing here renders. `build_from_project` only parses JSON;
+## fonts and the optional PLACEHOLDER branch live in _ready(), which never runs for
+## an instance that is not added to the tree.
 
 const BoardView = preload("res://src/view/board_view.gd")
+const ThemeLoader = preload("res://src/theme/theme_loader.gd")
+const AssetGuard = preload("res://src/assets/asset_guard.gd")
 
 const SAMPLE := "res://data/sample_project.json"
+const INDEX := "res://data/manifest_index.json"
+const DEFAULT_THEME := "themes/default"
 const VIEW_DIR := "res://src/view"
 const BANNED := ["chip_clean", "obstacle_web", "board_bg", "slot_empty", "char_order", "ui_topbar"]
+## The five §20.6 layers the board container itself paints.
+const UI_KEYS := ["bg_bottom", "bg_top", "board_frame", "cell", "select"]
+
+## §20.5, verbatim: board container 983x1263 at (48,466) inside a 1080x1920 canvas,
+## 7 columns x 9 rows -> 983/7 x 1263/9 per cell.
+const CONTAINER := Rect2(48, 466, 983, 1263)
+const CELL_W := 983.0 / 7.0
+const CELL_H := 1263.0 / 9.0
+const ITEMS_BAR_Y := 1731.0
 
 
 func run(t) -> void:
+	_constants(t)
 	_geometry(t)
 	_parsing(t)
 	_state(t)
 	_red_line(t)
+	_labels(t)
 	_scene(t)
+	_chip_icons(t)
+	_ui_theme(t)
+	_degraded(t)
+
+
+## The numbers themselves, so a future edit that rounds them "to taste" fails here
+## before it fails a pixel comparison.
+func _constants(t) -> void:
+	t.eq(BoardView.COLS, 7, "COLS is 7")
+	t.eq(BoardView.ROWS, 9, "ROWS is 9")
+	t.eq(BoardView.PAGE_SIZE, Vector2(1080, 1920), "canvas is 1080x1920")
+	t.eq(BoardView.BOARD_ORIGIN, Vector2(48, 466), "board container origin is (48,466)")
+	t.eq(BoardView.BOARD_SIZE, Vector2(983, 1263), "board container is 983x1263")
+	t.ok(absf(BoardView.CELL_W - CELL_W) < 1e-9, "CELL_W is exactly 983/7",
+			str(BoardView.CELL_W))
+	t.ok(absf(BoardView.CELL_H - CELL_H) < 1e-9, "CELL_H is exactly 1263/9",
+			str(BoardView.CELL_H))
+	t.ok(absf(BoardView.CELL_W - 140.428571) < 1e-6, "CELL_W is 140.428571", str(BoardView.CELL_W))
+	t.ok(absf(BoardView.CELL_H - 140.333333) < 1e-6, "CELL_H is 140.333333", str(BoardView.CELL_H))
+	# movie_scene.gd does float(BoardView.CELL) and derives every cell from it, and
+	# the cell-index math here stays integer: CELL must keep answering as 140 int.
+	t.eq(BoardView.CELL, 140, "CELL still answers 140 for movie_scene")
+	t.eq(typeof(BoardView.CELL), TYPE_INT, "CELL keeps its int type")
+	t.eq(BoardView.CELL_GAP, 4, "CELL_GAP is still 4")
+	t.eq(BoardView.PAGE_SIZE.x - BoardView.BOARD_ORIGIN.x, 1032.0,
+			"the container keeps a 48 px margin on the right")
+	# §20.6 item 1: the two background layers and the chip art size band.
+	t.eq(BoardView.BG_BOTTOM_RECT, Rect2(0, 384, 1080, 1536), "bg_bottom is 1080x1536 at (0,384)")
+	t.eq(BoardView.BG_TOP_RECT, Rect2(0, 0, 1080, 400), "bg_top is 1080x400 at (0,0)")
+	t.eq(BoardView.BG_BOTTOM_RECT.end.y, 1920.0, "bg_bottom fills to the bottom of the canvas")
+	t.ok(BoardView.CHIP_DRAW_SIZE >= 132.0 and BoardView.CHIP_DRAW_SIZE <= 140.0,
+			"chip art is drawn inside the 132-140 px band", str(BoardView.CHIP_DRAW_SIZE))
 
 
 func _geometry(t) -> void:
 	var v = BoardView.new()
-	t.eq(v.cell_rect(0, 0), Rect2(50, 450, 140, 140), "cell_rect(0,0) == Rect2(50,450,140,140)")
-	t.eq(v.cell_rect(6, 8), Rect2(890, 1570, 140, 140), "cell_rect(6,8) == Rect2(890,1570,140,140)")
-	t.eq(v.cell_rect(6, 0).position.x + v.cell_rect(6, 0).size.x, 1030.0, "board right edge is 1030")
-	t.eq(v.cell_rect(0, 8).position.y + v.cell_rect(0, 8).size.y, 1710.0, "board bottom edge is 1710")
-	t.eq(v.cell_rect(3, 3), Rect2(470, 870, 140, 140), "cell_rect(3,3) is the demo selection cell")
+	var c00: Rect2 = v.cell_rect(0, 0)
+	t.eq(c00, Rect2(48, 466, 140.428571, 140.333333),
+			"cell_rect(0,0) == Rect2(48,466,140.428571,140.333333)")
+	t.eq(v.cell_rect(6, 0).end.x, 1031.0, "last column right edge is 1031")
+	t.eq(v.cell_rect(0, 8).end.y, 1729.0, "last row bottom edge is 1729")
+	t.eq(v.cell_rect(6, 8).end, Vector2(1031, 1729), "cell_rect(6,8) ends at (1031,1729)")
+	t.eq(v.cell_rect(0, 0).position, Vector2(48, 466), "the grid starts at the container origin")
+	t.eq(v.cell_rect(3, 3).position.y, 887.0, "cell_rect(3,3).y is 466 + 3*1263/9 = 887")
+	t.ok(v.cell_rect(3, 3).position.is_equal_approx(
+			Vector2(48.0 + 983.0 * 3.0 / 7.0, 887.0)), "cell_rect(3,3) sits at the demo cell",
+			str(v.cell_rect(3, 3).position))
+
+	# Neighbours share their edge: Rect2 stores 32-bit floats, so the shared edge is
+	# one ulp apart (~6e-5 px) rather than bit-identical. Anything larger is a seam.
+	var seam := 0.0
+	for x in BoardView.COLS - 1:
+		seam = maxf(seam, absf(v.cell_rect(x, 2).end.x - v.cell_rect(x + 1, 2).position.x))
+	for y in BoardView.ROWS - 1:
+		seam = maxf(seam, absf(v.cell_rect(4, y).end.y - v.cell_rect(4, y + 1).position.y))
+	t.ok(seam < 1e-3, "neighbouring cells meet with no seam (<= 1e-3 px)", str(seam))
+
+	# 7x9 cells exactly fill the container
+	var union: Rect2 = v.cell_rect(0, 0)
+	var cells := 0
+	for y in BoardView.ROWS:
+		for x in BoardView.COLS:
+			union = union.merge(v.cell_rect(x, y))
+			cells += 1
+	t.eq(cells, 63, "the grid has 63 cells")
+	t.eq(union, CONTAINER, "the 63 cells exactly fill the 983x1263 container")
+	t.eq(v.cell_rect(6, 0).end.x - v.cell_rect(0, 0).position.x, 983.0,
+			"7 cell widths add up to 983 exactly")
+	t.eq(v.cell_rect(0, 8).end.y - v.cell_rect(0, 0).position.y, 1263.0,
+			"9 cell heights add up to 1263 exactly")
 	v.free()
 
 
@@ -122,6 +199,17 @@ func _red_line(t) -> void:
 	t.ok(view_script.contains("--allow-placeholders"), "placeholder opt-in reads the CLI flag")
 	t.ok(view_script.contains("if allow_placeholders"), "placeholder branch is gated by the flag")
 	t.ok(view_script.contains("check_ref"), "placeholder branch asks the asset guard")
+	# The caption/legend are debug-only: a composed screen owns that space.
+	t.ok(view_script.contains("if show_debug_labels"), "debug labels are gated by a flag")
+
+
+## The caption/legend switch a composed screen flips; the standalone board keeps it on.
+func _labels(t) -> void:
+	var v = BoardView.new()
+	t.eq(v.show_debug_labels, true, "debug labels default to on for a standalone board")
+	v.show_debug_labels = false
+	t.eq(v.show_debug_labels, false, "a caller can hide the caption and the legend")
+	v.free()
 
 
 func _scene(t) -> void:
@@ -136,7 +224,102 @@ func _scene(t) -> void:
 		t.ok(instance.has_method("apply_state"), "scene root exposes apply_state")
 		t.ok(instance.has_method("debug_summary"), "scene root exposes debug_summary")
 		t.ok(instance.has_method("cell_rect"), "scene root exposes cell_rect")
+		t.ok(instance.has_method("set_asset_theme"), "scene root exposes set_asset_theme")
 		instance.free()
+
+
+## chip_icons wire-up: the board draws the resolved texture when a theme maps the
+## (entity, level) pair, and keeps the procedural chip when it does not.
+func _chip_icons(t) -> void:
+	var guard = AssetGuard.new()
+	t.ok(guard.load_from(INDEX, false), "manifest index loads for the chip icon test")
+	var loader = ThemeLoader.new()
+	loader.setup(guard, false)
+	var project := _project()
+	var theme_result: Dictionary = loader.load_theme(DEFAULT_THEME, project)
+	t.ok(bool(theme_result.get("ok", false)), "themes/default loads for the board view",
+			str(theme_result.get("errors", [])))
+
+	var v = BoardView.new()
+	v.build_from_project(SAMPLE, 0)
+	t.ok(v.has_method("set_chip_icons"), "view keeps the M1 set_chip_icons entry point")
+	if v.has_method("set_chip_icons"):
+		v.set_chip_icons(loader, project)
+	var resolved: int = v.chip_icon_count()
+	t.eq(resolved, 4, "level 1 resolves exactly four chip textures (generator + special stay procedural)")
+	t.ok(v.debug_summary().begins_with("board=7x9 items=6 obstacles=4"),
+			"summary prefix is unchanged with chip icons", v.debug_summary())
+	t.ok(resolved <= v.item_count(), "chip_icon_count never exceeds the item count",
+			"%d of %d" % [resolved, v.item_count()])
+	v.free()
+
+
+## (b) The board container's own art comes from the theme: the default theme must
+## resolve the five §20.6 layers to real manifest ids and real textures.
+func _ui_theme(t) -> void:
+	t.ok(ThemeLoader.new().has_method("resolve_ui"), "ThemeLoader exposes resolve_ui")
+	t.ok(ThemeLoader.new().has_method("texture_for"), "ThemeLoader exposes texture_for")
+
+	var guard = AssetGuard.new()
+	t.ok(guard.load_from(INDEX, false), "manifest index loads for the ui theme test")
+	var loader = ThemeLoader.new()
+	loader.setup(guard, false)
+	var project := _project()
+	var result: Dictionary = loader.load_theme(DEFAULT_THEME, project)
+	t.ok(bool(result.get("ok", false)), "themes/default loads for the ui theme test",
+			str(result.get("errors", [])))
+	if not (loader.has_method("resolve_ui") and loader.has_method("texture_for")):
+		return
+
+	for key in UI_KEYS:
+		var resolved = loader.resolve_ui(String(key), project)
+		var id := ""
+		if typeof(resolved) == TYPE_DICTIONARY:
+			id = String((resolved as Dictionary).get("id", ""))
+		t.ok(not id.is_empty(), "default theme resolves ui.%s to an id" % String(key), str(resolved))
+		if id.is_empty():
+			continue
+		var texture = loader.texture_for(id)
+		t.ok(texture is Texture2D, "texture_for(%s) returns a texture" % id, str(texture))
+		if texture is Texture2D:
+			t.ok((texture as Texture2D).get_width() > 0 and (texture as Texture2D).get_height() > 0,
+					"ui texture %s has a real size" % id,
+					"%dx%d" % [(texture as Texture2D).get_width(), (texture as Texture2D).get_height()])
+
+	var v = BoardView.new()
+	v.build_from_project(SAMPLE, 0)
+	t.ok(v.has_method("set_asset_theme"), "view exposes set_asset_theme")
+	if not v.has_method("set_asset_theme"):
+		v.free()
+		return
+	v.set_asset_theme(loader, project)
+	var ids: Dictionary = v.ui_ids()
+	for key in UI_KEYS:
+		t.ok(not String(ids.get(String(key), "")).is_empty(),
+				"view resolves ui.%s through set_asset_theme" % String(key), str(ids))
+	var summary: String = v.ui_summary()
+	t.ok(summary.begins_with("bg_bottom="), "ui_summary starts with bg_bottom", summary)
+	t.ok(not summary.contains("= "), "ui_summary prints no empty id", summary)
+	t.ok(v.chip_icon_count() > 0, "set_asset_theme also wires the chip icons",
+			str(v.chip_icon_count()))
+	v.free()
+
+
+## (c) No theme at all: the view still builds, keeps every procedural fallback and
+## resolves nothing, which is what a relocated copy without the copies relies on.
+func _degraded(t) -> void:
+	var v = BoardView.new()
+	var built: Dictionary = v.build_from_project(SAMPLE, 0)
+	t.ok(bool(built.get("ok", false)), "level 1 builds without a chip loader",
+			String(built.get("error", "")))
+	t.eq(v.chip_icon_count(), 0, "no loader -> chip_icon_count() is 0")
+	t.eq(v.ui_ids().size(), 0, "no loader -> ui_ids() is empty")
+	t.eq(v.ui_summary(), "", "no loader -> ui_summary() is empty")
+	t.ok(v.debug_summary().begins_with("board=7x9 items=6 obstacles=4"),
+			"summary keeps its prefix without a chip loader", v.debug_summary())
+	t.eq(v.cell_rect(0, 0), Rect2(48, 466, 140.428571, 140.333333),
+			"the geometry stays the §20.5 geometry without a theme")
+	v.free()
 
 
 func _is_ascii(text: String) -> bool:
@@ -144,3 +327,10 @@ func _is_ascii(text: String) -> bool:
 		if text.unicode_at(i) > 126:
 			return false
 	return true
+
+
+func _project() -> Dictionary:
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(SAMPLE))
+	if typeof(parsed) == TYPE_DICTIONARY:
+		return parsed
+	return {}

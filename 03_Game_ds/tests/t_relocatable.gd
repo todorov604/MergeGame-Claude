@@ -1,21 +1,36 @@
 extends RefCounted
 ## Relocatability and asset-boundary audit. Read-only by design.
+##
+## M1 rule: a payload file may live under res://assets only when a registration
+## explains it — either the v7 snapshot (data/manifest_index.json) or the local
+## register (data/assets_local.json) that carries the layout art the snapshot does
+## not have yet. The allowlist is therefore *computed* from those two tables instead
+## of being typed out here, so registering an asset is a data edit and never a test
+## edit. The payload count stays an exact equality: a file that appears or disappears
+## without a registration still fails this suite.
+##
+## The M0 name blocklist (`chip_*` / `obstacle_*` / `char_*` ...) is gone on purpose.
+## It encoded "these basenames are reference-only originals", which stopped being true
+## when the v7 manifest turned every 01_icon material into PRODUCTION: `obstacle_web.png`
+## is now a legitimately registered PRODUCTION file name. The rule that replaced it is
+## stricter: every shipped basename must be registered, and no shipped basename may
+## belong to a REFERENCE_ONLY or TODO record.
 
 const ROOT := "res://"
 const PROJECT_CONFIG := "res://project.godot"
 const ASSETS_DIR := "res://assets"
 const PROVENANCE_PATH := "res://assets/PROVENANCE.md"
 const MANIFEST_INDEX := "res://data/manifest_index.json"
+const LOCAL_REGISTRY := "res://data/assets_local.json"
 
-const EXPECTED_ASSETS := [
-	"res://assets/fonts/font_zh.otf",
-	"res://assets/fonts/font_en.ttf",
-	"res://assets/ui/board_frame.png",
-	"res://assets/ui/ui_icon_star.png",
-	"res://assets/ui/box_safe_x.png",
-	"res://assets/ui/box_energe_w.png",
-	"res://assets/ui/box_treasure_y.png",
-]
+const PAYLOAD_USAGES := ["PRODUCTION", "PLACEHOLDER"]
+
+## 27 M0/M1 payload files (20 chips + 2 fonts + 5 placeholders)
+## + 21 layout copies (9 files no table carried before + 12 snapshot files that were
+##   registered but never copied).
+const EXPECTED_PAYLOAD_COUNT := 48
+
+const SNAPSHOT_RESOURCE_COUNT := 180
 
 const TEXT_EXTENSIONS := {
 	"gd": true,
@@ -97,7 +112,19 @@ func _test_project_config(t) -> void:
 	t.ok(config.contains("window/stretch/aspect=\"keep\""), "stretch aspect is keep")
 
 
+## The allowlist is the union of the two registration tables. Everything that ships
+## must be inside it, and the shipped count is asserted exactly, so nothing can be
+## added or dropped silently.
 func _test_asset_allowlist(t) -> void:
+	var reg := _registrations()
+	var by_basename: Dictionary = reg["by_basename"]
+	var local_basenames: Array = reg["local_basenames"]
+
+	t.ok(int(reg["snapshot_count"]) == SNAPSHOT_RESOURCE_COUNT,
+			"the snapshot still carries 180 records", str(reg["snapshot_count"]))
+	t.ok(local_basenames.size() > 0, "the local register contributes layout files",
+			str(local_basenames.size()))
+
 	var all_files: Array = []
 	_collect_all_files(ASSETS_DIR, all_files)
 	all_files.sort()
@@ -108,59 +135,136 @@ func _test_asset_allowlist(t) -> void:
 		if String(path) == PROVENANCE_PATH:
 			continue
 		payload_files.append(path)
-		if not EXPECTED_ASSETS.has(String(path)):
+		if not by_basename.has(String(path).get_file().to_lower()):
 			unexpected.append(path)
 
-	var missing: Array = []
-	for expected in EXPECTED_ASSETS:
-		if not all_files.has(expected):
-			missing.append(expected)
+	var missing_local: Array = []
+	for base in local_basenames:
+		var found := false
+		for path in payload_files:
+			if String(path).get_file().to_lower() == String(base):
+				found = true
+		if not found:
+			missing_local.append(String(base))
 
 	t.ok(all_files.has(PROVENANCE_PATH), "PROVENANCE.md governance document is present")
-	t.ok(payload_files.size() == 7, "assets contains exactly seven payload files", _detail_paths(payload_files))
-	t.ok(unexpected.size() == 0, "assets has no extra payload files", _detail_paths(unexpected))
-	t.ok(missing.size() == 0, "all seven allowed payload files are present", _detail_paths(missing))
-
-	var forbidden := RegEx.create_from_string("^(chip_|obstacle_|char_|board_bg|slot_|ui_topbar)")
-	t.ok(forbidden != null, "forbidden asset-name regex compiles")
-	var forbidden_hits: Array = []
-	for path in all_files:
-		if forbidden != null and forbidden.search(String(path).get_file().to_lower()) != null:
-			forbidden_hits.append(path)
-	t.ok(forbidden_hits.size() == 0, "no reference-only filename families under assets", _detail_paths(forbidden_hits))
+	t.eq(payload_files.size(), EXPECTED_PAYLOAD_COUNT,
+			"assets contains exactly forty-eight payload files")
+	t.ok(unexpected.size() == 0,
+			"every payload file under res://assets is registered in the snapshot or in data/assets_local.json",
+			_detail_paths(unexpected))
+	t.ok(missing_local.size() == 0,
+			"every file the local register declares was really copied under res://assets",
+			_detail_paths(missing_local))
 
 
+## The M1 red line is a registration rule: every file that lives under res://assets
+## must be explained by a PRODUCTION or PLACEHOLDER record of one of the two tables,
+## and no shipped basename may belong to a REFERENCE_ONLY or TODO record.
 func _test_resource_redline(t) -> void:
-	var manifest := _load_json(MANIFEST_INDEX)
-	t.ok(not manifest.is_empty(), "manifest snapshot loads for redline cross-check")
-	if manifest.is_empty():
-		return
+	var reg := _registrations()
+	t.eq(reg["ref_only_ids"], [], "snapshot has zero REFERENCE_ONLY records")
+	t.ok((reg["local_bad_usage"] as Array).is_empty(),
+			"the local register is a PRODUCTION-only table",
+			_detail_paths(reg["local_bad_usage"]))
 
-	var resources = manifest.get("resources", null)
-	if typeof(resources) != TYPE_DICTIONARY:
-		t.ok(false, "manifest resources is a dictionary", str(typeof(resources)))
-		return
-
-	var ref_names := {}
-	for id in resources:
-		var record = resources[id]
-		if typeof(record) != TYPE_DICTIONARY:
-			continue
-		if String(record.get("usage", "")) == "REFERENCE_ONLY":
-			var file_name := String(record.get("file_name", "")).to_lower()
-			if not file_name.is_empty():
-				ref_names[file_name] = true
+	var by_basename: Dictionary = reg["by_basename"]
 
 	var all_files: Array = []
 	_collect_all_files(ASSETS_DIR, all_files)
 	all_files.sort()
-	var leaked: Array = []
-	for path in all_files:
-		var base := String(path).get_file().to_lower()
-		if ref_names.has(base):
-			leaked.append(path)
 
-	t.ok(leaked.size() == 0, "zero REFERENCE_ONLY files under res://assets", _detail_paths(leaked))
+	var unregistered: Array = []
+	var wrong_usage: Array = []
+	var todo_hits: Array = []
+	for path in all_files:
+		if String(path) == PROVENANCE_PATH:
+			continue
+		var base := String(path).get_file().to_lower()
+		if not by_basename.has(base):
+			unregistered.append(path)
+			continue
+		var usable := false
+		for record in by_basename[base]:
+			var usage := String(record["usage"])
+			if PAYLOAD_USAGES.has(usage):
+				usable = true
+			if usage == "TODO":
+				todo_hits.append(path + "=" + String(record["id"]))
+		if not usable:
+			wrong_usage.append(path)
+
+	t.ok(unregistered.size() == 0,
+			"every payload file under res://assets is registered by basename",
+			_detail_paths(unregistered))
+	t.ok(wrong_usage.size() == 0,
+			"every payload file is registered as a PRODUCTION or PLACEHOLDER record",
+			_detail_paths(wrong_usage))
+	t.ok(todo_hits.size() == 0, "no payload basename belongs to a TODO record", _detail_paths(todo_hits))
+
+
+## One pass over both registration tables. `origin` records where a basename came
+## from so a failure message can say which table has to grow.
+func _registrations() -> Dictionary:
+	var by_basename := {}
+	var ref_only_ids: Array = []
+	var local_basenames: Array = []
+	var local_bad_usage: Array = []
+
+	var snapshot := _load_json(MANIFEST_INDEX)
+	var snapshot_count := 0
+	var resources = snapshot.get("resources", null)
+	if typeof(resources) == TYPE_DICTIONARY:
+		snapshot_count = (resources as Dictionary).size()
+		for id in (resources as Dictionary).keys():
+			var record = (resources as Dictionary)[id]
+			if typeof(record) != TYPE_DICTIONARY:
+				continue
+			var usage := String((record as Dictionary).get("usage", ""))
+			if usage == "REFERENCE_ONLY":
+				ref_only_ids.append(String(id))
+			var file_name := String((record as Dictionary).get("file_name", "")).to_lower()
+			if file_name.is_empty():
+				continue
+			if not by_basename.has(file_name):
+				by_basename[file_name] = []
+			(by_basename[file_name] as Array).append({
+				"id": String(id),
+				"usage": usage,
+				"origin": "snapshot",
+			})
+
+	var local := _load_json(LOCAL_REGISTRY)
+	var local_resources = local.get("resources", null)
+	if typeof(local_resources) == TYPE_DICTIONARY:
+		for id in (local_resources as Dictionary).keys():
+			var record = (local_resources as Dictionary)[id]
+			if typeof(record) != TYPE_DICTIONARY:
+				continue
+			var usage := String((record as Dictionary).get("usage", ""))
+			if usage != "PRODUCTION":
+				local_bad_usage.append(String(id) + "=" + usage)
+			var file_name := String((record as Dictionary).get("file_name", "")).to_lower()
+			if file_name.is_empty():
+				continue
+			if not local_basenames.has(file_name):
+				local_basenames.append(file_name)
+			if not by_basename.has(file_name):
+				by_basename[file_name] = []
+			(by_basename[file_name] as Array).append({
+				"id": String(id),
+				"usage": usage,
+				"origin": "local",
+			})
+	local_basenames.sort()
+
+	return {
+		"by_basename": by_basename,
+		"ref_only_ids": ref_only_ids,
+		"local_basenames": local_basenames,
+		"local_bad_usage": local_bad_usage,
+		"snapshot_count": snapshot_count,
+	}
 
 
 func _is_text_file(path: String) -> bool:
@@ -208,6 +312,3 @@ func _detail_paths(paths: Array) -> String:
 	if paths.size() > limit:
 		detail += ", ..."
 	return detail
-
-
-

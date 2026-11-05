@@ -34,7 +34,10 @@
       "maxLevel": 10,
       "visual": {
         "hue": "#F2A65A",
-        "label": "A"
+        "label": "A",
+        "icons": {
+          "1": "ui_icon_star"
+        }
       }
     },
     "B": {

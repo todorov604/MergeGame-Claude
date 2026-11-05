@@ -12,5 +12,10 @@
     "generator": {
       "CleanBox_C": "box_treasure_y"
     }
+  },
+  "chip_icons": {
+    "CleanSet_Ca": {
+      "1": "box_safe_x"
+    }
   }
 }

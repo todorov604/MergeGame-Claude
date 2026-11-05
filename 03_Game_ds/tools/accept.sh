@@ -192,10 +192,10 @@ if [ -f "$ROOT/tools/render.sh" ]; then
     fail "render manifest missing or not tied to this film"
   fi
   if timeout 180 bash tools/render.sh --frames 30 --out "$ROOT/output/refuse.mp4" \
-      --project res://tests/fixtures/broken/bad_ref_only.json > "$ROOT/output/render_refuse.log" 2>&1; then
-    fail "REFERENCE_ONLY project was allowed to render"
+      --project res://tests/fixtures/broken/bad_unknown_icon.json > "$ROOT/output/render_refuse.log" 2>&1; then
+    fail "guard-refused project (unknown id) was allowed to render"
   else
-    pass "REFERENCE_ONLY project is refused before recording"
+    pass "guard-refused project (unknown id) is refused before recording"
   fi
   rm -rf "$RTMP"
 else

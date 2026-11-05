@@ -2,3 +2,6 @@
 .godot/
 output/
 *.tmp
+# 引擎边车文件（真窗口运行 / F5 会生成，可随时重建，不是载荷）
+*.import
+*.uid

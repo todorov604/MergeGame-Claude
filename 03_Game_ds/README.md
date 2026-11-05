@@ -38,21 +38,58 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 "$G" --path . res://src/editor/timeline_editor.tscn
 ```
 
+### 1.1 F5 运行窗口（2026-11-05）
+
+设计分辨率不变：`project.godot` 仍是 `viewport_width=1080` / `viewport_height=1920` + `stretch=canvas_items/keep`。
+真窗口（F5 / `--path .`）由 `src/view/game_screen.gd` 在运行期缩到**一半并居中：540×960**（0.5×），1080p 桌面能完整放下。
+
+```text
+[game] preview window=540x960 design=1080x1920 scale=0.50 screen=1920x1032
+```
+
+- 换缩放：编辑器 `项目设置 → 调试 → 运行 → 主运行参数` 填 `--window=648x1152`（0.6×）/ `--window=810x1440`（0.75×）；`--window=native` 回引擎默认（1080×1920）。命令行同理：`"$G" --path . -- --window=648x1152`。
+- **为什么没写进 `project.godot`**：`window/size/window_width_override` 会连带缩小 Movie Maker 的根视口（实测 AVI 变 540×960），直接顶掉 `render.sh` 的 1080×1920 门禁。放在主场景运行期，出片/截图路径一行都不经过它。
+- 证据产物实测未变：PNG `1080×1920`（bytes=900446，与 M1 基线一致）；60 帧成片 `width=1080 height=1920 nb_frames=60`，`render.sh` 分辨率门禁通过。
+- 真窗口运行会在 `assets/` 下生成 `*.import` / `*.uid` 边车文件：已进 `03_Game_ds/.gitignore`，`t_relocatable` 按引擎边车跳过——**跑完 F5 再跑测试仍是 1753 checks / 0 failures**。
+- `t_relocatable` 的配置断言改成读 `ProjectSettings` 有效值（不再匹配文件文本）：引擎退出时会重写 `project.godot`、省略等于默认值的键（如 `window/stretch/aspect="keep"`），按文本断言会让「干净仓库跑一次再跑第二次」变红。
+
+### 1.2 自由模式与「玩一遍出片」（2026-11-05）
+
+F5 默认进**自由模式**（`free_mode=true`）：没有时间轴替你走，点生成器出料、点两个同款合成、点订单卡交付、过关后点一下继续。规则全部落在 `src/core/sim.gd` 的同一套 `sim.apply` 上，`src/core/free_mode.gd` 只负责「点到哪一格 → 该发什么事件」。
+
+```text
+[game] cursor=ui_cursor_hand drawn=true os_hidden=true
+[game] freeze=false autoplay=false free_mode=true rec=false clock=0.00 t=-1.00
+```
+
+- **R = 开始 / 停止录制；停下就自动出片**，不需要终端：第二次按 R 后，take 存到 `output/mov/take_<时间戳>.take.json`，同目录随后出现 `take_<时间戳>.mp4`（另有 `.manifest.json` 资源清单和 `.log` 出片日志）。成片 1080×1920@60，文件名带时间戳，不会互相覆盖。
+- 出片是**后台进程**（`tools/render_take.gd`，headless）：它先等 Movie Maker 子进程录完 AVI，再调 ffmpeg 转 MP4，然后把 AVI 删掉。游戏窗口不卡，可以接着玩下一局。耗时约 **3× 片长**（2.5s 的片 ≈ 8s，30s 的片 ≈ 90–120s）。
+- 窗口里的手是**画在窗口内的**（`game_screen.gd` 的 `Cursor` 层，OS 光标隐藏）：图标 `ui_cursor_hand`（[Kenney Cursor Pack](https://kenney.nl/assets/cursor-pack)，CC0），按下缩到 0.92 保持 100ms；和成片里那只手是同一张图、同一套按压规则，所以**预览就是成片**。
+- 只想录、先不出片：`F5 -- --no-render`（take 照常保存，不启动出片）。想换参数重出同一条 take：
+
+```bash
+bash tools/render.sh --take output/mov/take_20261105_153012.take.json --out output/mov/clean.mp4 --no-cursor
+```
+
+- take 结构：`{schema, seed, fps, duration, project, cursor:[[t,x,y]…], clicks:[…], timeline:[…]}`；`src/core/take_io.gd` 负责采样插值 / 校验 / 读写，`tests/t_free_mode.gd` 覆盖插值、按压窗口、排序校验与点击→事件映射。
+- `-- --demo`：回到自动回放（按 `sample_project.json` 的 21 条事件走一遍），用来看出片节奏；不录制、不画手。
+- 自动出片依赖工程内的 `tools/render_take.gd`（和 `tools/` 其他脚本一样只在编辑器 / F5 运行时可用；导出版没有脚本源码）。
+
 ## 2. 目录
 
 ```
 03_Game_ds/
 ├─ project.godot           1080×1920、stretch=canvas_items/keep；main_scene=game_screen
-├─ assets/                 48 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER + 21 张界面切图）+ PROVENANCE.md
+├─ assets/                 49 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER + 21 张界面切图 + 1 个 CC0 光标）+ PROVENANCE.md
 │  ├─ chips/               icon_10002101..110（Ca Lv.1–10）、icon_10002201..110（Cb Lv.1–10）整字节复制
-│  ├─ fonts/ · ui/         2 个字体；ui/ 共 26 张（5 个 PLACEHOLDER + 21 张 §20.5 界面切图）
+│  ├─ fonts/ · ui/         2 个字体；ui/ 共 27 张（5 个 PLACEHOLDER + 21 张 §20.5 界面切图 + cursor_hand.png）
 │  └─ PROVENANCE.md        出处/许可/尺寸/fit/sha256（含 M1 20 张表）
 ├─ data/
 │  ├─ sample_project.json  schema v2 样例：2 关、7×9、21 条事件、30s
 │  ├─ manifest_index.json  资源清单快照（180 条 + 8 条别名，id/usage/license/文件名，无绝对路径）
 │  └─ themes/{default,placeholder,pet_shop}/theme.json
 ├─ src/
-│  ├─ core/        event_model / rng / board_state / project_model / sim / sim_handlers / event_evaluator / state_digest
+│  ├─ core/        event_model / rng / board_state / project_model / sim / sim_handlers / event_evaluator / state_digest / free_mode / take_io
 │  ├─ validate/    validator + 规则族（引用/等级/棋盘/时间轴/资源）
 │  ├─ assets/      asset_guard.gd（usage 单点裁决 + 别名解析 + res:// 存在性两层）
 │  ├─ view/        board_view / hud_view / order_panel / fly_anim / game_screen
@@ -60,22 +97,22 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 │  ├─ editor/      project_store / undo_stack / timeline_editor
 │  ├─ render/      movie_scene / render_plan / render_manifest
 │  └─ tools/       CLI、manifest 快照构建
-├─ tests/          20 个套件（自动发现）+ 25 条反例夹具
+├─ tests/          21 个套件（自动发现）+ 25 条反例夹具
 ├─ tools/          accept.sh / render.sh / framemd5_compare.sh / gen_fixtures.py / shot_*.gd
 └─ docs/           AUDIT-S1.md、REVIEW-CORE.md、PERF-BASELINE.md
 ```
 
 ## 3. 资源口径（M1 / manifest v7）
 
-`00_design/resource_manifest.json` 是唯一事实源（**180 条**）：`PRODUCTION 155` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0`。`01_icon` 公司自研素材已全部登记为 `PRODUCTION`（license `公司自有/自研`），M0 的“原游戏切图一律不打包”红线因此变成**按需复制**：本工程只复制了 **48 个载荷文件**（覆盖 42 条快照记录 + 8 个仅本地登记的文件；`in_project=42`），其余 **138 条**快照记录（118 条 `PRODUCTION` + 15 条 `PLACEHOLDER` + 5 条 `TODO`）一张都没进工程。
+`00_design/resource_manifest.json` 是唯一事实源（**192 条**，2026-11-05 追加 `ui_cursor_hand`；本工程快照仍是 v7 的 180 条，M2 重建）：`PRODUCTION 156` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0`。`01_icon` 公司自研素材已全部登记为 `PRODUCTION`（license `公司自有/自研`），M0 的“原游戏切图一律不打包”红线因此变成**按需复制**：本工程只复制了 **49 个载荷文件**（覆盖 42 条快照记录 + 9 个仅本地登记的文件；`in_project=42`），其余 **138 条**快照记录（118 条 `PRODUCTION` + 15 条 `PLACEHOLDER` + 5 条 `TODO`）一张都没进工程。
 
 - `data/manifest_index.json` 由 `src/tools/build_manifest_index.gd` 生成，只保留 id/usage/license/文件名/尺寸，**不带绝对路径**，所以搬移后仍能执法。顶层另有 8 条 `aliases`：源 manifest 把 Ca/Cb 的 7–10 级按原始文件名登记为 `icon_10002107..110` / `icon_10002207..210`，别名把它们对齐成统一的 `chip_clean_*_lv07..10`（`AssetGuard` 的每个方法都识别别名，`entry()` 仍返回原记录）。
 - 两层判定分开：`check_ref(id)` 看治理层（usage + `file_present`，即源文件是否在清单里存在），`local_path(id)` 看存在层（`res://assets/{ui,chips,fonts}/` 下是否真有这个副本）。**未复制**的 `PRODUCTION` id 会通过前者、返回 `""` 给后者——所以调色板之外的 8 条链图标“写进主题就能用”，但必须先复制。
 - `REFERENCE_ONLY`（0 条）与 `TODO`（5 条音频）恒阻断；`PLACEHOLDER` 仅在 `--allow-placeholders` 且经 `AssetGuard` 放行时加载并写日志。
 - 棋盘上的障碍 / 选中括角 / 完成态仍程序化绘制；chip 在主题给了 `chip_icons` 时画真实图标（fit=scale 居中，等级胶囊在上），没给时保持程序化圆角块。
 - 出片时 `output/render_manifest.json` 记录实际使用的资源（字体 + 主题 `chip_refs()` 的全部 chip id + 画面用到的 `icons.ui` id）与 `blocked` 列表；git 只跟踪代码与数据，`output/` 是产物。
-- **本地登记表** `data/assets_local.json`：v7 manifest 没登记、但 §20.5 画面要用的素材（`ui_bg_top`、`char_part1/part2`、`ui_items_bar`、`ui_board_frame` 等 9 条）在此登记为 `PRODUCTION` / `公司自有`，`AssetGuard` 载入时与快照合并，**快照记录永远优先**（本地同名记录会被拒并计数，`t_local_assets` 断言）。这 9 条已列入「待补登 00_design manifest」清单（见 §5.2 与本轮实施报告）。
-- 载荷文件共 **48** 个：20 张 chip 图标 + 2 字体 + 5 个 PLACEHOLDER + 21 张 §20.5 界面切图。
+- **本地登记表** `data/assets_local.json`：快照没登记、但画面要用的素材在此登记为 `PRODUCTION`，`AssetGuard` 载入时与快照合并，**快照记录永远优先**（本地同名记录会被拒并计数，`t_local_assets` 断言）。共 **10 条**：§20.5 布局 9 条（`ui_bg_top`、`char_part1/part2`、`ui_items_bar`、`ui_board_frame` 等）+ `ui_cursor_hand`（CC0 光标，2026-11-05 已同步登记进 00_design manifest v8，待 M2 重建快照后可删本地记录）。前 9 条仍在「待补登 00_design manifest」清单（见 §5.2）。
+- 载荷文件共 **49** 个：20 张 chip 图标 + 2 字体 + 5 个 PLACEHOLDER + 21 张 §20.5 界面切图 + 1 张 CC0 光标。
 
 ## 4. 数据 / 事件模型 v2 要点
 
@@ -142,6 +179,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 #### 待补登 00_design manifest 的本地素材（9 条，`data/assets_local.json`，`pending_manifest: true`）
 
 由 Claude 收口会话统一补登 v0.22；**本 lane 不改 `00_design`**。全部 `usage=PRODUCTION`、`license=公司自有/自研`。
+（第 10 条 `ui_cursor_hand` 不在此表：它已在 v8 manifest 登记，`pending_manifest: true` 只表示本工程快照仍是 v7/180 条。）
 
 | 本地 id | 工程文件（`assets/ui/`） | 源路径 | 尺寸 | fit |
 |---|---|---|---|---|
@@ -203,7 +241,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | NEW-1 | P2 | 订单**多件需求**与生成器**共享 `charges`** 未做联合容量扣减：`src/validate/rules_levels.gd:461-467` 逐条查 bucket 计数但**不扣减**，`:348-366` 把同一 `charges` 池对每个 `(chain, level)` 产出各计满额 → validator 假绿 | 出片阶段由 `tools/render.sh:180` 的 `TAKE_REFUSAL_RE`（`SCRIPT ERROR` / `[movie] rejected ` / `rejected=N>0`）拒绝该 take 兜底，不会交付坏片；只跑 strict 不出片的 CI 会漏过 |
 | NEW-2 | P2 | `outputs[].level` **无校验也无诊断**：`src/validate/rules_levels.gd:283-290` 对非整数、越界只静默 `continue`，不产生 error/warning；只有 `rareOutputs.level` 有 `GEN_RARE_LEVEL`（`:212-219`） | sim 侧 `src/core/sim.gd:330` 用 `clampi(level, 1, _level_cap(entity))` 夹取，声明的产出等级可能被夹到实体上限后实际不可达（订单随之不可达） |
 
-- 三项均属**校验器过松边界 / 表现层覆盖面**：不产生坏成片，也不改变本轮 25 条反例与 1681 checks 的结论；最小复现与修法建议见 `10_report/DS03/M0修复复核-1104.md`（P2-3 见 §3，NEW-1/NEW-2 见 §4）。
+- 三项均属**校验器过松边界 / 表现层覆盖面**：不产生坏成片，也不改变本轮 25 条反例与 1753 checks 的结论；最小复现与修法建议见 `10_report/DS03/M0修复复核-1104.md`（P2-3 见 §3，NEW-1/NEW-2 见 §4）。
 - 同一报告里的文档漂移 **NEW-DOC-1**（`tests/` 套件数 15 → 19，M1 又增至 20）已随 §2 目录树修正**关闭**，不再登记。
 - `data/manifest_index.json` 已在 M1 按 v7 manifest **重建为 180 条**（`PRODUCTION 155` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0` + 8 条别名，`snapshot_date` 由生成器写入当天）；详见 `10_report/DS03/M1实施报告-1105.md`。
 
@@ -212,7 +250,7 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | 文件 | 内容 |
 |---|---|
 | `output/accept.log` | 一键验收 9 步全量日志（ALL CHECKS PASS） |
-| `output/tests.log` | 20 套件 / 1681 checks |
+| `output/tests.log` | 21 套件 / 1753 checks |
 | `output/validation_report.json` | 样例工程校验报告（ok=true, 0 error, 0 warning, asset_refs=41） |
 | `output/board_1080x1920.png` | 静态棋盘（7×9、4 种障碍、选中、完成）+ 真实 chip 图标（resolved 4/6） |
 | `output/game_1080x1920.png` · `orders_panel.png` | 主游戏页（HUD+订单+棋盘，resolved 3/5）与订单卡特写 |

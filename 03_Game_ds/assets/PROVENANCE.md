@@ -72,6 +72,16 @@ M1 起 `chip_clean_*` 系列的 20 张真实棋子在工程内：Clean 家族 Ca
 `ui_board_frame` 是**提交给 00_design 的 usage 升级建议**：快照把同一个 `board_frame.png` 记为 `PLACEHOLDER`（PIL 生成），
 而 §20.5 的 983×1263 棋盘容器必须在 strict 渲染里出现，所以本地另立一条 PRODUCTION 记录指向同一张 PNG——
 `board_frame` 仍是 `PLACEHOLDER`（strict 模式照旧阻断），两条记录 `local_path()` 指向同一个文件。
+
+### 自由模式光标（2026-11-05，CC0）
+
+| id | 源文件（工作区相对） | 工程内路径 | actual | usage | license | sha256 |
+|---|---|---|---|---|---|---|
+| `ui_cursor_hand` | `01_icon/HotelManor_icon/剩余图标/cursor_hand.png` | `assets/ui/cursor_hand.png` | 64×64 | PRODUCTION | CC0 1.0（Kenney Cursor Pack） | `a565cc1141ae27a4ed0fc08c75a171fb774458161993633e1c09f7488b80f303` |
+
+- 开源来源：[Kenney Cursor Pack](https://kenney.nl/assets/cursor-pack)，原图 `PNG/Outline/Double/hand_point.png`，**整字节复制**（未重编码/缩放）。
+- 已在 `00_design/resource_manifest.json` v8 登记（2026-11-05 追加，id 同名），`data/assets_local.json` 仍保留一条本地记录，因为本工程快照还是 v7/180 条；M2 重建快照后本地记录可删。
+- 用途：自由模式试玩窗口的系统光标 + 成片光标 overlay（`src/render/movie_scene.gd` 的 `_draw_cursor()`）。
 本地表只做**加法**：与快照同名的 id 一律拒绝并计入 `AssetGuard.local_override_rejected`，本地记录不会改写、升级或降级任何 manifest 记录。
 
 ### 快照已登记、本次才复制的布局文件（13 个文件 / 15 条记录）
@@ -97,7 +107,7 @@ M1 起 `chip_clean_*` 系列的 20 张真实棋子在工程内：Clean 家族 Ca
 
 ## 未复制清单（M1 口径）
 
-v7 manifest 已把 `01_icon` 公司自研素材全部登记为 `PRODUCTION`（`REFERENCE_ONLY` 0 条），所以“红线”不再是某批原游戏切图，而是**按需复制**：本工程只复制了上面 48 个载荷文件（27 个 M0/M1 载荷 + 21 个 M1 布局素材），其余 **138 条** manifest 记录一张都没进工程——
+v7 manifest 已把 `01_icon` 公司自研素材全部登记为 `PRODUCTION`（`REFERENCE_ONLY` 0 条），所以“红线”不再是某批原游戏切图，而是**按需复制**：本工程只复制了上面 **49** 个载荷文件（27 个 M0/M1 载荷 + 21 个 M1 布局素材 + 1 个 CC0 光标），其余 **138 条** manifest 记录一张都没进工程——
 
 - 另外 8 条链的棋子图标（`icon_10001xxx` / `icon_10004xxx` / `icon_10005xxx` / `icon_10007xxx` / `icon_10008xxx`，共 80 张）：留待后续主题，主题里写 id 即用，不复制就不占体积；
 - 15 个未使用的 `PLACEHOLDER`（`ui_level_*`、`fx_*`、`cta_*` 等）：需要时才复制，且必须 `allow_placeholders=true`；

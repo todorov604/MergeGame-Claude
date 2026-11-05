@@ -25,10 +25,11 @@ const LOCAL_REGISTRY := "res://data/assets_local.json"
 
 const PAYLOAD_USAGES := ["PRODUCTION", "PLACEHOLDER"]
 
-## 27 M0/M1 payload files (20 chips + 2 fonts + 5 placeholders)
+## 28 M0/M1 payload files (20 chips + 2 fonts + 5 placeholders)
 ## + 21 layout copies (9 files no table carried before + 12 snapshot files that were
-##   registered but never copied).
-const EXPECTED_PAYLOAD_COUNT := 48
+##   registered but never copied)
+## + 1 CC0 cursor (ui_cursor_hand, 2026-11-05 free mode)
+const EXPECTED_PAYLOAD_COUNT := 49
 
 const SNAPSHOT_RESOURCE_COUNT := 180
 
@@ -103,13 +104,22 @@ func _test_path_hygiene(t) -> void:
 	t.ok(workspace_hits.size() == 0, "no workspace-root literals in text files", _detail_paths(workspace_hits))
 
 
+## Assert the *effective* settings, not the file text: the engine rewrites
+## project.godot on exit and drops keys whose value equals the default
+## (`window/stretch/aspect="keep"`), which used to turn a clean tree red on the
+## next run. Values are the contract here; the F5 preview size lives in
+## game_screen.gd and never touches project.godot.
 func _test_project_config(t) -> void:
 	var config := FileAccess.get_file_as_string(PROJECT_CONFIG)
 	t.ok(not config.is_empty(), "project.godot is readable")
-	t.ok(config.contains("window/size/viewport_width=1080"), "viewport width is 1080")
-	t.ok(config.contains("window/size/viewport_height=1920"), "viewport height is 1920")
-	t.ok(config.contains("window/stretch/mode=\"canvas_items\""), "stretch mode is canvas_items")
-	t.ok(config.contains("window/stretch/aspect=\"keep\""), "stretch aspect is keep")
+	t.eq(int(ProjectSettings.get_setting("display/window/size/viewport_width", 0)), 1080,
+			"viewport width is 1080")
+	t.eq(int(ProjectSettings.get_setting("display/window/size/viewport_height", 0)), 1920,
+			"viewport height is 1920")
+	t.eq(String(ProjectSettings.get_setting("display/window/stretch/mode", "")), "canvas_items",
+			"stretch mode is canvas_items")
+	t.eq(String(ProjectSettings.get_setting("display/window/stretch/aspect", "")), "keep",
+			"stretch aspect is keep")
 
 
 ## The allowlist is the union of the two registration tables. Everything that ships
@@ -149,7 +159,7 @@ func _test_asset_allowlist(t) -> void:
 
 	t.ok(all_files.has(PROVENANCE_PATH), "PROVENANCE.md governance document is present")
 	t.eq(payload_files.size(), EXPECTED_PAYLOAD_COUNT,
-			"assets contains exactly forty-eight payload files")
+			"assets contains exactly forty-nine payload files")
 	t.ok(unexpected.size() == 0,
 			"every payload file under res://assets is registered in the snapshot or in data/assets_local.json",
 			_detail_paths(unexpected))
@@ -274,6 +284,10 @@ func _is_text_file(path: String) -> bool:
 	return TEXT_EXTENSIONS.has(ext)
 
 
+## Engine sidecars (`.import` next to every imported texture, `.uid` next to every
+## script) are generated on any real-window run — including the F5 test loop — and
+## are never payload. Skipping them here keeps "assets holds exactly 48 payload
+## files" true both before and after a run; `.gitignore` hides them from git.
 func _collect_all_files(dir_path: String, files: Array) -> void:
 	var dir := DirAccess.open(dir_path)
 	if dir == null:
@@ -286,10 +300,14 @@ func _collect_all_files(dir_path: String, files: Array) -> void:
 			if dir.current_is_dir():
 				if entry != ".godot" and entry != "output":
 					_collect_all_files(child, files)
-			else:
+			elif not _is_engine_sidecar(entry):
 				files.append(child)
 		entry = dir.get_next()
 	dir.list_dir_end()
+
+
+func _is_engine_sidecar(file_name: String) -> bool:
+	return file_name.ends_with(".import") or file_name.ends_with(".uid")
 
 
 func _load_json(path: String) -> Dictionary:

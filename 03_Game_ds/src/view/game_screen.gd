@@ -3,8 +3,9 @@ extends Control
 ## driven by the shared event evaluator (no private timeline parsing here).
 ##
 ##   godot --path . --script res://tools/shot_game_screen.gd -- --t=6.2
-##   godot --path . -- --autoplay               (real-time playback)
-##   godot --path . -- --theme=themes/pet_shop  (data-only re-skin)
+##   godot --path .                              (F5: free mode, click to play)
+##   godot --path . -- --demo                    (autoplay preview of the timeline)
+##   godot --path . -- --theme=themes/pet_shop   (data-only re-skin)
 ##
 ## The screen owns three things and nothing else:
 ##   1. wiring views to the evaluator's single resolved event stream
@@ -28,7 +29,27 @@ const FilmLayout := preload("res://src/render/movie_scene.gd")
 
 const SAMPLE_PROJECT := "res://data/sample_project.json"
 const MANIFEST_INDEX := "res://data/manifest_index.json"
+const TakeIo := preload("res://src/core/take_io.gd")
+const FreeMode := preload("res://src/core/free_mode.gd")
+## Free-mode takes land in output/mov/ (gitignored): `take_<stamp>.take.json`
+## next to the film it produced, `take_<stamp>.mp4`.
+const MOV_DIR := "res://output/mov"
+const TAKE_FPS := 60
+## 64x64 CC0 outline hand (Kenney Cursor Pack). The fingertip is the hotspot, in
+## image pixels, so the same number works for the OS cursor and the film overlay.
+const CURSOR_ID := "ui_cursor_hand"
+const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
+const CURSOR_HOTSPOT := Vector2i(10, 8)
 const PAGE := Vector2(1080.0, 1920.0)
+## Interactive window size. The design surface stays 1080x1920 (project.godot
+## viewport_width/height, stretch canvas_items+keep); only the *real window* is
+## halved so F5 fits a 1080p desktop. This is applied at runtime from this scene on
+## purpose: `window/size/window_width_override` in project.godot would also shrink
+## the root viewport of Movie Maker takes (measured: AVI 540x960), which trips
+## render.sh's 1080x1920 gate. The movie scene never loads this script, and
+## shot_*.gd render into their own 1080x1920 SubViewports, so evidence is untouched.
+## Override per run: `-- --window=native` (engine default) or `-- --window=648x1152`.
+const PREVIEW_WINDOW := Vector2i(540, 960)
 const BOARD_RECT := Rect2(BoardView.BOARD_ORIGIN, BoardView.BOARD_SIZE)
 const LAYOUT_BG_BOTTOM := FilmLayout.LAYOUT_BG_BOTTOM
 const LAYOUT_BG_TOP := FilmLayout.LAYOUT_BG_TOP
@@ -207,6 +228,30 @@ class Chrome extends Control:
 		var baseline := r.position + Vector2((r.size.x - width) * 0.5, r.size.y * 0.5 + float(size_px) * 0.36)
 		draw_string(host._font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
 
+## The in-window hand. Separate Control on purpose: it must paint above the HUD, the
+## order cards and the fly layer, and it must not swallow clicks (mouse_filter is
+## IGNORE, the screen itself owns input).
+class Cursor extends Control:
+	const HOTSPOT := Vector2(10.0, 8.0)
+	const SIZE := 64.0
+	const PRESS_SECONDS := 0.10
+	const PRESS_SCALE := 0.92
+
+	var host = null
+
+	func _draw() -> void:
+		if host == null or host._cursor_tex == null:
+			return
+		if host._freeze or not host._free_mode:
+			return
+		var point: Vector2 = host.get_local_mouse_position()
+		var press := 1.0
+		if host._clock - float(host._last_click_at) <= PRESS_SECONDS:
+			press = PRESS_SCALE
+		draw_texture_rect(host._cursor_tex,
+				Rect2(point - HOTSPOT * press, Vector2(SIZE, SIZE) * press), false)
+
+
 var board
 var hud
 var orders
@@ -233,7 +278,7 @@ var _font: Font = null
 
 var _clock: float = 0.0
 var _seed: int = DEFAULT_SEED
-var _autoplay: bool = true
+var _autoplay: bool = false
 var _freeze: bool = false
 var _t_target: float = -1.0
 var _selected := Vector2i(-1, -1)
@@ -242,6 +287,23 @@ var _level_static: Dictionary = {}
 var _end_time: float = 0.0
 var _event_count: int = 0
 var _last_code: String = ""
+var _preview_window: Vector2i = PREVIEW_WINDOW
+var _preview_window_enabled: bool = true
+## F5 default is free mode (the player clicks); `-- --demo` replays the sample
+## timeline instead. `_autoplay` keeps its old meaning: drain evaluator events.
+var _free_mode: bool = true
+var _cursor_tex: Texture2D = null
+var _recording: bool = false
+var _rec_start: float = 0.0
+var _rec_cursor: Array = []
+var _rec_clicks: Array = []
+var _rec_events: Array = []
+var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
+var _take_path: String = ""
+var _cursor_layer = null
+var _last_click_at: float = -1000.0
+## `--no-render` records the take without starting the film (debug / test runs).
+var _auto_render: bool = true
 
 
 func _ready() -> void:
@@ -249,6 +311,7 @@ func _ready() -> void:
 	if size.x <= 0.0 or size.y <= 0.0:
 		size = PAGE
 	_parse_args()
+	_fit_preview_window()
 
 	model = ProjectModel.new()
 	if not model.load_file(SAMPLE_PROJECT):
@@ -271,6 +334,7 @@ func _ready() -> void:
 	# §20.5 layout art, resolved once before the first paint (textures are cached by
 	# ThemeLoader.texture_for, so no frame touches the disk).
 	_resolve_ui_art()
+	_setup_cursor()
 
 	board = BoardScene.instantiate()
 	board.position = Vector2.ZERO
@@ -328,6 +392,14 @@ func _ready() -> void:
 	fly.set_metrics(_flight_metrics(metrics))
 	add_child(fly)
 
+	# Topmost layer: the hand has to paint over every panel and card.
+	_cursor_layer = Cursor.new()
+	_cursor_layer.host = self
+	_cursor_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cursor_layer.position = Vector2.ZERO
+	_cursor_layer.size = PAGE
+	add_child(_cursor_layer)
+
 	_apply_static_level(0)
 	evaluator = EventEvaluator.new()
 	evaluator.setup(model, _seed, Callable(self, "_on_event"))
@@ -362,8 +434,8 @@ func _ready() -> void:
 	print("[game] ui " + String(ui_summary()))
 	print("[game] " + String(hud.debug_summary()))
 	print("[game] " + String(orders.debug_summary()))
-	print("[game] freeze=%s autoplay=%s clock=%.2f t=%.2f" % [
-		str(_freeze), str(_autoplay), _clock, _t_target,
+	print("[game] freeze=%s autoplay=%s free_mode=%s rec=%s clock=%.2f t=%.2f" % [
+		str(_freeze), str(_autoplay), str(_free_mode), str(_recording), _clock, _t_target,
 	])
 
 
@@ -372,10 +444,12 @@ func _ready() -> void:
 func _parse_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		var text := String(arg)
-		if text == "--autoplay":
+		if text == "--demo" or text == "--autoplay":
 			_autoplay = true
+			_free_mode = false
 		elif text == "--no-autoplay":
 			_autoplay = false
+			_free_mode = true
 		elif text.begins_with("--t="):
 			_freeze = true
 			_t_target = maxf(0.0, float(text.substr(4)))
@@ -385,6 +459,34 @@ func _parse_args() -> void:
 			_seed = int(text.substr(7))
 		elif text == "--allow-placeholders":
 			allow_placeholders = true
+		elif text == "--no-render":
+			_auto_render = false
+		elif text == "--window=native":
+			_preview_window_enabled = false
+		elif text.begins_with("--window="):
+			var parts := text.substr(9).split("x")
+			if parts.size() == 2 and parts[0].is_valid_int() and parts[1].is_valid_int():
+				var want := Vector2i(int(parts[0]), int(parts[1]))
+				if want.x > 0 and want.y > 0:
+					_preview_window = want
+
+
+## Halve the real window for interactive runs. No-op under --headless (tests) and
+## when the caller asked for the native size; never touches the viewport size, so
+## every 1080x1920 coordinate in this screen and in the film stays valid.
+func _fit_preview_window() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if not _preview_window_enabled:
+		print("[game] preview window=native (engine default)")
+		return
+	DisplayServer.window_set_size(_preview_window)
+	var usable := DisplayServer.screen_get_usable_rect()
+	DisplayServer.window_set_position(usable.position + (usable.size - _preview_window) / 2)
+	print("[game] preview window=%dx%d design=%dx%d scale=%.2f screen=%dx%d" % [
+		_preview_window.x, _preview_window.y, int(PAGE.x), int(PAGE.y),
+		float(_preview_window.x) / PAGE.x, usable.size.x, usable.size.y,
+	])
 
 
 # ------------------------------------------------------------------- view sync
@@ -713,16 +815,19 @@ func _mission_hue(order_id: String) -> String:
 func _process(delta: float) -> void:
 	if _freeze or evaluator == null:
 		return
-	if not _autoplay:
-		board.set_clock(_clock)
-		fly.set_clock(_clock)
-		return
+	# The clock always runs: free mode needs it for the toast/fly animation, and the
+	# sim needs a real `at` for cooldowns. Only `--demo` drains the timeline.
 	_clock += delta
-	while evaluator.cursor < evaluator.events.size():
-		var ev: Dictionary = evaluator.events[evaluator.cursor]
-		if float(ev.get("at", 0.0)) > _clock:
-			break
-		_note_sim_result(evaluator.step())
+	if _autoplay:
+		while evaluator.cursor < evaluator.events.size():
+			var ev: Dictionary = evaluator.events[evaluator.cursor]
+			if float(ev.get("at", 0.0)) > _clock:
+				break
+			_note_sim_result(evaluator.step())
+	if _recording:
+		_sample_cursor()
+	if _cursor_layer != null:
+		_cursor_layer.queue_redraw()
 	board.set_clock(_clock)
 	fly.set_clock(_clock)
 
@@ -764,9 +869,283 @@ func _locale_text(key: String) -> String:
 
 
 func _input(event: InputEvent) -> void:
-	if event is InputEventKey and (event as InputEventKey).pressed:
-		if (event as InputEventKey).keycode == KEY_ESCAPE:
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if not key_event.pressed or key_event.echo:
+			return
+		if key_event.keycode == KEY_ESCAPE:
 			get_tree().quit(0)
+			return
+		if key_event.keycode == KEY_R and _free_mode and not _freeze:
+			# R = record: first press restarts the level clean and starts a take,
+			# second press writes output/take_<stamp>.json for render.sh.
+			if _recording:
+				_stop_recording()
+			else:
+				_start_recording()
+			return
+	# High-rate motion events (typically 125-1000 Hz) make the recorded path smoother
+	# than a per-frame sample; TakeIo stores time-ordered points, the film interpolates.
+	if event is InputEventMouseMotion and _recording:
+		_sample_cursor()
+	if not _free_mode or _freeze:
+		return
+	if event is InputEventMouseButton:
+		var mouse := event as InputEventMouseButton
+		if mouse.pressed and mouse.button_index == MOUSE_BUTTON_LEFT:
+			_free_click()
+
+
+# ------------------------------------------------------------------ free mode
+
+## One click: board first (tap a generator / select+merge a chip), then an order
+## card (claim it), then "level complete → click to continue". Anything else drops
+## the selection. Every click is logged for the take (so the film shows the hand
+## pressing even when the click changed nothing); only accepted clicks become sim
+## events, all through the same `sim.apply` the replay uses.
+func _free_click() -> void:
+	if evaluator == null or evaluator.sim == null:
+		return
+	_free_click_at(get_global_mouse_position())
+
+
+## Same click, at an explicit page-space point. Split out so a headless probe can
+## exercise the real click path (the window mouse position is not available there).
+## Returns {"kind", "ok", "cell"} — the entry written to the take's click log.
+func _free_click_at(point: Vector2) -> Dictionary:
+	if evaluator == null or evaluator.sim == null:
+		return {"kind": "none", "ok": false, "cell": null}
+	_last_click_at = _clock
+	var out := {"kind": "none", "ok": false, "cell": null}
+	var cell := _cell_at(point)
+	if cell.x >= 0:
+		out["cell"] = [cell.x, cell.y]
+		var action: Dictionary = FreeMode.board_click(cell, evaluator.sim, model, _selected)
+		var kind := String(action.get("kind", ""))
+		_selected = action.get("selected", _selected)
+		out["kind"] = kind
+		if kind == FreeMode.ACTION_TAP:
+			out["ok"] = bool(_apply_free("tap", action.get("payload", {})).get("ok", false))
+		elif kind == FreeMode.ACTION_MERGE:
+			out["ok"] = bool(_apply_free("merge", action.get("payload", {})).get("ok", false))
+		elif kind == FreeMode.ACTION_SELECT or kind == FreeMode.ACTION_CLEAR:
+			_sync_from_sim()
+			out["ok"] = true
+		_record_click(point, out)
+		return out
+	var order_id := _order_card_at(point)
+	if not order_id.is_empty():
+		out["kind"] = "order_claim"
+		out["ok"] = bool(_apply_free("order_claim", {"order": order_id}).get("ok", false))
+		_record_click(point, out)
+		return out
+	if bool(evaluator.sim.level_complete_pending):
+		out["kind"] = "level_next"
+		out["ok"] = bool(_apply_free("level_next", {}).get("ok", false))
+		_record_click(point, out)
+		return out
+	if _selected.x >= 0:
+		_selected = Vector2i(-1, -1)
+		_sync_from_sim()
+	_record_click(point, out)
+	return out
+
+
+## Click log entry (position + what it hit + whether the sim accepted it). Recorded
+## for every click while a take is running, not only for accepted ones.
+func _record_click(point: Vector2, out: Dictionary) -> void:
+	if not _recording:
+		return
+	_rec_clicks.append({
+		"t": _rec_offset(),
+		"x": int(round(point.x)),
+		"y": int(round(point.y)),
+		"type": String(out.get("kind", "")),
+		"cell": out.get("cell", null),
+		"ok": bool(out.get("ok", false)),
+	})
+	_sample_cursor(true)
+
+
+## Page-space point -> board cell, or (-1,-1) outside the 983x1263 container. The
+## rule itself lives in free_mode.gd; the screen only supplies BoardView's geometry.
+func _cell_at(point: Vector2) -> Vector2i:
+	if board == null:
+		return Vector2i(-1, -1)
+	return FreeMode.cell_at(point, BoardView.BOARD_ORIGIN, BoardView.BOARD_SIZE,
+			int(BoardView.COLS), int(BoardView.ROWS))
+
+
+## Order id whose card covers `point` (page space), or "". Done cards are skipped:
+## the sim would refuse them anyway and a dead click should not look live.
+func _order_card_at(point: Vector2) -> String:
+	if orders == null:
+		return ""
+	for raw_card in orders.cards:
+		if typeof(raw_card) != TYPE_DICTIONARY:
+			continue
+		var card: Dictionary = raw_card
+		if bool(card.get("done", false)):
+			continue
+		var order_id := String(card.get("id", ""))
+		if order_id.is_empty():
+			continue
+		var rect: Rect2 = orders.card_rect(order_id)
+		if Rect2(rect.position + orders.position, rect.size).has_point(point):
+			return order_id
+	return ""
+
+
+## The only write path for a free-mode click: sim verdict -> views -> optional
+## take record. `at` is take time while recording (0-based) and scene clock
+## otherwise, so a take replays from its own first frame.
+func _apply_free(type: String, payload: Dictionary) -> Dictionary:
+	var sim = evaluator.sim
+	if sim == null:
+		return {"ok": false, "code": "SIM_NO_SIM", "note": "no sim"}
+	var at := _rec_offset() if _recording else _clock
+	var event := {"id": "free_%03d" % _rec_events.size(), "type": type, "at": at,
+			"payload": payload}
+	var result: Dictionary = sim.apply(event)
+	_note_sim_result(result)
+	_sync_from_sim()
+	if _recording:
+		_rec_events.append({"id": String(event["id"]), "at": at, "type": type,
+				"channel": "sim", "payload": payload.duplicate(true)})
+	return result
+
+
+## Cell a click event refers to (kept for callers that only have the payload).
+func _payload_cell(payload: Dictionary) -> Variant:
+	if payload.has("target"):
+		var target := _as_dict(payload.get("target", {}))
+		if target.has("slot"):
+			return target["slot"]
+	if payload.has("to"):
+		return payload["to"]
+	if payload.has("slot"):
+		return payload["slot"]
+	return null
+
+
+# ------------------------------------------------------------------ recording
+
+func _rec_offset() -> float:
+	return maxf(0.0, _clock - _rec_start)
+
+
+func _sample_cursor(force: bool = false) -> void:
+	var point := get_global_mouse_position()
+	if not force and _rec_last.x > -1.0e8 and point.distance_to(_rec_last) < 0.25:
+		return
+	_rec_cursor.append([snappedf(_rec_offset(), 0.001), int(round(point.x)), int(round(point.y))])
+	_rec_last = point
+
+
+func _start_recording() -> void:
+	# A take has to start from the level's pristine state, otherwise replaying it
+	# from frame 0 would begin on a different board than the one that was played.
+	_reset_run()
+	_rec_start = _clock
+	_recording = true
+	_rec_cursor = []
+	_rec_clicks = []
+	_rec_events = []
+	_rec_last = Vector2(-1.0e9, -1.0e9)
+	_sample_cursor(true)
+	board.show_toast("REC", TOAST_SECONDS)
+	print("[game] rec start level=%s seed=%d" % [String(_level_static.get("id", "")), _seed])
+
+
+## Stop = save the take AND start the render, so "play, press R, the film is in
+## output/mov/" is the whole workflow. The render runs in its own headless process
+## (tools/render_take.gd), which waits for the Movie Maker child and then ffmpeg;
+## this window keeps running and the player never waits on a modal dialog.
+func _stop_recording() -> void:
+	_recording = false
+	_sample_cursor(true)
+	var take := TakeIo.build(_seed, TAKE_FPS, _rec_offset(), _rec_cursor, _rec_clicks,
+			_rec_events, SAMPLE_PROJECT)
+	var check: Dictionary = TakeIo.validate(take)
+	if not bool(check.get("ok", false)):
+		print("[game] take invalid: " + str(check.get("errors", [])))
+		return
+	var stamp := Time.get_datetime_string_from_system(false, false)
+	stamp = stamp.replace("-", "").replace(":", "").replace("T", "_")
+	var base := MOV_DIR + "/take_" + stamp
+	_take_path = base + ".take.json"
+	if not TakeIo.save(take, _take_path):
+		print("[game] take save FAILED " + _take_path)
+		return
+	print("[game] take saved %s %s" % [_take_path, TakeIo.summary(take)])
+	if not _auto_render:
+		print("[game] --no-render set; film not started")
+		board.show_toast("take " + _take_path.get_file(), TOAST_SECONDS)
+		return
+	var movie_path := base + ".mp4"
+	var pid := _spawn_render(_take_path, movie_path)
+	if pid > 0:
+		print("[game] rendering -> %s (pid %d)" % [movie_path, pid])
+		print("[game] log -> %s.log" % base)
+		board.show_toast("rendering " + movie_path.get_file(), TOAST_SECONDS)
+	else:
+		print("[game] FAIL cannot spawn the render process; run: bash tools/render.sh --take %s" % _take_path)
+		board.show_toast("render failed: see console", TOAST_SECONDS)
+
+
+## Detached headless child: `godot --headless --script tools/render_take.gd`.
+## Returns the child pid, or 0 when the executable cannot be spawned.
+func _spawn_render(take_path: String, movie_path: String) -> int:
+	var args := PackedStringArray([
+		"--headless",
+		"--path", ProjectSettings.globalize_path("res://"),
+		"--script", "res://tools/render_take.gd",
+		"--",
+		"--take=" + take_path,
+		"--out=" + movie_path,
+	])
+	return OS.create_process(OS.get_executable_path(), args)
+
+
+## Fresh evaluator + board, clock back to 0: what R-recording and the film both
+## assume as frame 0.
+func _reset_run() -> void:
+	_clock = 0.0
+	_selected = Vector2i(-1, -1)
+	evaluator = EventEvaluator.new()
+	evaluator.setup(model, _seed, Callable(self, "_on_event"))
+	evaluator.load_timeline(_as_array(model.project.get("timeline", [])))
+	_sync_from_sim()
+	board.set_clock(_clock)
+	fly.set_clock(_clock)
+
+
+# -------------------------------------------------------------------- cursor
+
+## The 64x64 outline hand is drawn *inside* the window (the OS arrow is hidden), not
+## installed with Input.set_custom_mouse_cursor: that path makes DisplayServer hold a
+## texture RID past RenderingServer shutdown and the engine then reports a leaked
+## resource at quit. Drawing it ourselves also gives the window the same press
+## feedback (0.92 scale for 100 ms) that the film renders, so preview == film.
+## The texture itself still goes through ThemeLoader/AssetGuard (ui_cursor_hand).
+func _setup_cursor() -> void:
+	if theme_loader != null:
+		var loaded = theme_loader.texture_for(CURSOR_ID)
+		if loaded is Texture2D:
+			_cursor_tex = loaded
+	if DisplayServer.get_name() == "headless":
+		return
+	var interactive := _free_mode and not _freeze and _cursor_tex != null
+	if interactive:
+		Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN)
+	print("[game] cursor=%s drawn=%s os_hidden=%s" % [
+		CURSOR_ID, str(_cursor_tex != null), str(interactive),
+	])
+
+
+func _exit_tree() -> void:
+	if DisplayServer.get_name() != "headless":
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
 func debug_summary() -> String:

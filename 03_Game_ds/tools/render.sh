@@ -36,6 +36,8 @@ FRAMES_ARG=""
 OUT="output/render.mp4"
 PROJECT="res://data/sample_project.json"
 THEME=""
+TAKE=""
+NO_CURSOR=0
 KEEP=0
 DETERMINISM=0
 ALLOW_PH=0
@@ -48,6 +50,9 @@ while [ $# -gt 0 ]; do
 		--out=*) OUT="${1#*=}"; shift ;;
 		--project) PROJECT="${2:-}"; shift 2 ;;
 		--project=*) PROJECT="${1#*=}"; shift ;;
+		--take) TAKE="${2:-}"; shift 2 ;;
+		--take=*) TAKE="${1#*=}"; shift ;;
+		--no-cursor) NO_CURSOR=1; shift ;;
 		--theme) THEME="${2:-}"; shift 2 ;;
 		--theme=*) THEME="${1#*=}"; shift ;;
 		--keep-frames) KEEP=1; shift ;;
@@ -83,6 +88,29 @@ PROJECT_FILE="$(project_file "$PROJECT")"
 # ---------------------------------------------------------------- frame plan
 if [ -n "$FRAMES_ARG" ]; then
 	FRAMES="$FRAMES_ARG"
+elif [ -n "$TAKE" ]; then
+	# A take is its own timeline: the film runs to max(last event, recorded duration),
+	# which is what movie_scene's `_end_time` computes. Planning from the project here
+	# used to ask for 1800 frames while the take only had 138, and the frame gate
+	# failed every replay.
+	[ -n "$PY" ] || fail "--take needs python to plan the take length (or pass --frames)"
+	TAKE_FILE="$(project_file "$TAKE")"
+	[ -f "$TAKE_FILE" ] || fail "take file not found: $TAKE_FILE"
+	FRAMES="$("$PY" - "$TAKE_FILE" <<'PYEOF'
+import json, math, sys
+
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+end = float(data.get("duration", 0) or 0)
+for e in data.get("timeline", []) or []:
+    if not isinstance(e, dict):
+        continue
+    at = e.get("at")
+    if isinstance(at, (int, float)):
+        end = max(end, float(at) + float(e.get("duration", 0) or 0))
+fps = float(data.get("fps", 60) or 60)
+print(int(math.ceil(end * fps - 1e-6)))
+PYEOF
+)"
 else
 	[ -n "$PY" ] || fail "--frames not given and python is unavailable to plan the timeline"
 	FRAMES="$("$PY" - "$PROJECT_FILE" <<'PYEOF'
@@ -166,6 +194,8 @@ echo "[render] project=$PROJECT scene=$SCENE frames=$FRAMES fps=$FPS out=$OUT de
 MOVIE_EXTRA=("--frames=$FRAMES" "--project=$PROJECT")
 [ "$ALLOW_PH" -eq 1 ] && MOVIE_EXTRA+=("--allow-placeholders")
 [ -n "$THEME" ] && MOVIE_EXTRA+=("--theme=$THEME")
+[ -n "$TAKE" ] && MOVIE_EXTRA+=("--take=$TAKE")
+[ "$NO_CURSOR" -eq 1 ] && MOVIE_EXTRA+=("--no-cursor")
 
 take() { # take <avi> <log>
 	"$GODOT_BIN" --path . --resolution "${WIDTH}x${HEIGHT}" --write-movie "$1" \

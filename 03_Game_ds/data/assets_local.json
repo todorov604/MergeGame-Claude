@@ -111,6 +111,19 @@
       "pending_manifest": true,
       "supersedes": "board_frame",
       "supersedes_note": "快照把 board_frame 登记为 PLACEHOLDER（PIL 生成）；§20.5 容器必须在 strict 渲染里出现，所以本地另立 PRODUCTION 记录指向同一张 PNG。这是提交给 00_design 的 usage 升级建议，不是本地越权改快照。"
+    },
+    "ui_cursor_hand": {
+      "usage": "PRODUCTION",
+      "license": "CC0 1.0（Kenney Cursor Pack）",
+      "category": "界面",
+      "use": "鼠标指针（自由模式试玩窗口 + 成片光标 overlay）",
+      "file_name": "cursor_hand.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/cursor_hand.png",
+      "target_size": "64×64",
+      "actual_size": "64×64",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "已登记 00_design/resource_manifest.json v8（2026-11-05，id 同名，CC0）；本工程快照仍是 v7/180 条，M2 重建快照后本行可删"
     }
   }
 }

@@ -27,6 +27,7 @@ const AssetGuard = preload("res://src/assets/asset_guard.gd")
 const RenderPlan = preload("res://src/render/render_plan.gd")
 const RenderManifest = preload("res://src/render/render_manifest.gd")
 const ThemeLoader = preload("res://src/theme/theme_loader.gd")
+const TakeIo = preload("res://src/core/take_io.gd")
 
 const FPS := 60
 const MANIFEST_INDEX := "res://data/manifest_index.json"
@@ -37,6 +38,12 @@ const FONT_ZH := "res://assets/fonts/font_zh.otf"
 const FONT_EN := "res://assets/fonts/font_en.ttf"
 const FRAME_ID := "board_frame"
 const FRAME_TEXTURE := "res://assets/ui/board_frame.png"
+## Free-mode cursor overlay: same 64x64 CC0 hand the live window uses, same hotspot.
+## The film only draws it when the take carries a cursor track (`--take=<file>`).
+const CURSOR_ID := "ui_cursor_hand"
+const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
+const CURSOR_HOTSPOT := Vector2(10.0, 8.0)
+const CURSOR_SIZE := 64.0
 
 ## §20.5 棋盘.psd structure (1080x1920 canvas). Every number below is the PSD's own
 ## geometry, not a tuned guess: the two background layers, the 983x1263 board
@@ -134,6 +141,13 @@ var theme_name := ""
 ## governance red line gets an end-to-end check instead of only a unit test. Any id the
 ## guard refuses works here; the v7 snapshot has zero REFERENCE_ONLY records.
 var probe_refs: Array = []
+## `--take=<file>`: replay a free-mode recording (cursor path + click log + the sim
+## events the player produced). Empty means a timeline film, exactly as before.
+var take_path := ""
+## `--no-cursor`: render a clean take (no hand overlay) from the same recording.
+var no_cursor := false
+var _take: Dictionary = {}
+var _cursor_tex: Texture2D = null
 
 var _model = null
 var _evaluator = null
@@ -196,14 +210,23 @@ func _ready() -> void:
 		_fail("project load failed: " + String(model.load_error))
 		return
 	_model = model
+	if not take_path.is_empty() and not _load_take():
+		return
 
 	_evaluator = EventEvaluator.new()
 	_evaluator.setup(_model, seed_value, self)
-	var loaded: Dictionary = _evaluator.load_timeline(_model.project.get("timeline", []))
+	var timeline: Array = _model.project.get("timeline", [])
+	if not _take.is_empty():
+		timeline = _take.get("timeline", [])
+	var loaded: Dictionary = _evaluator.load_timeline(timeline)
 	if not bool(loaded.get("ok", false)):
 		_fail("timeline resolve failed: " + str(loaded.get("errors", [])))
 		return
 	_end_time = float(loaded.get("end_time", 0.0))
+	if not _take.is_empty():
+		# The recording may run past the last click (the hand keeps moving, or the
+		# player pauses before pressing R again): the film covers the whole take.
+		_end_time = maxf(_end_time, float(_take.get("duration", 0.0)))
 
 	var planned := RenderPlan.frame_count(_end_time, FPS)
 	if frame_cap > 0:
@@ -240,6 +263,8 @@ func _ready() -> void:
 	# §20.5: every layout texture is resolved here, once, before the first frame.
 	# _draw() only reads the cache, so no frame ever touches the filesystem.
 	_resolve_ui_art()
+	if not _take.is_empty() and not no_cursor:
+		_cursor_tex = _load_cursor()
 
 	var refs: Array = ["font_en", "font_zh"]
 	# §M1: the manifest must name the icon set the film drew with, so a theme swap
@@ -252,6 +277,8 @@ func _ready() -> void:
 	# block list and the film falls back to the procedural panel instead).
 	for ui_id in _ui_ids:
 		refs.append(String(ui_id))
+	if _cursor_tex != null:
+		refs.append(CURSOR_ID)
 	if allow_placeholders:
 		refs.append(FRAME_ID)
 	for extra in probe_refs:
@@ -303,8 +330,59 @@ func _parse_args() -> void:
 			theme_name = arg.substr(8)
 		elif arg == "--allow-placeholders":
 			allow_placeholders = true
+		elif arg == "--no-cursor":
+			no_cursor = true
+		elif arg.begins_with("--take="):
+			take_path = arg.substr(7)
 		elif arg.begins_with("--probe-ref="):
 			probe_refs.append(arg.substr(12))
+
+
+## `--take=<file>`: the recording is the film's script (timeline + cursor path).
+## Validated before a single frame, so a broken take fails loudly instead of
+## rendering a film with a frozen or jumping hand.
+func _load_take() -> bool:
+	var take: Dictionary = TakeIo.load_file(take_path)
+	if take.is_empty():
+		_fail("take not readable: " + take_path)
+		return false
+	var check: Dictionary = TakeIo.validate(take)
+	if not bool(check.get("ok", false)):
+		_fail("take invalid: " + str(check.get("errors", [])))
+		return false
+	_take = take
+	# Recorded events are sim events; older takes may carry no `channel` at all.
+	# Normalising here keeps those takes renderable instead of silently refusing
+	# every event (see TakeIo.normalize_timeline).
+	_take["timeline"] = TakeIo.normalize_timeline(take.get("timeline", []))
+	seed_value = int(take.get("seed", seed_value))
+	print("[movie] take " + take_path + " " + TakeIo.summary(take))
+	return true
+
+
+## The film's hand is the same registered asset the window uses (ui_cursor_hand,
+## CC0). ThemeLoader goes through AssetGuard, so a missing registration blocks the
+## render instead of drawing an invisible cursor.
+func _load_cursor() -> Texture2D:
+	if _theme_loader != null:
+		var loaded = _theme_loader.texture_for(CURSOR_ID)
+		if loaded is Texture2D:
+			return loaded
+	return _load_font_texture(CURSOR_TEXTURE)
+
+
+func _draw_cursor() -> void:
+	if no_cursor or _take.is_empty() or _cursor_tex == null:
+		return
+	var pos: Dictionary = TakeIo.cursor_at(_take, _t)
+	if not bool(pos.get("visible", false)):
+		return
+	var press := 1.0
+	if not TakeIo.click_at(_take, _t).is_empty():
+		press = TakeIo.PRESS_SCALE
+	var size := Vector2(CURSOR_SIZE, CURSOR_SIZE) * press
+	var origin := Vector2(float(pos["x"]), float(pos["y"])) - CURSOR_HOTSPOT * press
+	draw_texture_rect(_cursor_tex, Rect2(origin, size), false)
 
 
 func _load_font(path: String) -> Font:
@@ -463,9 +541,16 @@ func _advance_to(t: float) -> void:
 			break
 		var r: Dictionary = _evaluator.step()
 		var channel := String(r.get("channel", ""))
+		# Any refused event is a broken take, not just a refused sim one: a timeline
+		# whose `channel` is missing used to fail EV_CHANNEL here while the film kept
+		# rendering the cursor over a frozen board (the "merge did nothing" dud).
+		if not bool(r.get("ok", false)):
+			_rejected.append({
+				"id": String(r.get("id", "")),
+				"channel": channel,
+				"code": String(r.get("code", "")),
+			})
 		if channel == "sim":
-			if not bool(r.get("ok", false)):
-				_rejected.append({"id": String(r.get("id", "")), "code": String(r.get("code", ""))})
 			# §7 item 4: the film shows the same prompt the live screen shows, either
 			# as an explicit board_full marker or as the sim's verdict on some event.
 			if String(r.get("code", "")) == "SIM_BOARD_FULL" \
@@ -490,6 +575,9 @@ func _finish() -> void:
 	print("[movie] done frames=%d t=%.3f level=%s cells=%d obstacles=%d rejected=%d" % [
 		_frame, _t, level_id, cells, obs, _rejected.size(),
 	])
+	if not _take.is_empty():
+		print("[movie] take " + TakeIo.summary(_take) + " cursor="
+				+ ("off" if no_cursor else "on"))
 	# A take the sim refused is not a film. Before this gate the log could say
 	# "rejected=8" and render.sh still reported ok=1, so a timeline that only
 	# looked valid shipped as a silently incomplete video.
@@ -540,6 +628,7 @@ func _draw() -> void:
 	_draw_bottom_bar(_snap)
 	_draw_view_layer()
 	_draw_toast()
+	_draw_cursor()
 
 
 ## Bottom band: metrics.band_height is the one theme knob with no other consumer, so

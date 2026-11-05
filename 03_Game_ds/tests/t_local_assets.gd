@@ -39,6 +39,7 @@ const LOCAL_IDS := [
 	"ui_board_frame",
 	"ui_btn_plus",
 	"ui_button_shop",
+	"ui_cursor_hand",
 	"ui_icon_finish",
 	"ui_items_bar",
 	"ui_level_badge_bg",
@@ -51,6 +52,7 @@ const LOCAL_FILES := {
 	"ui_board_frame": "board_frame.png",
 	"ui_btn_plus": "main_btn_plussign.png",
 	"ui_button_shop": "common_main_btn_shop.png",
+	"ui_cursor_hand": "cursor_hand.png",
 	"ui_icon_finish": "main_icon_finish.png",
 	"ui_items_bar": "items.png",
 	"ui_level_badge_bg": "main_bar_level_bg.png",
@@ -93,6 +95,7 @@ const EXPECTED_SIZE := {
 	"ui_icon_finish": Vector2i(52, 52),
 	"ui_btn_plus": Vector2i(48, 48),
 	"ui_button_shop": Vector2i(142, 132),
+	"ui_cursor_hand": Vector2i(64, 64),
 	"ui_level_badge_bg": Vector2i(118, 104),
 }
 
@@ -151,7 +154,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 189, "index = 180 snapshot records + 9 local records")
+	t.eq(guard.index.size(), 190, "index = 180 snapshot records + 10 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:

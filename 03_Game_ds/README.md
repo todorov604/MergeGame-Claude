@@ -43,9 +43,9 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 ```
 03_Game_ds/
 ├─ project.godot           1080×1920、stretch=canvas_items/keep；main_scene=game_screen
-├─ assets/                 27 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER）+ PROVENANCE.md
+├─ assets/                 48 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER + 21 张界面切图）+ PROVENANCE.md
 │  ├─ chips/               icon_10002101..110（Ca Lv.1–10）、icon_10002201..110（Cb Lv.1–10）整字节复制
-│  ├─ fonts/ · ui/         字体与 5 个 PLACEHOLDER
+│  ├─ fonts/ · ui/         2 个字体；ui/ 共 26 张（5 个 PLACEHOLDER + 21 张 §20.5 界面切图）
 │  └─ PROVENANCE.md        出处/许可/尺寸/fit/sha256（含 M1 20 张表）
 ├─ data/
 │  ├─ sample_project.json  schema v2 样例：2 关、7×9、21 条事件、30s
@@ -60,14 +60,14 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 │  ├─ editor/      project_store / undo_stack / timeline_editor
 │  ├─ render/      movie_scene / render_plan / render_manifest
 │  └─ tools/       CLI、manifest 快照构建
-├─ tests/          19 个套件（自动发现）+ 25 条反例夹具
+├─ tests/          20 个套件（自动发现）+ 25 条反例夹具
 ├─ tools/          accept.sh / render.sh / framemd5_compare.sh / gen_fixtures.py / shot_*.gd
 └─ docs/           AUDIT-S1.md、REVIEW-CORE.md、PERF-BASELINE.md
 ```
 
 ## 3. 资源口径（M1 / manifest v7）
 
-`00_design/resource_manifest.json` 是唯一事实源（**180 条**）：`PRODUCTION 155` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0`。`01_icon` 公司自研素材已全部登记为 `PRODUCTION`（license `公司自有/自研`），M0 的“原游戏切图一律不打包”红线因此变成**按需复制**：本工程只复制了 27 个载荷文件，其余 153 条记录一张都没进工程。
+`00_design/resource_manifest.json` 是唯一事实源（**180 条**）：`PRODUCTION 155` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0`。`01_icon` 公司自研素材已全部登记为 `PRODUCTION`（license `公司自有/自研`），M0 的“原游戏切图一律不打包”红线因此变成**按需复制**：本工程只复制了 **48 个载荷文件**（覆盖 42 条快照记录 + 8 个仅本地登记的文件；`in_project=42`），其余 **138 条**快照记录（118 条 `PRODUCTION` + 15 条 `PLACEHOLDER` + 5 条 `TODO`）一张都没进工程。
 
 - `data/manifest_index.json` 由 `src/tools/build_manifest_index.gd` 生成，只保留 id/usage/license/文件名/尺寸，**不带绝对路径**，所以搬移后仍能执法。顶层另有 8 条 `aliases`：源 manifest 把 Ca/Cb 的 7–10 级按原始文件名登记为 `icon_10002107..110` / `icon_10002207..210`，别名把它们对齐成统一的 `chip_clean_*_lv07..10`（`AssetGuard` 的每个方法都识别别名，`entry()` 仍返回原记录）。
 - 两层判定分开：`check_ref(id)` 看治理层（usage + `file_present`，即源文件是否在清单里存在），`local_path(id)` 看存在层（`res://assets/{ui,chips,fonts}/` 下是否真有这个副本）。**未复制**的 `PRODUCTION` id 会通过前者、返回 `""` 给后者——所以调色板之外的 8 条链图标“写进主题就能用”，但必须先复制。
@@ -98,8 +98,8 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | 时间轴：锚点、同刻排序、预览/单步/渲染一致 | ✅ | `t_event_model` 排序用例 + 编辑器单步 + 出片共用求值器 |
 | 资源守卫：`REFERENCE_ONLY`/`TODO` 无法出片；`PLACEHOLDER` 需显式 | ✅ | 25 条反例逐条命中 + `t_guard`（M1 快照已无 `REFERENCE_ONLY` 记录，该分支用注入合成记录的单测保住，`accept.sh` 步骤 7 另用未知 id 做端到端拒绝） |
 | 校验：缺图/越界/不可达/usage 违规在出片前阻断 | ✅ | `output/validation_report.json`、`accept.sh` 步骤 2–3、8（`payload_empty` / `f1_a` / `reject_sim`） |
-| 两次出片 framemd5 一致 | ✅ | `accept.sh` 步骤 7：240 帧 `same=YES`，`0326f525…afcd9`（223 个唯一帧）；M1 样片 300 帧 `same=YES`，`37131e75…2f5`（default）/ `fa97320c…5a`（pet_shop） |
-| 换 1 套主题 ≤10 分钟、不改代码 | ✅ | `accept.sh` 步骤 9：60 帧 default vs pet_shop，framemd5 `fb72776dd5b7` ≠ `633b46b48955`，sha256 也不同；300 帧样片同样不同（见下表） |
+| 两次出片 framemd5 一致 | ✅ | `accept.sh` 步骤 7：240 帧 `same=YES`，`b42fff51…c3d68f`（195 个唯一帧）；M1 样片 300 帧 `same=YES`，`e2c7f9ba…956189ce`（default）/ `bb92abd5…cb15e2fc`（pet_shop） |
+| 换 1 套主题 ≤10 分钟、不改代码 | ✅ | `accept.sh` 步骤 9：60 帧 default vs pet_shop，framemd5 `f81c1cb311d6` ≠ `65a941acded1`，sha256 `ab76cc21a5d9` ≠ `df39b1b1c0c4`；300 帧样片同样不同（见下表） |
 | **M1 真实图标**：chip 不是占位 | ✅ | 棋盘截图 `[shot] chip_icons resolved=4 of 6 items`、游戏页 `3 of 5`、成片抽帧 `output/m1_frame_t2.6.png` 可见骨头/三文鱼卷图标；pet_shop 同命令 `resolved=0 of 6`（对照） |
 | **M1 资产配置**：一套资产 = 数据，不改代码 | ✅ | `manifest_index.json` 180 条 + `assets/chips/` 20 张 + `themes/default/theme.json` 的 `chip_icons`；见 §5.1 |
 | **M1 画面贴近 棋盘.psd（§20.5）** | ✅ | 棋盘容器 983×1263 @ (48,466)、7×9 格 140.43×140.33 精确铺满、背景 `main_bg_01_bottom/top`、顶栏 money、订单角色 part1/part2、底部 items 693×183 @ (193,1731)、左下退出/右下背包、冰/泡/网/锁切图；并排对照见 §5.2 |
@@ -137,9 +137,26 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 并排对照（左＝`board_full_preview.jpg`，右＝本工程截图）：
 `output/m1_side_by_side_board.png`、`output/m1_side_by_side_game.png`。
 
-**与参考图仍存在的差异（已知，见 §6）**：格底多一圈"lip"边、棋子没有皇冠/角标态、生成器仍是程序化闪电方块（PSD 的箱堆图未导出）、`box24.png` 只作参考未使用。
+**与参考图仍存在的差异（已知，见 §6.1）**：格底多一圈"lip"边、棋子没有皇冠/角标态、生成器仍是程序化闪电方块（PSD 的箱堆图未导出）、`box24.png` 只作参考未使用。
 
-**待补登 00_design manifest（9 条，`pending_manifest: true`）**：`ui_bg_top`、`ui_level_badge_bg`、`ui_icon_finish`、`ui_btn_plus`、`ui_button_shop`、`char_part1`、`char_part2`、`ui_items_bar`、`ui_board_frame`（最后一条同时是对 `board_frame` 的 usage 升级建议：v7 里它是 PLACEHOLDER，§20.5 要求容器在 strict 模式也可见，故本地以 `ui_board_frame` 指向同一文件、usage=PRODUCTION，并在记录里写了 `supersedes: board_frame`）。
+#### 待补登 00_design manifest 的本地素材（9 条，`data/assets_local.json`，`pending_manifest: true`）
+
+由 Claude 收口会话统一补登 v0.22；**本 lane 不改 `00_design`**。全部 `usage=PRODUCTION`、`license=公司自有/自研`。
+
+| 本地 id | 工程文件（`assets/ui/`） | 源路径 | 尺寸 | fit |
+|---|---|---|---|---|
+| `ui_bg_top` | `main_bg_01_top.png` | `01_icon/HotelManor_icon/界面切图/main_bg_01_top.png` | 1080×400 | exact |
+| `ui_level_badge_bg` | `main_bar_level_bg.png` | `01_icon/HotelManor_icon/界面切图/main_bar_level_bg.png` | 118×104 | exact |
+| `ui_icon_finish` | `main_icon_finish.png` | `01_icon/HotelManor_icon/界面切图/main_icon_finish.png` | 52×52 | exact |
+| `ui_btn_plus` | `main_btn_plussign.png` | `01_icon/HotelManor_icon/界面切图/main_btn_plussign.png` | 48×48 | exact |
+| `ui_button_shop` | `common_main_btn_shop.png` | `01_icon/HotelManor_icon/界面切图/common_main_btn_shop.png` | 142×132 | exact |
+| `char_part1` | `part1.png` | `00_design/images/psd_slices/part1.png` | 373×370 | exact |
+| `char_part2` | `part2.png` | `00_design/images/psd_slices/part2.png` | 373×524 | exact |
+| `ui_items_bar` | `items.png` | `00_design/images/psd_slices/items.png` | 693×183 | exact |
+| `ui_board_frame` | `board_frame.png` | `01_icon/HotelManor_icon/剩余图标/board_frame.png` | 983×1263 | exact |
+
+> `ui_board_frame` 同时是对 `board_frame` 的 **usage 升级建议**：v7 里 `board_frame` 是 `PLACEHOLDER`（PIL 生成），§20.5 要求容器在 strict 模式也可见，故本地以 `ui_board_frame` 指向同一文件、`usage=PRODUCTION`，并在记录里写了 `supersedes: board_frame`。补登时建议直接升级 `board_frame` 的 usage，或在 v0.22 并档。
+> 另：`ui_icon_coin`、`ui_icon_energy` **无需补登**——它们在 v7 快照里已是 `PRODUCTION`（`file_present=true`），只是 `in_project=false`（未复制/未映射）；需要时复制进 `assets/ui/` 并在主题 `icons.ui` 映射即可。真正缺登记的只有宝石图标（`icon_90000003` / `ui_icon_gem`，见 §6.1 D5）。
 
 ## 6. 已知限制 / 与规格文字的偏差
 
@@ -156,6 +173,26 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 11. **只复制了两条链**：`assets/chips/` 只有 Ca/Cb 各 10 级；另外 8 条链（80 张）在快照里是 `PRODUCTION`，写进 `chip_icons` 即可用，但要先把文件复制进 `assets/chips/` 并登记 `PROVENANCE.md`——`local_path()` 只认工程内副本。
 12. **图标无底色**：真实 chip 直接画透明 PNG（不铺 entity hue 底色块），主题若需要彩色底板得在主题层另做；程序化路径（未映射时）像素与 M0 一致。
 
+### 6.1 M1 视觉已知差异（对照 `board_full_preview.jpg`，**不阻塞 M1**）
+
+来源：`10_report/DS03/M1实施复核-1105.md` §7.2（D 编号沿用该报告）。几何/布局已按 §20.5 精确落位（见 §5.2），下表全部是**美术/内容层**差异，不影响 tests / strict / accept / 出片确定性。
+
+| # | 差异 | 参考图 | 本工程 | 处置 |
+|---|---|---|---|---|
+| D1 | 格底"lip"边 | 更平的浅蓝格底，格间缝隙细 | 圆角格 + 较粗浅蓝外环（lip） | 已知，未修（§6 第 4 条） |
+| D2 | 生成器美术 | 3D 箱堆 + `x10` + `Lv.22` + 锁 | 程序化蓝色方块 + 闪电 + `x9` | 已知，PSD 箱堆未导出 |
+| D3 | 安全箱 | 灰色 3D 袋 + 猫图标 + 蛛网 | 灰色圆角块 + 文本 `Safe` | 已知，程序化兜底 |
+| D4 | 冻结组 / 区域遮罩 / 存储 / 特殊格角标 | 4 格冰、2×3 多格锁、存储角标、皇冠/满级角标 | 单格冰 + `19:28`；无多格遮罩/存储/角标 | 已知（`冻结.png`/`区域遮罩1.png`/`棋盘特殊格子.png`/`存储.png` 未复制） |
+| **D5** | **游戏页顶栏货币图标**（复核 P2-4） | 闪电/金币/宝石图标 + 加号 | 游戏页预览为**空白胶囊 + 数字**；**成片**由 `src/render/movie_scene.gd` 的 `_draw_topbar()` 画程序化闪电/金币/宝石图标，故预览与成片不一致 | 已知，不阻塞；修法：把 `movie_scene` 的 `_coin/_gem/_star` 画法复用到 `src/view/game_screen.gd` 的 `Chrome._draw_topbar()`（M2） |
+| **D6** | **左下退出按钮无箭头**（复核 P2-5） | 蓝色箭头按钮 | 空白五边形：`data/themes/default/theme.json` 的 `exit` 映射到 `ui_button_primary`（文件 `main_btn1.png`）；参考图的 `main_icon_exit.png` 存在于 `01_icon/HotelManor_icon/界面切图/`，但既不在 180 条快照、也不在 `assets_local.json` | 已知，不阻塞；修法：复制并登记 `main_icon_exit.png` 后在主题 `icons.exit` 指向它（M2） |
+| D7 | 订单区内容 | SALE/NEW 标签、罐子红点 3、两张订单卡、物品缩略图、资源徽章 | 单张订单卡（数据只有 1 单）、DONE 绿条、无 SALE/NEW/罐子 | 数据/内容级；布局槽位一致 |
+| **D8** | **底栏文案/信息图标** | `Items name Lv.3` + 信息图标 | `LEVEL 1 / level_1` + 白色胶囊底，无信息图标（文本为程序化数据） | 已知，不阻塞（本轮新登记） |
+| D9 | 背景台面起点 | 米色台面自 y≈386 开始 | 米色台面自 y≈400 开始（`main_bg_01_top` 覆盖 0–400） | 轻微 14px 差；蓝区起点两者均约 y=454 |
+| **D10** | **静态棋盘截图带调试层**（复核 P2-6） | 无 | `output/board_1080x1920.png` / `m1_side_by_side_board.png` 右侧含 `LEVEL 1 / level_1` 与 `CHIP/GENERATOR/...` 图例（`src/view/board_view.gd` 的 `show_debug_labels` 默认 true；`game_screen.gd` chrome 模式已关闭） | 已知；读图时忽略该图层，或给 `tools/shot_board.gd` 加 `--no-debug-labels`（M2） |
+| D11 | chip 本身的美术 | 三文鱼/肉/奶等 | 骨头/三文鱼卷/饼干 | **任务明确允许**，不视为偏差 |
+
+> 复核报告同时引用：P2-1（README 旧数字）、P2-2（反例 26→25）、P2-3（货币图标"未登记"措辞）已在本轮文档收口中修正；P2-7（9 条本地登记）见 §5.2 清单；P2-8 已由本表归并关闭。
+
 ### M0 已知限制（收口登记）
 
 以下为 M0 修复复核 `10_report/DS03/M0修复复核-1104.md` 确认、本轮不修的 P2 级残留：**不阻塞 M0 交付，列入 M1 待办**。同日 `10_report/CC02/M0修复复核-1104.md` 属 `02_Game` lane 的复核，无 03 未修项（其 P2-3 是同名不同项），不在本表登记。
@@ -166,8 +203,8 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | NEW-1 | P2 | 订单**多件需求**与生成器**共享 `charges`** 未做联合容量扣减：`src/validate/rules_levels.gd:461-467` 逐条查 bucket 计数但**不扣减**，`:348-366` 把同一 `charges` 池对每个 `(chain, level)` 产出各计满额 → validator 假绿 | 出片阶段由 `tools/render.sh:180` 的 `TAKE_REFUSAL_RE`（`SCRIPT ERROR` / `[movie] rejected ` / `rejected=N>0`）拒绝该 take 兜底，不会交付坏片；只跑 strict 不出片的 CI 会漏过 |
 | NEW-2 | P2 | `outputs[].level` **无校验也无诊断**：`src/validate/rules_levels.gd:283-290` 对非整数、越界只静默 `continue`，不产生 error/warning；只有 `rareOutputs.level` 有 `GEN_RARE_LEVEL`（`:212-219`） | sim 侧 `src/core/sim.gd:330` 用 `clampi(level, 1, _level_cap(entity))` 夹取，声明的产出等级可能被夹到实体上限后实际不可达（订单随之不可达） |
 
-- 三项均属**校验器过松边界 / 表现层覆盖面**：不产生坏成片，也不改变本轮 25 条反例与 1347 checks 的结论；最小复现与修法建议见 `10_report/DS03/M0修复复核-1104.md`（P2-3 见 §3，NEW-1/NEW-2 见 §4）。
-- 同一报告里的文档漂移 **NEW-DOC-1**（`tests/` 套件数 15 → 19）已随 §2 目录树修正**关闭**，不再登记。
+- 三项均属**校验器过松边界 / 表现层覆盖面**：不产生坏成片，也不改变本轮 25 条反例与 1681 checks 的结论；最小复现与修法建议见 `10_report/DS03/M0修复复核-1104.md`（P2-3 见 §3，NEW-1/NEW-2 见 §4）。
+- 同一报告里的文档漂移 **NEW-DOC-1**（`tests/` 套件数 15 → 19，M1 又增至 20）已随 §2 目录树修正**关闭**，不再登记。
 - `data/manifest_index.json` 已在 M1 按 v7 manifest **重建为 180 条**（`PRODUCTION 155` / `PLACEHOLDER 20` / `TODO 5` / `REFERENCE_ONLY 0` + 8 条别名，`snapshot_date` 由生成器写入当天）；详见 `10_report/DS03/M1实施报告-1105.md`。
 
 ## 7. 证据文件
@@ -175,12 +212,12 @@ bash tools/render.sh --frames 120 --determinism   # 2s 双次出片 + framemd5 �
 | 文件 | 内容 |
 |---|---|
 | `output/accept.log` | 一键验收 9 步全量日志（ALL CHECKS PASS） |
-| `output/tests.log` | 19 套件 / 1347 checks |
-| `output/validation_report.json` | 样例工程校验报告（ok=true, 0 error, 0 warning, asset_refs=20） |
+| `output/tests.log` | 20 套件 / 1681 checks |
+| `output/validation_report.json` | 样例工程校验报告（ok=true, 0 error, 0 warning, asset_refs=41） |
 | `output/board_1080x1920.png` | 静态棋盘（7×9、4 种障碍、选中、完成）+ 真实 chip 图标（resolved 4/6） |
 | `output/game_1080x1920.png` · `orders_panel.png` | 主游戏页（HUD+订单+棋盘，resolved 3/5）与订单卡特写 |
 | `output/game_level2.png` · `game_levelup_banner.png` · `game_theme_pet_shop.png` | 第 2 关 / 过关横幅 / 换主题同帧 |
-| `output/m1_icons_default.mp4` · `m1_icons_default.manifest.json` | M1 样片：300 帧（5s），default 主题带真实图标；manifest `assets=22`（2 字体 + 20 chip）`blocked=0` |
+| `output/m1_icons_default.mp4` · `m1_icons_default.manifest.json` | M1 样片：300 帧（5s），default 主题带真实图标；manifest `assets=43`（2 字体 + 20 chip + 21 界面切图）`blocked=0` |
 | `output/m1_icons_pet.mp4` · `m1_icons_pet.manifest.json` | 同一时间轴换 `themes/pet_shop`：`assets=2`（chip 走程序化），framemd5 与 default 不同 |
 | `output/m1_frame_t2.6.png` · `m1_frame_pet_t2.6.png` | 两支样片同时刻抽帧，肉眼对照图标/配色 |
 | `output/render.mp4` · `render_manifest.json` | 全片 30s / 1800 帧 / 单视频流成片 + 与之绑定的资源清单（frames/out/sha256） |

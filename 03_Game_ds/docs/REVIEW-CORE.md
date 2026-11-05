@@ -54,6 +54,6 @@
 ```bash
 G="/e/Program Files/Godot/Godot_v4.7.2.exe"
 "$G" --headless --path . --script res://tests/run_tests.gd -- --suite res://tests/t_sim_defects.gd
-"$G" --headless --path . --script res://tests/run_tests.gd     # 1134 checks
+"$G" --headless --path . --script res://tests/run_tests.gd     # 1681 checks（M1：20 套件）
 bash tools/accept.sh                                          # ALL CHECKS PASS
 ```

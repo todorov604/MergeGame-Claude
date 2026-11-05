@@ -1,0 +1,2 @@
+# Godot 导入元数据统一 LF，避免 core.autocrlf 造成无内容 diff（M1 复核 P1-1）
+*.import text eol=lf

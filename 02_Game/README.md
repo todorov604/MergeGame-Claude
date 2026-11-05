@@ -22,8 +22,8 @@ godot --headless --path 02_Game -s res://tools/simulate.gd         # 确定性�
 
 ## 自包含 / 免导入
 
-- 本目录可单独复制运行，不依赖同级 `00_design`：manifest 快照内嵌在 `data/manifest_index.json`（M1 起为 **180 条**），测试与校验读取该快照（`simulate` 走 SimRunner，不依赖 manifest）。
-- 测试 / 校验 / 模拟**不需要先执行 `--import`**。无 `.godot` 导入缓存时，资源加载回退为运行时解码（纹理 `Image.load_from_file` + `ImageTexture`，字体 `FontFile.load_dynamic_font`）；有缓存时优先使用导入资源，保持出片与既有 `framemd5` 基线一致。
+- 本目录可单独复制运行，不依赖同级 `00_design`：manifest 快照内嵌在 `data/manifest_index.json`（M1 起为 **180 条**，对应源 manifest v7；源 manifest 已于 M1 收口补登为 v8/191 条，本工程快照待 M2 重建），测试与校验读取该快照（`simulate` 走 SimRunner，不依赖 manifest）。
+- 测试 / 校验 / 模拟**不需要先执行 `--import`**。无 `.godot` 导入缓存时，资源加载回退为运行时解码（纹理 `Image.load_from_file` + `ImageTexture`，字体 `FontFile.load_dynamic_font`）；有缓存时优先使用导入资源。**注意：出片 `framemd5` 依赖导入缓存态**，同一 HEAD 有三种稳定 hash，见「出片」下的「framemd5 与导入缓存态（P1-2）」。
 - 若手动执行 `--import`，新增的 `*.uid` 已被 `.gitignore` 忽略；该命令不再是验收前置。M1 新增的棋子/UI 贴图未提交 `.import`，运行时走上述回退路径。
 - 重新生成资源与内嵌快照（开发期，需显式指定源 manifest、资产集合与本地登记）：
   `REPO_ROOT=$(git rev-parse --show-toplevel)`
@@ -59,13 +59,27 @@ bash 02_Game/tools/render.sh --keep-frames   # 保留 PNG 序列（隐含 --png-
 
 - M1 默认 AVI/MJPEG + `--disable-vsync`：1080×1920 / 60fps / 1800 帧（30s）；`--disable-vsync` 用于避免 vsync 帧节奏漂移（否则双跑 framemd5 可能不一致）。M0 的 PNG 序列路径保留为 `--png-frames`（逐帧 PNG 对复杂背景编码很慢，单条可能 >5 分钟）。
 - 磁盘预检 20GB（verify+keep 32GB）；中间产物用独立临时目录，转码后自动清理。
-- 实测基准（2026-11-05，i7-12700 / RTX 4060 Ti 4G / 64GB RAM）：AVI/MJPEG 中间产物约 23ms/帧；`--verify` 双跑的总耗时与 framemd5 见根目录 `10_report/CC02/M1实施报告-1105.md`。M0 PNG 基线（2026-11-04）：1800 帧录制 151s / 196s，单次出片 177s / 223s，framemd5 `17fa27c9…`，输出 sha256 `d58d91c8…`。
+- 实测基准（2026-11-05，i7-12700 / RTX 4060 Ti 4G / 64GB RAM）：AVI/MJPEG 中间产物约 23ms/帧；`--verify` 双跑的总耗时与 framemd5 见根目录 `10_report/CC02/M1实施报告-1105.md`。M0 PNG 基线（2026-11-04，M0 缓存态存档）：1800 帧录制 151s / 196s，单次出片 177s / 223s，framemd5 `17fa27c9…`，输出 sha256 `d58d91c8…`。
 - 帧数判定：PNG 路径以独立临时目录的文件序列为准（首帧 0、末帧 N-1、数量 N）；AVI 路径以 ffprobe 的 `nb_frames` 为准。Godot 4.7.2 的退出摘要偶发少报帧数，脚本只告警。
 - 出片前阻断：非法项目（未定义实体、wait 事件、主题引用 REFERENCE_ONLY 等）由 `export_info` 的 Validator 门禁拦下，退出码 1，不产生视频。
 
+### framemd5 与导入缓存态（P1-2，2026-11-05 复核）
+
+同一 commit、同一命令，`.godot/imported` 缓存不同会得到三种稳定输出（各自双跑稳定；差异属 hash 级，mean|Δ|≈0.95–1.01/255，非观感级）：
+
+| 导入缓存态 | 构造方式 | `sample_30s` framemd5（sha256） | mp4 sha256 | 字节 |
+|---|---|---|---|---|
+| 无缓存 | 纯净副本（`git archive`，无 `.godot`、无 `.import`） | `4dc74c8168ab3bda…` | `361ce1088c7a71e1…` | 1,662,210 |
+| 22 个 M0 ctex（作者态） | 只有 M0 的 22 个缓存；44 张 M1 新图运行时解码 | `6accae7c697c264c…` | `0acc8978e066f398…` | 1,662,023 |
+| 全量缓存 | 用 Godot 编辑器打开过 `02_Game`（新图生成 `.import` + `.ctex`） | `f7f28fc8a10876f0…` | `08674e20f4ec800a…` | 1,627,209 |
+
+- 机制：`game/asset_loader.gd` 对 2D 贴图走「有 ctex → `ResourceLoader`；无 ctex → `Image.load_from_file` 运行时解码」双路径，两条路径的采样细节不同。
+- **验收建议统一用「无缓存态」**：`git archive` 出纯净副本（或删掉 `.godot/` 与 `*.import`）后出片；该态与机器/缓存历史无关，跨机可复现。
+- 作者遗留报告 §4.4 的 `6accae7c…`/`0acc8978…` 只在「22 个 M0 ctex」态成立；本工作区开过编辑器后为 `f7f28fc8…`/`08674e20…`。任何记录 framemd5 的场合必须同时记录缓存态。
+
 ## 资源策略
 
-`assets/assets.json` 由 `tools/sync_assets.gd` 按源 `resource_manifest.json` + `data/asset_set.json` + `data/local_assets.json` 生成：M1 起只复制资产集合内的 PLACEHOLDER / PRODUCTION（当前 **61 项 manifest 资源** = 20 张 PLACEHOLDER（UI/特效/棋盘框/特殊箱）+ 2 个字体 + 20 张真实棋子图标 + 19 张棋盘/订单/顶栏 UI），另有 **5 项本地登记**（`local_assets.json`：顶部房间背景、底部信息条、退出图标、宝石图标、完成对号；未进 00_design manifest，`assets.json` 中标记 `local=true`）。合计 **66 项**；其余 100 张图标（100 张棋子 + 20 张生成器箱 − 已打包 20 张）不进入工程，按需加入 `asset_set.json` 后重跑。REFERENCE_ONLY 与 TODO 永不进入工程。同一工具同时生成内嵌快照 `data/manifest_index.json`（**180 条**；已复制资源的 `file` 指向 `res://assets/…`，未复制的 PRODUCTION 保留无盘符的 `01_icon/…` 溯源路径），使工程在无 `00_design` 的干净副本中也能完成校验与测试。运行时统一经 `AssetLoader` 守卫，PLACEHOLDER 需 `allow_placeholders=true`。角色/棋盘/顶栏/底栏已接入 PSD 素材；生成器、障碍外的特效仍为自绘占位；`CleanSet_Ca` / `CleanSet_Cb` 的 1–10 级已接入真实图标，其余实体替换正式美术时按资源 ID 接入，不改逻辑。
+`assets/assets.json` 由 `tools/sync_assets.gd` 按源 `resource_manifest.json` + `data/asset_set.json` + `data/local_assets.json` 生成：M1 起只复制资产集合内的 PLACEHOLDER / PRODUCTION（当前 **61 项 manifest 资源** = 20 张 PLACEHOLDER（UI/特效/棋盘框/特殊箱）+ 2 个字体 + 20 张真实棋子图标 + 19 张棋盘/订单/顶栏 UI），另有 **5 项本地登记**（`local_assets.json`：顶部房间背景、底部信息条、退出图标、宝石图标、完成对号；已于 2026-11-05 补登 manifest v8，本工程仍以 `local=true` 记录运行）。合计 **66 项**；其余 100 张图标（100 张棋子 + 20 张生成器箱 − 已打包 20 张）不进入工程，按需加入 `asset_set.json` 后重跑。REFERENCE_ONLY 与 TODO 永不进入工程。同一工具同时生成内嵌快照 `data/manifest_index.json`（**180 条**；已复制资源的 `file` 指向 `res://assets/…`，未复制的 PRODUCTION 保留无盘符的 `01_icon/…` 溯源路径），使工程在无 `00_design` 的干净副本中也能完成校验与测试。运行时统一经 `AssetLoader` 守卫，PLACEHOLDER 需 `allow_placeholders=true`。角色/棋盘/顶栏/底栏已接入 PSD 素材；生成器、障碍外的特效仍为自绘占位；`CleanSet_Ca` / `CleanSet_Cb` 的 1–10 级已接入真实图标，其余实体替换正式美术时按资源 ID 接入，不改逻辑。
 
 ## 画面贴近棋盘.psd（M1 追加）
 
@@ -86,8 +100,34 @@ bash 02_Game/tools/render.sh --keep-frames   # 保留 PNG 序列（隐含 --png-
 | 左下退出 / 右下背包 | 164×174 / 109×147 | `local_icon_exit` @ (20,1734) / `ui_button_secondary` @ (938,1739) |
 | 障碍 | 锁/泡泡/冰/网 | `obstacle_lock` / `obstacle_bubble` / `obstacle_ice` / `obstacle_web` 贴图（缺失回退自绘） |
 
-- 已知差异（不阻塞）：样例只有 1 个活动订单，所以只显示当前角色与 1 张订单卡（参考图同时展示 part1/part2 两张卡）；生成器仍为自绘 `Lv CleanBox`（manifest 的 `box_clean_c_*` 实为宠物床，非 PSD 蓝色储物箱）；多格锁/冰冻组/区域遮罩按单格障碍实现，未整组使用 `区域遮罩1.png`；`main_icon_finish`/`main_icon_ice`/`main_frame_nonactivated` 已有文件但未进 00_design manifest，其中 finish 已本地登记，ice/web 使用已登记的 `obstacle_ice`/`obstacle_web`。
+- 已知差异（不阻塞）：样例只有 1 个活动订单，所以只显示当前角色与 1 张订单卡（参考图同时展示 part1/part2 两张卡）；生成器仍为自绘 `Lv CleanBox`（manifest 的 `box_clean_c_*` 实为宠物床，非 PSD 蓝色储物箱）；多格锁/冰冻组/区域遮罩按单格障碍实现，未整组使用 `区域遮罩1.png`；`main_icon_finish` 已随 v8 补登（`ui_icon_finish`），本工程仍以本地登记运行；`main_icon_ice`/`main_frame_nonactivated` 未单独登记，分别使用已登记的 `obstacle_ice`/`obstacle_web`。
 - 1080×1920 对比图（`output/` 已 gitignore）：`output/m1_side_by_side_static.png`、`output/m1_side_by_side_ingame.png`、`output/m1_static_board_1080x1920.png`、`output/m1_ingame_chips_1080x1920.png`。
+
+### M1 复核登记：已知视觉差异（V1–V10 / P2-a..f，不修代码）
+
+来源：`10_report/CC02/M1实施复核-1105.md`（DSH 独立复核）。以下均为不阻塞差异，M1 收口只登记、不改代码。
+
+| 编号 | 差异 | 说明 / 影响 |
+|---|---|---|
+| V1 | 只有 1 个订单/角色 | 参考图 part1（左）+ part2（右）；样例 `sample_30s.json` 只有 `order_1`，右半为空 |
+| V2 | 无商店按钮、多 star pill | 顶栏 5 组为等级/能量/金币/星星/宝石；参考图为等级/能量/金币/宝石/商店 |
+| V3 | 格底为逐格圆角砖 | `slot_empty` 94×94 缩放到 126×126，砖缝可见；参考图为无缝棋盘格（§20.6 允许 9 宫格/放大，属实现选择） |
+| V4 | 锁呈「蓝色储物箱」 | `obstacle_lock` 取自 `common_main_icon_lock_1x1.png`（素材选型合规），但读法弱于参考图的「罐子 + 红色计数 3」；无解锁计数角标 |
+| V5 | web 障碍只是角落蛛网 | 素材本身为角落绘制，且常被文本气泡遮住 |
+| V6 | 冻结/多格锁/区域遮罩按单格实现 | 未用 `冻结.png` 271×273 组、`区域遮罩1.png` 413×288 2×3 组 |
+| V7 | 生成器仍自绘 | 橙色/粉色圆角块 + `Lv1 CleanBox`；参考图为蓝色箱体 + `x10` + `Lv.22`（manifest 的 `box_clean_c_*` 实为宠物床） |
+| V8 | 订单卡更宽 | 560×190（为容纳标题/奖励行），参考图更窄 |
+| V9 | 背景运行时 50% 降采样 | `board_view.gd` L580–586；布局数值不变，1080 宽下背景偏软（性能折中） |
+| V10 | 文本气泡位置偏低 | 覆盖第 3 行格内容；参考图气泡略高、更窄 |
+
+| 编号 | 观察项 | 后续建议 |
+|---|---|---|
+| P2-a | `obstacle_lock` 蓝箱读法、`obstacle_web` 角落蛛网 | 补计数角标或改用更明确的锁素材；评估 `main_frame_nonactivated` 正规登记 |
+| P2-b | 逐格 `slot_empty` 的「砖块感」 | 对齐 PSD 无缝棋盘可考虑 9 宫格拉伸或整块棋盘贴图 |
+| P2-c | 背景 50% 降采样 | README 已补画质说明（V9），代码不动 |
+| P2-d | 文本气泡遮挡棋盘 | 若气泡上移到 y≈760 可少遮一格 |
+| P2-e | 「46 条 PRODUCTION」含 2 个字体 | 表述时区分为「44 张图 + 2 字体」（`assets.json` 66 = 61 manifest + 5 local） |
+| P2-f | 出片耗时口径 | 单跑 107–114s；两条并发时 137–153s，记录时注明「单跑、无并发」 |
 
 ## 编辑器（时间轴）
 
@@ -116,19 +156,19 @@ godot --path 02_Game res://editor/timeline_editor.tscn -- --project res://tests/
 
 ## M1 验收状态（2026-11-05）
 
-- ✅ manifest 快照 74→**180 条**（PRODUCTION 155 / PLACEHOLDER 20 / TODO 5 / REFERENCE_ONLY 0），逐条与 `00_design/resource_manifest.json` 一致；`assets.json` **66 项**（61 manifest + 5 local）。
+- ✅ manifest 快照 74→**180 条**（PRODUCTION 155 / PLACEHOLDER 20 / TODO 5 / REFERENCE_ONLY 0），逐条与 `00_design/resource_manifest.json` **v7** 一致（v8 新增 11 条，待 M2 重建快照）；`assets.json` **66 项**（61 manifest + 5 local）。
 - ✅ `chip_clean_ca` / `chip_clean_cb` lv01–10 共 20 张真实图标入库；`theme.chip_icons` 优先级 theme > project > default；BoardView 真实图标绘制（底边对齐、轻阴影）。
-- ✅ 主题切换：复制项目 JSON 只改 `theme` 字段 → 出片（candy 109s）；pet_shop framemd5 `6accae7c…`、candy `135f1bea…`，**不同**（candy 的 Ca/Cb 图标互换）。
+- ✅ 主题切换：复制项目 JSON 只改 `theme` 字段 → 出片（candy 109s）；作者导入缓存态下 pet_shop framemd5 `6accae7c…`、candy `135f1bea…`，**不同**（candy 的 Ca/Cb 图标互换）。缓存态变化时 hash 会变，见「framemd5 与导入缓存态」。
 - ✅ 画面贴近棋盘.psd：背景/容器/格底/顶栏/订单角色/底栏按 §20.5 数值；1080×1920 对比图见 `output/m1_side_by_side_*.png`。
 - ✅ tests **717 checks / 0 failures**；validate `PASS (0 errors, 0 warnings)`；simulate 双跑同 hash；干净副本（无 `00_design` / `.godot`）同样 717/0 + validate PASS。
-- ✅ 出片 1080×1920@60 / 1800 帧 / 30.000s，单次 **109–111s**（含 FFmpeg，≤5 分钟）；`render.sh --verify` 双跑 framemd5 **A=B=`6accae7c…`**，输出 sha256 `0acc8978…`（详见 `10_report/CC02/M1实施报告-1105.md`）。
+- ✅ 出片 1080×1920@60 / 1800 帧 / 30.000s，单次 **109–111s**（含 FFmpeg，≤5 分钟）；在作者导入缓存态（22 个 M0 ctex）下 `render.sh --verify` 双跑 framemd5 **A=B=`6accae7c…`**、输出 sha256 `0acc8978…`；无缓存/全缓存态的对应 hash 见「framemd5 与导入缓存态（P1-2）」与 `10_report/CC02/M1实施复核-1105.md`。
 - ⏳ 音频仍为 TODO；其余 100 张棋子图标未打包，按需加入 `data/asset_set.json`。
 
 ## 当前边界
 
 - 音频为 TODO，出片无音轨。
 - `CleanSet_Ca` / `CleanSet_Cb` 已用真实图标；其余 10 条链等 100 张图标未进工程（按需加 `asset_set.json`）；生成器、特效、多格锁/冰冻组仍为自绘/单格占位。
-- 5 项本地登记素材（顶部房间背景、底部信息条、退出、宝石、完成对号）待补登 `00_design/resource_manifest.json`；本 lane 未改 00_design，清单见 `10_report/CC02/M1实施报告-1105.md`。
+- 5 项本地登记素材已于 2026-11-05 收口补登 `00_design/resource_manifest.json` v8（正式 id 见 M1-2 行）；本工程仍以 `local_assets.json` 运行，M2 重建快照时切换。
 - Godot 4.7.2 Movie Maker 的退出摘要偶发少报帧数；`render.sh` 在 PNG 路径以帧文件序列为准（数量 + 首末帧编号），在默认 AVI 路径以 ffprobe `nb_frames` 为准。
 
 ## M0 已知限制（收口登记）
@@ -145,11 +185,11 @@ godot --path 02_Game res://editor/timeline_editor.tscn -- --project res://tests/
 | B1 | `SIM_NOT_MERGEABLE` 只是 message 前缀 | 事件无结构化 code。 |
 | B2 | validator 不校验 merge 命令语义 | `kind=chip`、`level+1 ≤ min(10, maxLevel)` 未前置校验。 |
 | D1 | `render.sh` 只认字面 `SCRIPT ERROR` | 不认运行期 `ERROR:`（push_error）。 |
-| C1 | `.uid` 跟踪不一致 | 10 个已跟踪与 `*.uid` 忽略并存；`*.import` 的 CRLF 噪声取决于客户端 `core.autocrlf`，仓库无 `.gitattributes`。M1 新增 66 项资源未提交 `.import`，运行时回退解码。 |
+| C1 | `.uid` 跟踪不一致 | 10 个已跟踪与 `*.uid` 忽略并存；`02_Game/.gitattributes` 已固定 `*.import text eol=lf`（M1 收口 P1-1），EOL 噪声不再产生。M1 新增 66 项资源未提交 `.import`，运行时回退解码。 |
 | E1 | validator 可达性对 rareOutputs 无条件计 charges | 与运行时 directOrder 门控分叉，只会加剧 P2-3 漏杀。 |
 | M1-1 | 其余 100 张棋子图标未打包 | 只有 ca/cb 两条链的 20 张进入 `assets/`；其余按需加入 `data/asset_set.json` 后重跑 `sync_assets.gd`。 |
-| M1-2 | 5 项本地登记素材未进 00_design manifest | `local_assets.json` 记录 usage=PRODUCTION / license=公司自有 / `local=true`；待补登清单见 `10_report/CC02/M1实施报告-1105.md`。 |
-| M1-3 | 画面与 PSD 的非阻塞差异 | 仅 1 个活动订单/角色；生成器无合适箱体图标；多格锁/冰冻/区域遮罩按单格障碍实现；订单卡宽 560×190（为容纳标题/奖励行，比 PSD 预览宽）；顶栏额外保留 M0 star pill、未做商店按钮；详见「画面贴近棋盘.psd」。 |
+| M1-2 | 5 项本地登记素材已补登 00_design manifest v8 | `local_assets.json` 仍记录 usage=PRODUCTION / license=公司自有 / `local=true`；2026-11-05 收口已补登源 manifest（对应正式 id：`ui_bg_top` / `ui_items_bar` / `ui_icon_exit` / `ui_icon_gem` / `ui_icon_finish`），本工程快照待 M2 重建时切换。 |
+| M1-3 | 画面与 PSD 的非阻塞差异 | 仅 1 个活动订单/角色；生成器无合适箱体图标；多格锁/冰冻/区域遮罩按单格障碍实现；订单卡宽 560×190（为容纳标题/奖励行，比 PSD 预览宽）；顶栏额外保留 M0 star pill、未做商店按钮；逐条 V1–V10 见「M1 复核登记：已知视觉差异」。 |
 
 证据与最小复现见 `10_report/CC02/M0修复复核-1104.md`（§3.7–§3.14、§4）。M1 修复时逐项补回归。
 

@@ -13,11 +13,12 @@ extends Control
 
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const COLOR_DONE := Color("#8FD46B")
+const UiFonts := preload("res://src/core/ui_fonts.gd")
 const WIDTH := 1080.0
 const HEIGHT := 250.0
 const MAX_CARDS := 2
 const MARGIN := 18.0
-const MAX_CARD_W := 640.0
+const MAX_CARD_W := 286.0
 
 var cards: Array = []
 var palette: Dictionary = {}
@@ -43,6 +44,74 @@ func _ready() -> void:
 
 ## Entities/characters give the hue and display name; without it the panel still
 ## works from ids alone (useful in headless tests).
+## Asset access for the card plate + mission icons (same loader the board uses).
+var _loader = null
+var _font_bold: Font = null
+## Per-card anchors from the screen: [{"center": float, "bottom": float, "width": float}]
+## in panel-local coordinates, so a card sits centred under its character and shares
+## that character's drawn width.
+var _anchors: Array = []
+
+
+func set_asset_theme(loader, project: Dictionary) -> void:
+	_loader = loader
+	if not project.is_empty():
+		_project = project
+	queue_redraw()
+
+
+func _ui_texture(key: String) -> Texture2D:
+	if _loader == null or not _loader.has_method("texture_for"):
+		return null
+	var id := ""
+	if _loader.has_method("resolve_ui"):
+		var resolved = _loader.resolve_ui(key, _project)
+		if typeof(resolved) == TYPE_DICTIONARY:
+			id = String((resolved as Dictionary).get("id", ""))
+		else:
+			id = String(resolved)
+	if id.is_empty():
+		return null
+	var loaded = _loader.texture_for(id)
+	return loaded if loaded is Texture2D else null
+
+
+func _chip_texture(entity_id: String, level: int) -> Texture2D:
+	if _loader == null or not _loader.has_method("chip_texture"):
+		return null
+	var loaded = _loader.chip_texture(entity_id, level, _project)
+	return loaded if loaded is Texture2D else null
+
+
+## 9-slice draw: corners stay 1:1 so the plate keeps its rounded radius.
+func _draw_nine(texture: Texture2D, r: Rect2, corner: float) -> void:
+	var src := texture.get_size()
+	var c := minf(corner, minf(src.x, src.y) * 0.5)
+	if c <= 0.0:
+		draw_texture_rect(texture, r, false)
+		return
+	var inner_w := maxf(r.size.x - c * 2.0, 0.0)
+	var inner_h := maxf(r.size.y - c * 2.0, 0.0)
+	var sw := src.x - c * 2.0
+	var sh := src.y - c * 2.0
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y, c, c), Rect2(0, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y, c, c), Rect2(src.x - c, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.end.y - c, c, c), Rect2(0, src.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.end.y - c, c, c), Rect2(src.x - c, src.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y, inner_w, c), Rect2(c, 0, sw, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.end.y - c, inner_w, c), Rect2(c, src.y - c, sw, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y + c, c, inner_h), Rect2(0, c, c, sh))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y + c, c, inner_h), Rect2(src.x - c, c, c, sh))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y + c, inner_w, inner_h),
+			Rect2(c, c, sw, sh))
+
+
+func set_card_anchors(rows: Array) -> void:
+	_anchors = rows.duplicate(true)
+	_layout()
+	queue_redraw()
+
+
 func set_project(project: Dictionary) -> void:
 	_project = project if typeof(project) == TYPE_DICTIONARY else {}
 	if not cards.is_empty():
@@ -200,10 +269,19 @@ func _layout() -> void:
 	var card_w := minf((total_w - MARGIN * 2.0 - gap * float(n - 1)) / float(n), MAX_CARD_W)
 	var row_w := card_w * float(n) + gap * float(n - 1)
 	var start_x := (total_w - row_w) * 0.5
-	var card_h := total_h - 8.0
+	# 2026-11-05: compact card — content only (mission + rewards), centred in the band.
+	var card_h := minf(total_h - 8.0, 140.0)
+	var start_y := maxf((total_h - card_h) * 0.5, 4.0)
 	for i in n:
-		_rects[String(cards[i]["id"])] = Rect2(
-				start_x + float(i) * (card_w + gap), 4.0, card_w, card_h)
+		var rect := Rect2(start_x + float(i) * (card_w + gap), start_y, card_w, card_h)
+		if _anchors.size() == n:
+			# WYSIWYG anchor: the card is as wide as its character and bottom-aligned.
+			var a: Dictionary = _anchors[i]
+			var w := maxf(float(a.get("width", card_w)), 200.0)
+			var bottom := float(a.get("bottom", start_y + card_h))
+			var cx := float(a.get("center", rect.get_center().x))
+			rect = Rect2(cx - w * 0.5, bottom - card_h, w, card_h)
+		_rects[String(cards[i]["id"])] = rect
 
 
 # --------------------------------------------------------------------- drawing
@@ -228,50 +306,106 @@ func _draw_card(card: Dictionary, r: Rect2) -> void:
 	var ink: Color = _c("ink", Color("#22303F"))
 	var dim: Color = _c("ink_dim", Color("#5C6B7D"))
 
-	_rounded(r, radius, card_bg)
-	_rounded_outline(r, radius, card_edge, 2)
+	# 2026-11-05: the card plate is 任务背景板 (九宫格) instead of the flat white box.
+	var plate := _ui_texture("bar_board")
+	if plate != null:
+		_draw_nine(plate, r, 26.0)
+	else:
+		_rounded(r, radius, card_bg)
+		_rounded_outline(r, radius, card_edge, 2)
 
-	var p := Vector2(r.position.x + 62.0, r.position.y + 66.0)
-	_portrait(p, 44.0, card)
-
-	_text_at(r.position + Vector2(118.0, 42.0), String(card.get("display", "")), 28, ink)
-	_text_at(r.position + Vector2(118.0, 76.0), String(card.get("character", "")), 17, dim)
-
+	# 2026-11-05: the avatar circle, the display name and the character id are gone —
+	# the card is just the mission slot plus the reward column.
 	var items: Array = card.get("mission", [])
+	var chip_size := 125.0
+	var gap := 14.0
+	var row := chip_size * float(items.size()) + gap * float(maxi(items.size() - 1, 0))
+	var chip_x := (r.size.x - row) * 0.5
 	for i in range(items.size()):
 		var item: Dictionary = items[i]
-		var chip := Rect2(r.position + Vector2(118.0 + 100.0 * float(i), 92.0),
-				Vector2(62.0, 62.0))
+		var chip := Rect2(r.position + Vector2(chip_x + (chip_size + gap) * float(i),
+				(r.size.y - chip_size) * 0.5), Vector2(chip_size, chip_size))
 		var hue: Color = item.get("hue", Color("#94A3B8"))
 		var ready := int(item.get("have", 0)) >= int(item.get("need", 1))
-		_rounded(chip, 14, hue if ready else hue.lerp(Color(1.0, 1.0, 1.0), 0.28))
-		_rounded_outline(chip, 14, hue.darkened(0.22), 2)
-		_text_center(chip, String(item.get("label", "?")), 24, Color.WHITE)
-		if ready:
-			_check(Vector2(chip.position.x + chip.size.x - 12.0,
-					chip.position.y + chip.size.y - 12.0), 13.0)
-		_text_center(Rect2(chip.position + Vector2(0.0, 68.0), Vector2(chip.size.x, 26.0)),
-				"%d/%d" % [int(item.get("have", 0)), int(item.get("need", 1))], 20, dim)
+		# 2026-11-05: the mission slot shows the real chip icon when the loader can
+		# resolve it; the procedural tile stays as the no-asset fallback.
+		var icon := _chip_texture(String(item.get("entity", "")), int(item.get("level", 1)))
+		if icon != null:
+			draw_texture_rect(icon, chip.grow(6.0), false)
+		else:
+			_rounded(chip, 14, hue if ready else hue.lerp(Color(1.0, 1.0, 1.0), 0.28))
+			_rounded_outline(chip, 14, hue.darkened(0.22), 2)
+			_text_center(chip, String(item.get("label", "?")), 24, Color.WHITE)
 
-	var reward_x := r.position.x + r.size.x - 92.0
-	_coin(Vector2(reward_x, r.position.y + 96.0))
-	_text_at(Vector2(reward_x + 28.0, r.position.y + 82.0), str(int(card.get("coin", 0))),
-			28, ink)
-	_star(Vector2(reward_x, r.position.y + 148.0), 16.0)
-	_text_at(Vector2(reward_x + 28.0, r.position.y + 134.0), str(int(card.get("star", 0))),
-			28, ink)
+
+	_draw_reward_row(r, int(card.get("coin", 0)), 0.0)
+	if int(card.get("star", 0)) > 0:
+		_draw_star_row(r, int(card.get("star", 0)))
 
 	if bool(card.get("done", false)):
-		var done_color: Color = _c("done", COLOR_DONE)
-		_rounded_outline(r.grow(2.0), radius + 2, done_color, 5)
-		_rounded(r.grow(-2.0), maxi(4, radius - 2),
-				Color(done_color.r, done_color.g, done_color.b, 0.10))
-		_pill(r)
+		# 2026-11-05: no green rim, no small check — one confirm badge centred on the card.
+		var confirm := _ui_texture("confirm")
+		var size := Vector2(126.0, 74.0)
+		var at := Rect2(r.get_center() - size * 0.5, size)
+		if confirm != null:
+			draw_texture_rect(confirm, at, false)
+		else:
+			_rounded(at, 20, _c("done", COLOR_DONE))
+
+
+## Coin reward above the card: task_reward icon + "+N", right-aligned with the card.
+func _draw_reward_row(r: Rect2, amount: int, dy: float) -> void:
+	var icon := _ui_texture("task_reward")
+	var icon_size := Vector2(132.0, 49.0)
+	var text_size := 34
+	var label := "+%d" % amount
+	var base_y := r.position.y - 54.0 + dy
+	if icon != null:
+		var icon_rect := Rect2(Vector2(r.end.x - icon_size.x, base_y), icon_size)
+		draw_texture_rect(icon, icon_rect, false)
+		var font := _font_display()
+		if font != null:
+			# 2026-11-05: the number is right-aligned inside the reward pill, so its right
+			# edge lines up with the card's right edge.
+			var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, text_size).x
+			var at := Vector2(icon_rect.end.x - 14.0 - width,
+					icon_rect.get_center().y + float(text_size) * 0.36)
+			draw_string(font, at + Vector2(1.5, 1.5), label, HORIZONTAL_ALIGNMENT_LEFT, -1,
+					text_size, Color(0.24, 0.14, 0.02, 0.55))
+			draw_string(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, text_size,
+					Color(1.0, 0.97, 0.86))
+	else:
+		_coin(Vector2(r.end.x - 30.0, base_y + 24.0))
+		_text_right(Vector2(r.end.x - 54.0, base_y + 6.0), label, 28, _c("ink", Color("#22303F")))
+
+
+## Star reward sits under the coin row, same right edge.
+func _draw_star_row(r: Rect2, amount: int) -> void:
+	_star(Vector2(r.end.x - 18.0, r.position.y - 106.0), 15.0)
+	var label := "+%d" % amount
+	var corner := Vector2(r.end.x - 40.0, r.position.y - 122.0)
+	_text_right(corner + Vector2(1.5, 1.5), label, 26, Color(0.22, 0.14, 0.02, 0.6))
+	_text_right(corner, label, 26, Color(1.0, 0.97, 0.86))
+
+
+func _font_display() -> Font:
+	if _font_bold == null:
+		_font_bold = UiFonts.load_font(UiFonts.DISPLAY_BOLD)
+	return _font_bold
+
+
+func _text_right(top_right: Vector2, text: String, size_px: int, color: Color) -> void:
+	var font := _font_display()
+	if font == null:
+		return
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	draw_string(font, Vector2(top_right.x - width, top_right.y + float(size_px)),
+			text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
 
 
 func _pill(r: Rect2) -> void:
-	var pill_rect := Rect2(r.position + Vector2(14.0, 186.0),
-			Vector2(r.size.x - 28.0, 46.0))
+	var pill_rect := Rect2(r.position + Vector2(14.0, r.size.y - 56.0),
+			Vector2(r.size.x - 28.0, 44.0))
 	var done_color: Color = _c("done", COLOR_DONE)
 	_rounded(pill_rect, 23, done_color)
 	_rounded_outline(pill_rect, 23, done_color.darkened(0.18), 2)
@@ -284,8 +418,7 @@ func _portrait(c: Vector2, radius: float, card: Dictionary) -> void:
 	var hue: Color = card.get("hue", Color("#94A3B8"))
 	draw_circle(c, radius + 3.0, hue.darkened(0.28), true, -1.0, true)
 	draw_circle(c, radius, hue, true, -1.0, true)
-	draw_arc(c + Vector2(0.0, -6.0), radius * 0.62, PI * 1.08, PI * 1.92, 24,
-			Color(1.0, 1.0, 1.0, 0.55), 6.0, true)
+	# 2026-11-05: the little arc highlight ("小花") is gone; the portrait is a clean disc.
 	var initial := String(card.get("initial", "?"))
 	_text_center(Rect2(c - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)),
 			initial, 40, Color.WHITE)

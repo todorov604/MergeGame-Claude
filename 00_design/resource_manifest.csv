@@ -207,3 +207,19 @@ ui_safe_2x4,界面,保险箱 2×4,P1,可用,PRODUCTION,公司自有（北京Icon
 ui_safe_frame,界面,保险箱 Lv 小框（拉伸成标签条）,P1,可用,PRODUCTION,公司自有（北京Icon 资产汇总）,E:\北京Icon\常用资产汇总\界面ui\common_main_frame_label.png,64×48,64×48,exact,n/a,static,2026-11-05 新增：小框贴图，运行时拉伸到标签条；文字用工程字体；sha256 39b30510e8e40a8f…
 ui_safe_lock,界面,保险箱小锁头,P1,可用,PRODUCTION,公司自有（北京Icon 资产汇总）,E:\北京Icon\常用资产汇总\界面ui\common_main_icon_lock.png,58×68,58×68,exact,n/a,static,2026-11-05 新增：锁头图标，贴在小框右侧；sha256 3696971f8fc17c4f…
 ui_safe_unknown,界面,保险箱气泡（未知道具「?」卡片），包住闪电,P1,可用,PRODUCTION,公司自有（北京Icon 资产汇总）,E:\北京Icon\常用资产汇总\界面ui\common_main_icon_unknown.png,140×140,140×140,exact,n/a,static,2026-11-05 新增：替换保险箱叠层里误用的 board bubble；sha256 9270ef50a2bcace7…
+ui_level_paw,界面,左上角等级爪子（棋盘拆解_0000s_0015_等级）,P0,可用,PRODUCTION,公司自有（北京Icon 资产汇总）,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0015_等级.png,118×103,118×103,exact,n/a,static,2026-11-05 新增：替换左上角等级徽章主图；sha256 58055a19a6c21cda…
+ui_bg_top_clean,背景,顶栏背景（干净版，无人物/无金币标）,P0,可用,PRODUCTION,公司自有（北京Icon 资产汇总）,E:\北京Icon\常用资产汇总\界面ui\main_bg_01_top.png,1080×400,1080×400,exact,n/a,static,2026-11-05 新增：替换顶栏背景，去掉人物与 +100 金币标；sha256 4e08f7353baf7dda…
+ui_char_waitress,角色,顾客立绘 waitress,原生,PNG,自研,可用,P1,ui/char_waitress.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\01_waitress\01_waitress.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_technician,角色,顾客立绘 technician,原生,PNG,自研,可用,P1,ui/char_technician.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\02_technician\02_technician.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_customer,角色,顾客立绘 customer,原生,PNG,自研,可用,P1,ui/char_customer.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\03_customer\03_customer.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_police,角色,顾客立绘 police,原生,PNG,自研,可用,P1,ui/char_police.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\04_police\04_police.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_blonde,角色,顾客立绘 blonde,原生,PNG,自研,可用,P1,ui/char_blonde.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\05_blonde\05_blonde.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_racer,角色,顾客立绘 racer,原生,PNG,自研,可用,P1,ui/char_racer.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\06_racer\06_racer.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_manager,角色,顾客立绘 manager,原生,PNG,自研,可用,P1,ui/char_manager.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\07_manager\07_manager.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_glasses,角色,顾客立绘 glasses,原生,PNG,自研,可用,P1,ui/char_glasses.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\08_glasses\08_glasses.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_char_worker,角色,顾客立绘 worker,原生,PNG,自研,可用,P1,ui/char_worker.png,,E:\MergeGame-Claude\04_Anim\顾客动画_v3_5秒\09_worker\09_worker.png,,PRODUCTION,公司自有（04_Anim）,原生,exact,n/a,static
+ui_task_reward,界面,任务奖励图标,110×41,PNG,自研,可用,P0,ui/task_reward.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0000_任务奖励.png,,PRODUCTION,公司自有（北京Icon）,110×41,exact,n/a,static
+ui_confirm,界面,订单完成确认图标,166×97,PNG,自研,可用,P0,ui/confirm.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0018_确认UI.png,,PRODUCTION,公司自有（北京Icon）,166×97,exact,n/a,static
+ui_energy_bar,界面,体力条,243×90,PNG,自研,可用,P0,ui/energy_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0014_体力条.png,,PRODUCTION,公司自有（北京Icon）,243×90,exact,n/a,static
+ui_coin_bar,界面,金币条,255×82,PNG,自研,可用,P0,ui/coin_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0013_金币条.png,,PRODUCTION,公司自有（北京Icon）,255×82,exact,n/a,static
+ui_gem_bar,界面,钻石条,246×67,PNG,自研,可用,P0,ui/gem_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0012_钻石条.png,,PRODUCTION,公司自有（北京Icon）,246×67,exact,n/a,static

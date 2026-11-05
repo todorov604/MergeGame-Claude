@@ -227,6 +227,12 @@ func _hud_anchor(key: String) -> Vector2:
 func _draw() -> void:
 	_draw_backdrop()
 	for motion in motions:
+		# A motion past its duration must never be painted, even if the clock stopped
+		# (frozen preview): otherwise a finished delivery stays glued to the card as a
+		# floating hue square.
+		var dur := float(motion.get("dur", 0.0))
+		if dur > 0.0 and clock > float(motion.get("start", 0.0)) + dur:
+			continue
 		_draw_motion(motion)
 
 

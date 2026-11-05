@@ -1,0 +1,68 @@
+09_worker_atlas.png
+size: 492, 604
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 488, 490
+  orig: 488, 490
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 496
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 98, 496
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 194, 496
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 290, 496
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 549
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 98, 549
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 194, 549
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 290, 549
+  size: 92, 49
+  orig: 92, 49
+  offset: 0, 0
+  index: -1

@@ -1,0 +1,68 @@
+07_manager_atlas.png
+size: 430, 563
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 426, 477
+  orig: 426, 477
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 483
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 89, 483
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 176, 483
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 263, 483
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 522
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 89, 522
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 176, 522
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 263, 522
+  size: 83, 35
+  orig: 83, 35
+  offset: 0, 0
+  index: -1

@@ -37,19 +37,34 @@ const LOCAL_IDS := [
 	"char_part2",
 	"ui_bar_board",
 	"ui_bg_top",
+	"ui_bg_top_clean",
 	"ui_board_frame",
 	"ui_board_plate",
 	"ui_btn_plus",
 	"ui_button_shop",
 	"ui_cell_light",
+	"ui_char_blonde",
+	"ui_char_customer",
+	"ui_char_glasses",
+	"ui_char_manager",
+	"ui_char_police",
+	"ui_char_racer",
+	"ui_char_technician",
+	"ui_char_waitress",
+	"ui_char_worker",
+	"ui_coin_bar",
 	"ui_coin_reward",
 	"ui_common_line",
+	"ui_confirm",
 	"ui_cursor_hand",
+	"ui_energy_bar",
 	"ui_exit_button",
+	"ui_gem_bar",
 	"ui_generator_icon",
 	"ui_icon_finish",
 	"ui_items_bar",
 	"ui_level_badge_bg",
+	"ui_level_paw",
 	"ui_reminder",
 	"ui_safe_1x7",
 	"ui_safe_2x2",
@@ -59,16 +74,32 @@ const LOCAL_IDS := [
 	"ui_safe_lock",
 	"ui_safe_unknown",
 	"ui_stamina",
+	"ui_task_reward",
 ]
 
 const LOCAL_FILES := {
 	"char_part1": "part1.png",
 	"char_part2": "part2.png",
 	"ui_bg_top": "main_bg_01_top.png",
+	"ui_bg_top_clean": "bg_top_clean.png",
 	"ui_bar_board": "bar_board.png",
 	"ui_board_frame": "board_frame.png",
 	"ui_board_plate": "board_plate.png",
 	"ui_cell_light": "cell_light.png",
+	"ui_coin_bar": "coin_bar.png",
+	"ui_energy_bar": "energy_bar.png",
+	"ui_gem_bar": "gem_bar.png",
+	"ui_confirm": "confirm.png",
+	"ui_task_reward": "task_reward.png",
+	"ui_char_blonde": "char_blonde.png",
+	"ui_char_customer": "char_customer.png",
+	"ui_char_glasses": "char_glasses.png",
+	"ui_char_manager": "char_manager.png",
+	"ui_char_police": "char_police.png",
+	"ui_char_racer": "char_racer.png",
+	"ui_char_technician": "char_technician.png",
+	"ui_char_waitress": "char_waitress.png",
+	"ui_char_worker": "char_worker.png",
 	"ui_btn_plus": "main_btn_plussign.png",
 	"ui_button_shop": "common_main_btn_shop.png",
 	"ui_coin_reward": "coin_reward.png",
@@ -88,18 +119,33 @@ const LOCAL_FILES := {
 	"ui_stamina": "stamina.png",
 	"ui_items_bar": "items.png",
 	"ui_level_badge_bg": "main_bar_level_bg.png",
+	"ui_level_paw": "level_paw.png",
 }
 
 ## Logical key -> manifest id, exactly as themes/default/theme.json declares it.
 const UI_KEYS := {
 	"bg_bottom": "board_bg",
-	"bg_top": "ui_bg_top",
+	"bg_top": "ui_bg_top_clean",
 	"board_frame": "ui_board_frame",
 	"board_plate": "ui_board_plate",
 	"cell_light": "ui_cell_light",
 	"cell": "slot_empty",
 	"select": "ui_select_frame",
-	"level_badge": "ui_level_badge",
+	"level_badge": "ui_level_paw",
+	"task_reward": "ui_task_reward",
+	"confirm": "ui_confirm",
+	"coin_bar": "ui_coin_bar",
+	"energy_bar": "ui_energy_bar",
+	"gem_bar": "ui_gem_bar",
+	"char_blonde": "ui_char_blonde",
+	"char_customer": "ui_char_customer",
+	"char_glasses": "ui_char_glasses",
+	"char_manager": "ui_char_manager",
+	"char_police": "ui_char_police",
+	"char_racer": "ui_char_racer",
+	"char_technician": "ui_char_technician",
+	"char_waitress": "ui_char_waitress",
+	"char_worker": "ui_char_worker",
 	"level_badge_bg": "ui_level_badge_bg",
 	"energy_timer": "ui_energy_timer",
 	"money_bg": "ui_topbar",
@@ -145,6 +191,7 @@ const EXPECTED_SIZE := {
 	"ui_safe_unknown": Vector2i(140, 140),
 	"ui_stamina": Vector2i(39, 53),
 	"ui_bg_top": Vector2i(1080, 400),
+	"ui_bg_top_clean": Vector2i(1080, 400),
 	"char_part1": Vector2i(373, 370),
 	"char_part2": Vector2i(373, 524),
 	"obstacle_ice": Vector2i(140, 140),
@@ -154,6 +201,20 @@ const EXPECTED_SIZE := {
 	"ui_bar_board": Vector2i(388, 178),
 	"ui_board_plate": Vector2i(167, 167),
 	"ui_cell_light": Vector2i(256, 256),
+	"ui_coin_bar": Vector2i(255, 82),
+	"ui_energy_bar": Vector2i(243, 90),
+	"ui_gem_bar": Vector2i(246, 67),
+	"ui_confirm": Vector2i(166, 97),
+	"ui_task_reward": Vector2i(110, 41),
+	"ui_char_blonde": Vector2i(330, 454),
+	"ui_char_customer": Vector2i(440, 339),
+	"ui_char_glasses": Vector2i(351, 477),
+	"ui_char_manager": Vector2i(426, 477),
+	"ui_char_police": Vector2i(430, 509),
+	"ui_char_racer": Vector2i(498, 490),
+	"ui_char_technician": Vector2i(369, 415),
+	"ui_char_waitress": Vector2i(508, 454),
+	"ui_char_worker": Vector2i(488, 490),
 	"ui_coin_reward": Vector2i(146, 147),
 	"ui_common_line": Vector2i(10, 4),
 	"ui_cursor_hand": Vector2i(256, 256),
@@ -217,7 +278,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 206, "index = 180 snapshot records + 26 local records")
+	t.eq(guard.index.size(), 222, "index = 180 snapshot records + 42 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -378,7 +439,7 @@ func _test_resolve_ui_precedence(t) -> void:
 	t.ok(bool(loaded.get("ok", false)), "default theme loads for resolve_ui", str(loaded.get("errors", [])))
 
 	var themed: Dictionary = loader.resolve_ui("bg_top", project)
-	t.eq(String(themed.get("id", "")), "ui_bg_top", "resolve_ui: theme mapping beats the project override")
+	t.eq(String(themed.get("id", "")), "ui_bg_top_clean", "resolve_ui: theme mapping beats the project override")
 	t.eq(String(themed.get("source", "")), "theme", "resolve_ui: theme mapping reports source=theme")
 
 	var from_project: Dictionary = loader.resolve_ui("level_max", project)
@@ -418,7 +479,7 @@ func _test_default_theme_ui_block(t) -> void:
 	if ui.has("common_line") and not ui.has("line"):
 		ui["line"] = ui["common_line"]
 		ui.erase("common_line")
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 36 layout keys")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 50 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

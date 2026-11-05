@@ -32,6 +32,7 @@ const CompletedCells = preload("res://src/core/completed_cells.gd")
 const IceCell = preload("res://src/core/ice_cell.gd")
 const FlyPath = preload("res://src/core/fly_path.gd")
 const Safeboxes = preload("res://src/core/safeboxes.gd")
+const Pulse = preload("res://src/core/pulse.gd")
 
 const FPS := 60
 const MANIFEST_INDEX := "res://data/manifest_index.json"
@@ -143,6 +144,8 @@ const UI_KEYS := [
 	"generator", "stamina",
 	"level_badge", "level_badge_bg", "energy_timer", "money_bg", "finish", "ice", "bubble",
 	"lock", "web", "exit", "bag", "items", "part1", "part2", "plus", "shop",
+	"char_waitress", "char_technician", "char_customer", "char_police", "char_blonde", "char_racer", "char_manager", "char_glasses", "char_worker",
+	"task_reward", "safe_unknown", "confirm", "energy_bar", "coin_bar", "gem_bar",
 ]
 ## Same 9-slice corner as board_view.PLATE_CORNER: the board base is one 167px rounded
 ## tile stretched over 983x1263, and its corners must not scale with the board.
@@ -214,6 +217,8 @@ var _frame := 0
 ## Generator -> slot flights, one per replayed tap: [{"spawn", "started"}]. Several can
 ## be in the air at once, exactly like the live board.
 var _flys: Array = []
+## Merge pop on the result cell: {"cell", "started"}.
+var _pulse: Dictionary = {}
 var _t := 0.0
 var _total_frames := 0
 var _end_time := 0.0
@@ -765,6 +770,13 @@ func _advance_to(t: float) -> void:
 					"channel": channel,
 					"code": String(r.get("code", "")),
 				})
+		if channel == "sim" and bool(r.get("ok", false)) \
+				and (String(r.get("type", "")) == "merge" or String(r.get("type", "")) == "drag"):
+			var payload = (r.get("payload", {}) as Dictionary)
+			var to_raw = payload.get("to", [])
+			if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
+				_pulse = {"cell": Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])),
+						"started": float(r.get("at", t))}
 		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
 			var spawn: Dictionary = _evaluator.sim.last_spawn
 			if not spawn.is_empty():
@@ -878,8 +890,18 @@ func _draw_background() -> void:
 ## each slice is painted (the slices bake in their own order card + counters), scaled
 ## to end exactly where the order cards start, and painted behind those cards.
 func _draw_characters() -> void:
-	_draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
-	_draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+	var used := {}
+	var snap_orders = _snap.get("orders", []) if _snap is Dictionary else []
+	if typeof(snap_orders) == TYPE_ARRAY:
+		for raw in snap_orders:
+			if typeof(raw) == TYPE_DICTIONARY:
+				used[String((raw as Dictionary).get("character", ""))] = true
+	if used.is_empty() or used.has("char_01"):
+		if not _draw_ui_fit("char_blonde", Rect2(250.0, 18.0, 286.0, 394.0)):
+			_draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
+	if used.is_empty() or used.has("char_02"):
+		if not _draw_ui_fit("char_glasses", Rect2(657.0, 18.0, 286.0, 394.0)):
+			_draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
 
 
 ## §20.5/§20.6 top money bar, in the band above the characters: level badge over
@@ -969,55 +991,117 @@ func _plus_slot(r: Rect2) -> void:
 ## §20.5 order cards: the existing card drawing (title, mission rows, check dots,
 ## character badge) moved onto the 372x190 rects, plus the PSD's `finish` check on
 ## the done state and a mission pill behind each requirement.
+## WYSIWYG order cards: identical geometry to OrderPanel — 286 wide, 124 tall,
+## centred in the band, mission icons 96px in the middle, reward pill above the card
+## right-aligned with a "+N" label. The film must show exactly what the live screen shows.
+const CARD_H := 140.0
+const CARD_GAP := 14.0
+const PORTRAIT_TOP := 18.0
+const PORTRAIT_HEIGHT := 394.0
+const PORTRAIT_CENTER_LEFT := 393.0
+const PORTRAIT_CENTER_RIGHT := 800.0
+const MISSION_ICON := 125.0
+const REWARD_ICON := Vector2(132.0, 49.0)
+
+
+func _portrait_width(character: String) -> float:
+	var texture := _ui("char_glasses") if character == "char_02" else _ui("char_blonde")
+	if texture == null:
+		return 286.0
+	return PORTRAIT_HEIGHT * (texture.get_width() / maxf(texture.get_height(), 1.0))
+
+
+func _portrait_center(character: String) -> float:
+	return PORTRAIT_CENTER_RIGHT if character == "char_02" else PORTRAIT_CENTER_LEFT
+
+
+## Card = as wide as its character, centred under it, bottom-aligned with the portrait.
+func _order_cards(snap: Dictionary) -> Array:
+	var orders: Array = snap.get("orders", [])
+	var out: Array = []
+	for raw in orders:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		if out.size() >= 2:
+			break
+		var who := String((raw as Dictionary).get("character", ""))
+		var width := _portrait_width(who)
+		var center := _portrait_center(who)
+		var bottom := PORTRAIT_TOP + PORTRAIT_HEIGHT
+		out.append(Rect2(center - width * 0.5, bottom - CARD_H, width, CARD_H))
+	return out
+
+
 func _draw_orders(snap: Dictionary) -> void:
 	var orders: Array = snap.get("orders", [])
-	var cards := [LAYOUT_CARD1, LAYOUT_CARD2]
-	var card_radius := _card_radius()
-	for i in range(mini(orders.size(), cards.size())):
+	var cards := _order_cards(snap)
+	for i in range(cards.size()):
 		var o: Dictionary = orders[i]
-		var done := bool(o.get("done", false))
 		var r: Rect2 = cards[i]
-		if done:
-			_hud_pill(r, _palette("done", COLOR_DONE), Color("#5FA83F"), card_radius)
+		var done := bool(o.get("done", false))
+		var plate := _ui("bar_board")
+		if plate != null:
+			_draw_plate(plate, r, 26.0)
 		else:
-			_hud_pill(r, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), card_radius)
-		_text_left(Rect2(r.position.x + 16.0, r.position.y + 2.0, 240.0, 34.0),
-			"ORDER " + String(o.get("id", "")), SMALL_FONT, _palette("ink_dim", COLOR_INK_DIM))
-		var who := String(o.get("character", ""))
-		var who_name := String((_model.character(who) as Dictionary).get("display", ""))
-		if who_name.is_empty():
-			who_name = who.replace("char_", "C")
-		var lv := int(snap.get("level_index", 0)) + 1
-		_text_left(Rect2(r.position.x + 16.0, r.position.y + 30.0, 250.0, 38.0),
-			"%s  Lv.%d" % [who_name, lv], 26, _palette("ink", COLOR_INK))
-		_character_badge(Rect2(r.position.x + r.size.x - 66.0, r.position.y + 10.0, 56.0, 56.0),
-				who_name, done)
+			_hud_pill(r, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _card_radius())
+		if done:
+			# 2026-11-05: one confirm badge centred on the card, nothing else.
+			var confirm_size := Vector2(126.0, 74.0)
+			var confirm_rect := Rect2(r.get_center() - confirm_size * 0.5, confirm_size)
+			if not _draw_ui_fit("confirm", confirm_rect):
+				_rounded(confirm_rect, 20, _palette("done", COLOR_DONE))
 		var mission: Array = o.get("mission", [])
-		var row_y := r.position.y + 74.0
+		var row := MISSION_ICON * float(mission.size()) + CARD_GAP * float(maxi(mission.size() - 1, 0))
+		var chip_x := (r.size.x - row) * 0.5
 		for m in mission:
 			var ent := String((m as Array)[0]) if typeof(m) == TYPE_ARRAY else ""
 			var lvl := int((m as Array)[1]) if typeof(m) == TYPE_ARRAY else 1
 			var have := int((m as Array)[2]) if typeof(m) == TYPE_ARRAY else 0
-			# A claimed order resets `have` to 0 in the sim (the units were consumed).
-			# The card keeps showing 1/1 for a finished order, otherwise a green
-			# done card would read "0/1" on screen.
-			var shown := 1 if done else mini(have, 1)
-			var label := "%s Lv.%d  %d/%d" % [ent, lvl, shown, 1]
-			var pill := Rect2(r.position.x + 12.0, row_y - 4.0, 300.0, 38.0)
-			_hud_pill(pill, _palette("card_edge", COLOR_PILL_EDGE).lightened(0.22),
-					Color(0, 0, 0, 0), 19)
-			_text_left(Rect2(pill.position.x + 12.0, pill.position.y, 270.0, pill.size.y),
-					label, 24, _palette("ink", COLOR_INK))
-			_check_dot(Vector2(r.position.x + 330.0, row_y + 15.0), done or have >= 1)
-			row_y += 46.0
-		if done:
-			# §20.6 item 8: main_icon_finish over the completed card. Text fallback
-			# keeps the state readable when the theme has no finish art.
-			var finish_rect := Rect2(Vector2(r.position.x + r.size.x - 92.0,
-					r.position.y + r.size.y - 66.0), Vector2(52.0, 52.0))
-			if not _draw_ui_fit("finish", finish_rect):
-				_rounded(finish_rect, 26, Color("#5FA83F"))
-				_text_in(finish_rect, "OK", 26, COLOR_WHITE)
+			var chip := Rect2(r.position + Vector2(chip_x, (r.size.y - MISSION_ICON) * 0.5),
+					Vector2(MISSION_ICON, MISSION_ICON))
+			var texture := _chip_texture(ent, lvl)
+			if texture != null:
+				draw_texture_rect(texture, chip.grow(6.0), false)
+			else:
+				_hud_pill(chip, _palette("card_edge", COLOR_PILL_EDGE).lightened(0.2),
+						Color(0, 0, 0, 0), 18)
+				_text_in(chip, ent.substr(0, 2), 28, _palette("ink", COLOR_INK))
+
+			chip_x += MISSION_ICON + CARD_GAP
+		var amount := int(o.get("coin", 0))
+		var icon := _ui("task_reward")
+		var icon_rect := Rect2(Vector2(r.end.x - REWARD_ICON.x, r.position.y - 54.0), REWARD_ICON)
+		if icon != null:
+			draw_texture_rect(icon, icon_rect, false)
+			var label := "+%d" % amount
+			var font := _font_display_bold if _font_display_bold != null else _font_zh
+			if font != null:
+				var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
+				var at := Vector2(icon_rect.end.x - 14.0 - width,
+						icon_rect.get_center().y + 34.0 * 0.36)
+				draw_string(font, at + Vector2(1.5, 1.5), label, HORIZONTAL_ALIGNMENT_LEFT, -1,
+						34, Color(0.24, 0.14, 0.02, 0.55))
+				draw_string(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34,
+						Color(1.0, 0.97, 0.86))
+		else:
+			_text_left_font(_font_display_bold,
+					Rect2(r.end.x - 90.0, r.position.y - 44.0, 80.0, 34.0), "+%d" % amount, 30,
+					_palette("ink", COLOR_INK))
+		var stars := int(o.get("star", 0))
+		if stars > 0:
+			_star_icon(Vector2(r.end.x - 18.0, r.position.y - 106.0), 15.0)
+			_text_left_font(_font_display_bold,
+					Rect2(r.end.x - 96.0, r.position.y - 124.0, 70.0, 30.0), "+%d" % stars, 26,
+					Color(1.0, 0.97, 0.86))
+
+
+func _star_icon(c: Vector2, radius: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 10:
+		var rr := radius if i % 2 == 0 else radius * 0.45
+		var angle := -PI * 0.5 + PI * float(i) / 5.0
+		pts.append(c + Vector2(cos(angle), sin(angle)) * rr)
+	draw_colored_polygon(pts, _palette("star", Color("#F2B233")))
 
 
 func _draw_board(snap: Dictionary) -> void:
@@ -1084,7 +1168,7 @@ func _draw_board(snap: Dictionary) -> void:
 			var item_pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
 			if flying_to.has(item_pos):
 				continue
-			_draw_item(item_pos, String((raw as Array)[2]), int((raw as Array)[3]))
+			_draw_item_pulsed(item_pos, String((raw as Array)[2]), int((raw as Array)[3]))
 
 	var obstacles: Array = board.get("obstacles", [])
 	for raw in obstacles:
@@ -1199,6 +1283,29 @@ func _cell_rect(x: int, y: int, cell_tex: Texture2D = null) -> void:
 	_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, lip)
 
 
+## Merge pop: the result chip is drawn scaled around its cell centre for 0.4 s.
+func _draw_item_pulsed(pos: Vector2i, entity_id: String, level: int) -> void:
+	if _pulse.is_empty() or Vector2i(_pulse.get("cell", Vector2i(-1, -1))) != pos:
+		_draw_item(pos, entity_id, level)
+		return
+	var started := float(_pulse.get("started", 0.0))
+	var now := float(_frame) / float(FPS)
+	if now - started >= Pulse.MERGE_DURATION:
+		_pulse = {}
+		_draw_item(pos, entity_id, level)
+		return
+	var scale := Pulse.merge_scale(started, now)
+	var rect: Rect2 = _slot_rect(pos.x, pos.y)
+	var local: Rect2 = Rect2(-rect.size * 0.5, rect.size).grow(-6.0)
+	draw_set_transform(rect.get_center(), 0.0, Vector2(scale, scale))
+	var ent: Dictionary = _model.entity(entity_id)
+	if String(ent.get("kind", "chip")) == "chip":
+		_draw_chip(local, entity_id, level)
+	else:
+		_draw_item(pos, entity_id, level)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
 func _draw_item(pos: Vector2i, entity_id: String, level: int) -> void:
 	var r: Rect2 = _slot_rect(pos.x, pos.y).grow(-6.0)
 	var ent: Dictionary = _model.entity(entity_id)
@@ -1310,6 +1417,12 @@ func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 	match kind:
 		"safe":
 			return  # one multi-cell group is drawn by _draw_safeboxes()
+		"bag":
+			# 2026-11-05: the little "?" bag obstacle, same art as the live board.
+			if _draw_ui_fit("safe_unknown", r):
+				return
+			if _draw_ui_fit("bubble", r):
+				return
 		"lock":
 			if _draw_ui_fit("lock", r):
 				return

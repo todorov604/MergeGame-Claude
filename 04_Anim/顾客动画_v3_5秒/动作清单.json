@@ -1,0 +1,219 @@
+[
+  {
+    "id": "01_waitress",
+    "name": "女服务员",
+    "action": "扶腰的手微挪后放回",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        0.7,
+        0.28
+      ],
+      [
+        3.65,
+        0.3
+      ]
+    ],
+    "gesture_window": [
+      1.6,
+      3.0
+    ],
+    "minimum_triangle_area_ratio": 0.927371113071476,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "02_technician",
+    "name": "电钻青年",
+    "action": "握电钻的手腕向内轻转",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        1.15,
+        0.3
+      ],
+      [
+        4.0,
+        0.27
+      ]
+    ],
+    "gesture_window": [
+      1.85,
+      3.45
+    ],
+    "minimum_triangle_area_ratio": 0.8239393811476988,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "03_customer",
+    "name": "黄衬衫顾客",
+    "action": "右肩轻耸一下再落下",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        0.48,
+        0.26
+      ],
+      [
+        3.03,
+        0.32
+      ]
+    ],
+    "gesture_window": [
+      1.35,
+      2.9
+    ],
+    "minimum_triangle_area_ratio": 0.8986095964420839,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "04_police",
+    "name": "警察",
+    "action": "抱臂略微收紧再松开",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        2.23,
+        0.38
+      ]
+    ],
+    "gesture_window": [
+      1.45,
+      3.75
+    ],
+    "minimum_triangle_area_ratio": 0.9413336336583166,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "05_blonde",
+    "name": "金发女顾客",
+    "action": "上身小幅换重心并停顿",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        1.0,
+        0.28
+      ],
+      [
+        3.77,
+        0.28
+      ]
+    ],
+    "gesture_window": [
+      1.5,
+      3.8
+    ],
+    "minimum_triangle_area_ratio": 0.9496016171361996,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "06_racer",
+    "name": "赛车手",
+    "action": "轻轻左右摇头一次",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        0.92,
+        0.25
+      ],
+      [
+        3.2,
+        0.28
+      ]
+    ],
+    "gesture_window": [
+      1.55,
+      3.05
+    ],
+    "minimum_triangle_area_ratio": 0.9166377509115333,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "07_manager",
+    "name": "眼镜男顾客",
+    "action": "轻抬眉并略抬下巴",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        1.4,
+        0.26
+      ],
+      [
+        3.7,
+        0.31
+      ]
+    ],
+    "gesture_window": [
+      2.0,
+      3.35
+    ],
+    "minimum_triangle_area_ratio": 0.7492754688388108,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "08_glasses",
+    "name": "眼镜女顾客",
+    "action": "握包带的手轻拉一下",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        0.56,
+        0.29
+      ],
+      [
+        3.36,
+        0.3
+      ]
+    ],
+    "gesture_window": [
+      1.68,
+      3.16
+    ],
+    "minimum_triangle_area_ratio": 0.921961477173924,
+    "head_scale": [
+      1,
+      1
+    ]
+  },
+  {
+    "id": "09_worker",
+    "name": "工人",
+    "action": "轻垂头、肩膀下沉呼气",
+    "duration_seconds": 5,
+    "blink_windows": [
+      [
+        2.47,
+        0.46
+      ]
+    ],
+    "gesture_window": [
+      1.8,
+      3.8
+    ],
+    "minimum_triangle_area_ratio": 0.9349443909822714,
+    "head_scale": [
+      1,
+      1
+    ]
+  }
+]

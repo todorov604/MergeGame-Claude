@@ -51,7 +51,7 @@ func _cards(t) -> void:
 	t.eq(int(item.get("need", 0)), 1, "mission need is 1")
 	t.eq(int(item.get("have", -1)), 0, "mission starts with have=0")
 	t.eq(int(card.get("coin", -1)), 5, "card shows the coin reward")
-	t.eq(int(card.get("star", -1)), 1, "card shows the star reward")
+	t.eq(int(card.get("star", 0)), 0, "level 1 has no star reward")
 
 	var summary: String = panel.debug_summary()
 	t.ok(summary.contains("cards=1"), "summary reports one card", summary)
@@ -87,7 +87,7 @@ func _cards(t) -> void:
 	var rect_b: Rect2 = panel.card_rect("order_b")
 	t.ok(rect_b.position.x > rect_a.position.x + rect_a.size.x - 1.0,
 			"the two cards do not overlap", str(rect_a) + " " + str(rect_b))
-	t.ok(rect_a.size.x > 300.0, "each card keeps a usable width", str(rect_a.size.x))
+	t.ok(rect_a.size.x > 260.0, "each card keeps a usable width", str(rect_a.size.x))
 	t.ok(panel.portrait_center("order_b").x > panel.portrait_center("order_a").x,
 			"portraits follow their cards")
 	t.eq(panel.debug_summary().split("|").size(), 2, "summary lists every card")

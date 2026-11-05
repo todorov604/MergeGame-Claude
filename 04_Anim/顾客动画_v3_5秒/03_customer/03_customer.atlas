@@ -1,0 +1,68 @@
+03_customer_atlas.png
+size: 444, 465
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 440, 339
+  orig: 440, 339
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 345
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 96, 345
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 190, 345
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 284, 345
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 404
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 96, 404
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 190, 404
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 284, 404
+  size: 90, 55
+  orig: 90, 55
+  offset: 0, 0
+  index: -1

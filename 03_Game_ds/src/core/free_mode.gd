@@ -13,6 +13,8 @@ const ACTION_SELECT := "select"
 const ACTION_TAP := "tap"
 const ACTION_MERGE := "merge"
 const ACTION_SWAP := "swap"
+## 2026-11-05: a generator can be dragged to another free cell to move it.
+const ACTION_MOVE := "move"
 
 
 ## Page-space point -> board cell, or (-1,-1) outside the container. The geometry
@@ -109,6 +111,15 @@ static func drag_action(from: Vector2i, to: Vector2i, sim, model, selected: Vect
 	var src: Dictionary = sim.board.item(from)
 	var src_entity := String(src.get("entity", ""))
 	var src_kind := String(model.entity(src_entity).get("kind", "")) if model != null else ""
+	if src_kind == "generator":
+		# Dragging a generator moves it: the target must be empty and unblocked.
+		if sim.board.has_item(to):
+			out["kind"] = ACTION_BLOCKED
+			return out
+		out["kind"] = ACTION_MOVE
+		out["payload"] = {"from": [from.x, from.y], "to": [to.x, to.y]}
+		out["selected"] = Vector2i(-1, -1)
+		return out
 	if src_kind != "chip":
 		return out
 	var cells := {"from": [from.x, from.y], "to": [to.x, to.y]}

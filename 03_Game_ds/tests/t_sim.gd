@@ -78,7 +78,7 @@ func _new_sim(project: Dictionary, seed_value: int):
 func _merge_project() -> Dictionary:
 	return {
 		"version": 2,
-		"hud": _hud(),
+		"hud": {"energy": 3, "coin": 0, "gem": 0},
 		"entities": _entities(),
 		"generators": {"GEN": {"charges": 3, "cooldown": 1.0, "outputs": [{"entity": "A", "weight": 1}], "rareOutputs": []}},
 		"characters": {"CH": {"display": "T"}},
@@ -110,7 +110,7 @@ func _merge_project() -> Dictionary:
 func _gen_project(charges: int = 3, cooldown: float = 1.0) -> Dictionary:
 	return {
 		"version": 2,
-		"hud": _hud(),
+		"hud": {"energy": charges, "coin": 0, "gem": 0},
 		"entities": _entities(),
 		"generators": {"GEN": {"charges": charges, "cooldown": cooldown, "outputs": [{"entity": "A", "weight": 1}], "rareOutputs": []}},
 		"characters": {"CH": {"display": "T"}},
@@ -129,7 +129,7 @@ func _gen_project(charges: int = 3, cooldown: float = 1.0) -> Dictionary:
 func _full_project() -> Dictionary:
 	return {
 		"version": 2,
-		"hud": _hud(),
+		"hud": {"energy": 5, "coin": 0, "gem": 0},
 		"entities": _entities(),
 		"generators": {"GEN": {"charges": 5, "cooldown": 0.0, "outputs": [{"entity": "A", "weight": 1}], "rareOutputs": []}},
 		"characters": {"CH": {"display": "T"}},
@@ -260,7 +260,7 @@ func _unsat_project() -> Dictionary:
 func _flow_project() -> Dictionary:
 	return {
 		"version": 2,
-		"hud": _hud(),
+		"hud": {"energy": 2, "coin": 0, "gem": 0},
 		"entities": _entities(),
 		"generators": {"GEN": {"charges": 2, "cooldown": 0.5, "outputs": [{"entity": "A", "weight": 1}], "rareOutputs": []}},
 		"characters": {"CH": {"display": "T"}},
@@ -486,13 +486,13 @@ func _test_generator(t) -> void:
 	var dry = _new_sim(_gen_project(1, 0.0), 5)
 	dry.apply({"type": "tap", "payload": {"target": {"slot": [0, 0]}}})
 	var r7: Dictionary = dry.apply({"type": "tap", "payload": {"target": {"slot": [0, 0]}}})
-	t.eq(String(r7.get("code", "")), "SIM_NO_CHARGES", "no charges left is reported")
+	t.eq(String(r7.get("code", "")), "SIM_NO_ENERGY", "no energy left is reported")
 
 	var stuck = _new_sim(_full_project(), 5)
 	var r8: Dictionary = stuck.apply({"type": "tap", "payload": {"target": {"slot": [0, 0]}}})
 	t.eq(String(r8.get("code", "")), "SIM_BOARD_FULL", "full board blocks the output")
 	t.ok(stuck.board_full_pending, "full board sets board_full_pending")
-	t.eq(int(stuck.generator_state["GEN"]["charges"]), 5, "board_full keeps the charge")
+	t.eq(int(stuck.generator_state["GEN"]["charges"]), 5, "board_full keeps the energy")
 	t.eq(int(stuck.board.item_count()), 1, "board_full adds nothing")
 
 
@@ -653,11 +653,11 @@ func _test_sample_run(t) -> void:
 	t.eq(s.level_index, 1, "final level_index is 1")
 	t.eq(s.current_level_id(), "level_2", "final level is level_2")
 	t.eq(int(s.hud["coin"]), 22, "coin = 9 + 5 + 8")
-	t.eq(int(s.hud["star"]), 3, "star = 0 + 1 + 2")
-	t.eq(int(s.hud["energy"]), 87, "energy = 88 - 1")
+	t.eq(int(s.hud["star"]), 0, "star = 0 + 0 + 0 (no star rewards configured)")
+	t.eq(int(s.hud["energy"]), 85, "energy = 88 - 3 taps (every spawn costs 1 energy)")
 	t.ok(s.level_complete_pending, "order_2 leaves level_2 complete")
 	t.ok(not s.board_full_pending, "the sample never fills the board")
-	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 9, "level_2 generator reset to 10 then tapped once")
+	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 85, "level_2 stock mirrors the energy bar (88 - 3 taps)")
 	t.eq(int(s.board.item_count()), 3, "3 items left on the level_2 board")
 	t.ok(s.board.has_item(Vector2i(5, 0)) == false, "claimed mission items were consumed")
 

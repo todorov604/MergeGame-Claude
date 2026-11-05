@@ -1,0 +1,68 @@
+01_waitress_atlas.png
+size: 512, 582
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 508, 454
+  orig: 508, 454
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 460
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 112, 460
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 222, 460
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 332, 460
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 520
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 112, 520
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 222, 520
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 332, 520
+  size: 106, 56
+  orig: 106, 56
+  offset: 0, 0
+  index: -1

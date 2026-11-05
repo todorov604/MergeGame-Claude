@@ -18,6 +18,7 @@ const BoardView = preload("res://src/view/board_view.gd")
 const CompletedCells = preload("res://src/core/completed_cells.gd")
 const IceCell = preload("res://src/core/ice_cell.gd")
 const SimHandlers = preload("res://src/core/sim_handlers.gd")
+const Pulse = preload("res://src/core/pulse.gd")
 
 const SAMPLE := "res://data/sample_project.json"
 const TAKE_PATH := "res://output/take_unit_test.json"
@@ -37,6 +38,7 @@ func run(t) -> void:
 	_test_completed_cells(t)
 	_test_ice_cell(t)
 	_test_swap_command(t)
+	_test_pulse_curves(t)
 	_test_click_applies_to_sim(t)
 	_test_scripts_compile(t)
 
@@ -431,6 +433,20 @@ func _test_swap_command(t) -> void:
 	t.eq((sim.snapshot().get("board", {}).get("cells", []) as Array).size(),
 			(before.get("board", {}).get("cells", []) as Array).size(),
 			"swapping never changes how many cells are occupied")
+
+
+## 拖起放大 / 放下缩小 / 合成弹一下：都是纯时间函数，峰值不白框。
+func _test_pulse_curves(t) -> void:
+	t.ok(is_equal_approx(Pulse.drag_scale(0.0, 0.0), 1.0), "pickup starts at normal size")
+	t.ok(is_equal_approx(Pulse.drag_scale(0.0, 0.12), Pulse.PEAK), "held chip grows to the peak")
+	t.ok(is_equal_approx(Pulse.drag_scale(0.0, 5.0), Pulse.PEAK), "held chip stays big")
+	t.ok(is_equal_approx(Pulse.settle_scale(0.0, 0.0), Pulse.PEAK), "drop starts at the peak")
+	t.ok(is_equal_approx(Pulse.settle_scale(0.0, 0.2), 1.0), "drop settles back to normal")
+	t.ok(is_equal_approx(Pulse.merge_scale(0.0, 0.0), 1.0), "merge pop starts normal")
+	t.ok(is_equal_approx(Pulse.merge_scale(0.0, 0.2), Pulse.PEAK), "merge pop peaks at half time")
+	t.ok(is_equal_approx(Pulse.merge_scale(0.0, 0.4), 1.0), "merge pop ends normal after 0.4 s")
+	t.ok(Pulse.PEAK <= (160.0 * 1.14) / 132.0, "the peak fits inside the drawn drag frame")
+	t.eq(Pulse.duration_of("merge"), Pulse.MERGE_DURATION, "merge pulse lasts 0.4 s")
 
 
 func _test_click_applies_to_sim(t) -> void:

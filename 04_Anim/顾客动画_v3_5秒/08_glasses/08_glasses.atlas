@@ -1,0 +1,68 @@
+08_glasses_atlas.png
+size: 424, 593
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 351, 477
+  orig: 351, 477
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 483
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 108, 483
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 214, 483
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 320, 483
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 537
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 108, 537
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 214, 537
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 320, 537
+  size: 102, 50
+  orig: 102, 50
+  offset: 0, 0
+  index: -1

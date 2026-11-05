@@ -12,6 +12,7 @@ const TYPES := [
 	"tap",
 	"drag",
 	"swap",
+	"move",
 	"merge",
 	"deliver",
 	"order_claim",
@@ -44,6 +45,8 @@ static func apply(sim, event: Dictionary) -> Dictionary:
 			return sim._do_tap(payload)
 		"swap":
 			return sim._do_swap(payload)
+		"move":
+			return sim._do_move(payload)
 		"merge", "drag":
 			return sim._do_merge(payload)
 		"deliver":

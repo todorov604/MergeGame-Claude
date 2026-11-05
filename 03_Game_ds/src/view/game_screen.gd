@@ -86,7 +86,8 @@ const HUD_RECT := Rect2(0.0, 0.0, 864.0, 148.0)
 const UI_KEYS := [
 	"bg_bottom", "bg_top", "level_badge", "level_badge_bg", "energy_timer",
 	"money_bg", "part1", "part2", "items", "bar_board", "reminder", "coin_reward", "line",
-	"exit", "bag", "shop",
+	"exit", "bag", "shop", "energy_bar", "coin_bar", "gem_bar",
+	"char_waitress", "char_technician", "char_customer", "char_police", "char_blonde", "char_racer", "char_manager", "char_glasses", "char_worker",
 ]
 const DEFAULT_SEED := 7
 ## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
@@ -111,6 +112,26 @@ class Chrome extends Control:
 	const PART1_CHAR_SRC := FilmLayout.PART1_CHAR_SRC
 	const PART2_CHAR_SRC := FilmLayout.PART2_CHAR_SRC
 	const PART1_CHAR_RECT := FilmLayout.PART1_CHAR_RECT
+	## Standalone customer portraits are full busts (330x454 for the blonde), so they sit
+	## a bit lower and narrower than the baked head crop.
+	## Portraits keep a fixed height; their width follows the art's aspect, and the
+	## order card borrows that width so the two read as one block.
+	const ORDER_BAND_Y := 210.0
+	const PORTRAIT_TOP := 18.0
+	const PORTRAIT_HEIGHT := 394.0
+	const PORTRAIT_CENTER_LEFT := 393.0
+	const PORTRAIT_CENTER_RIGHT := 800.0
+
+	func _portrait_rect(texture: Texture2D, center_x: float) -> Rect2:
+		var w := PORTRAIT_HEIGHT * (texture.get_width() / maxf(texture.get_height(), 1.0))
+		return Rect2(center_x - w * 0.5, PORTRAIT_TOP, w, PORTRAIT_HEIGHT)
+
+	func _portrait_center_for(character: String) -> float:
+		return PORTRAIT_CENTER_RIGHT if character == "char_02" else PORTRAIT_CENTER_LEFT
+
+	func _portrait_for(character: String) -> Texture2D:
+		var key := "char_glasses" if character == "char_02" else "char_blonde"
+		return host._ui(key)
 	const PART2_CHAR_RECT := FilmLayout.PART2_CHAR_RECT
 	const LAYOUT_LEVEL_BADGE_BG := FilmLayout.LAYOUT_LEVEL_BADGE_BG
 	const LAYOUT_LEVEL_BADGE := FilmLayout.LAYOUT_LEVEL_BADGE
@@ -126,44 +147,99 @@ class Chrome extends Control:
 		if host == null:
 			return
 		var snap: Dictionary = host._snapshot()
-		draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
-		draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+		# 2026-11-05: each portrait is its own texture, so only the characters that
+		# actually own an order in this level are drawn (a level with one order shows
+		# one character; no order list at all keeps both, as before).
+		var used := {}
+		var orders_raw = snap.get("orders", [])
+		if typeof(orders_raw) == TYPE_ARRAY:
+			for raw in orders_raw:
+				if typeof(raw) == TYPE_DICTIONARY:
+					used[String((raw as Dictionary).get("character", ""))] = true
+		if used.is_empty() or used.has("char_01"):
+			# 2026-11-05: level 1 uses the standalone blonde customer art (05_blonde),
+			# so the baked part1 sheet (which carries the +100 badges) is only a fallback.
+			var blonde: Texture2D = host._ui("char_blonde")
+			if blonde != null:
+				draw_ui_fit("char_blonde", _portrait_rect(blonde, PORTRAIT_CENTER_LEFT))
+			else:
+				draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
+		if used.is_empty() or used.has("char_02"):
+			# 2026-11-05: level 2 uses 08_glasses (char_glasses) instead of the baked part2.
+			var glasses: Texture2D = host._ui("char_glasses")
+			if glasses != null:
+				draw_ui_fit("char_glasses", _portrait_rect(glasses, PORTRAIT_CENTER_RIGHT))
+			else:
+				draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+		_sync_card_anchors(used)
 		_draw_topbar(snap)
 		_draw_bottom_bar(snap)
+
+	## Card anchors in order-band local space (the panel sits at ORDER_BAND_Y).
+	func _sync_card_anchors(used: Dictionary) -> void:
+		if host.orders == null:
+			return
+		var rows: Array = []
+		var orders_raw = host._snapshot().get("orders", [])
+		if typeof(orders_raw) == TYPE_ARRAY:
+			for raw in orders_raw:
+				if typeof(raw) != TYPE_DICTIONARY:
+					continue
+				var who := String((raw as Dictionary).get("character", ""))
+				if not used.is_empty() and not used.has(who):
+					continue
+				var tex := _portrait_for(who)
+				var width := 286.0
+				if tex != null:
+					width = PORTRAIT_HEIGHT * (tex.get_width() / maxf(tex.get_height(), 1.0))
+				rows.append({
+					"center": _portrait_center_for(who),
+					"bottom": PORTRAIT_TOP + PORTRAIT_HEIGHT - ORDER_BAND_Y,
+					"width": width,
+				})
+		host.orders.set_card_anchors(rows)
 
 	func _draw_topbar(snap: Dictionary) -> void:
 		var values: Dictionary = host._hud_values(snap)
 		# The HUD (hud_view.gd) keeps its own pill rects; the chrome paints the §20.5
 		# plates underneath them instead of moving its numbers around, and the
 		# transparent pill palette in the screen leaves the fills to this layer.
-		for key in ["energy", "coin", "gem", "star"]:
-			rounded(host._hud_pill_page(key), 22, Color(1, 1, 1, 0.82))
+		# 2026-11-05: the pills are real bar art now; the star counter is gone.
+		var bars := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
+		for key in bars.keys():
+			var bar_rect: Rect2 = host._hud_pill_page(String(key))
+			if not draw_ui_fit(String(bars[key]), bar_rect):
+				rounded(bar_rect, 22, Color(1, 1, 1, 0.82))
 		var level_rect: Rect2 = host._hud_pill_page("level")
 		var badge_drawn := draw_ui_fit("level_badge_bg", level_rect)
 		badge_drawn = draw_ui_fit("level_badge", level_rect) or badge_drawn
 		if not badge_drawn:
 			rounded(level_rect, 22, Color("#5B8DEF"))
-		# main_money_bg is the PSD currency base: a 68x66 plate behind each icon,
-		# shrunk to the HUD's own pill height.
-		for key2 in ["energy", "coin", "star", "gem"]:
-			var centre: Vector2 = host._hud_counter_page(key2)
-			draw_ui_stretch("money_bg", Rect2(centre - Vector2(27.0, 26.0), Vector2(54.0, 52.0)))
-		if host._ui("energy_timer") != null:
-			draw_ui_stretch("energy_timer", Rect2(Vector2(856.0, 12.0), Vector2(52.0, 52.0)))
+		# 2026-11-05: the old money_bg plates are gone — each bar art carries its own
+		# icon and plus button, and the star counter was removed.
+		# 2026-11-05: the hourglass icon next to the shop is gone (operator request).
 		# Digits live here in chrome mode (hud_view is hidden): level inside the badge,
 		# the four counters inside their pills, mm:ss under the energy timer.
-		text_center(level_rect.grow(-6.0), str(int(values.get("level", 1))), 36, Color("#22303F") if badge_drawn else Color(1, 1, 1, 0.96))
+		var level_font: Font = host._font_display_bold
+		if level_font == null:
+			level_font = host._font
+		text_center_font(level_font, level_rect.grow(-6.0), str(int(values.get("level", 1))), 40,
+				Color(1, 1, 1, 0.98))
+		# 2026-11-05: numbers sit centred and bold inside each bar; the energy bar also
+		# carries a 30-minute countdown pressed onto its top edge.
+		var num_color := Color("#3B5C8F")
 		var energy_rect: Rect2 = host._hud_pill_page("energy")
-		text_left(Rect2(energy_rect.position.x + 58.0, energy_rect.position.y + 10.0,
-				energy_rect.size.x - 74.0, 34.0), str(int(values.get("energy", 0))), 30, Color("#22303F"))
-		text_left(Rect2(energy_rect.position.x + 58.0, energy_rect.position.y + 42.0,
-				energy_rect.size.x - 74.0, 24.0),
-				host._mmss(int(values.get("energyTickSeconds", 0))), 18, Color("#5C6B7D"))
-		for key3 in ["coin", "star", "gem"]:
+		text_center_font(level_font, energy_rect, str(int(values.get("energy", 0))), 40, num_color)
+		var clock: String = host._mmss(host._energy_countdown())
+		var clock_rect := Rect2(energy_rect.position.x, energy_rect.position.y - 8.0,
+				energy_rect.size.x, 26.0)
+		for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+			text_center_font(level_font, Rect2(clock_rect.position + offset, clock_rect.size),
+					clock, 22, Color(0.12, 0.22, 0.40, 0.85))
+		text_center_font(level_font, clock_rect, clock, 22, Color(1.0, 1.0, 1.0))
+		for key3 in ["coin", "gem"]:
 			var counter_rect: Rect2 = host._hud_pill_page(key3)
-			text_left(Rect2(counter_rect.position.x + 58.0, counter_rect.position.y,
-					counter_rect.size.x - 66.0, counter_rect.size.y),
-					str(int(values.get(key3, 0))), 30, Color("#22303F"))
+			text_center_font(level_font, counter_rect, str(int(values.get(key3, 0))), 40, num_color)
 		if not draw_ui_fit("shop", LAYOUT_SHOP):
 			rounded(LAYOUT_SHOP, 30, Color("#5B8DEF"))
 			draw_rect(Rect2(LAYOUT_SHOP.position + Vector2(26.0, 34.0),
@@ -424,6 +500,12 @@ var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
 var _last_click_at: float = -1000.0
+## 2026-11-05: a finished level holds for 0.5 s (so the confirm badge is readable)
+## before the next level is applied. -1 means "not scheduled".
+const LEVEL_NEXT_DELAY := 1.0
+var _level_next_at: float = -1.0
+## Last whole second the chrome painted; drives the per-second countdown repaint.
+var _last_chrome_second: int = -1
 ## Gesture state: press -> (move > DRAG_THRESHOLD) drag -> release. A press without
 ## movement is still a click, so both interaction styles coexist.
 const DRAG_THRESHOLD := 10.0
@@ -517,6 +599,7 @@ func _ready() -> void:
 	orders.set_palette(_transparent_page(colors))
 	orders.set_metrics(metrics)
 	orders.set_project(model.project)
+	orders.set_asset_theme(theme_loader, model.project)
 	add_child(orders)
 
 	fly = FlyAnim.new()
@@ -663,6 +746,15 @@ func _draw() -> void:
 
 
 ## The HUD dictionary as plain values (the rail the chrome reads its text from).
+## 30-minute energy refill countdown, one second per tick, wrapping for the preview.
+const ENERGY_CYCLE := 1800
+
+
+func _energy_countdown() -> int:
+	var elapsed := int(floor(_clock)) % ENERGY_CYCLE
+	return ENERGY_CYCLE - elapsed
+
+
 func _hud_values(snap: Dictionary) -> Dictionary:
 	var values: Dictionary = _as_dict(snap.get("hud", {}))
 	if values.is_empty() and hud != null:
@@ -813,6 +905,11 @@ func _sync_from_sim() -> void:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
 	orders.sync_orders(_as_array(snap.get("orders", [])))
+	# 2026-11-05: the chrome draws the character portraits from the order list, so it
+	# must repaint whenever the snapshot changes — otherwise the old level's character
+	# stays on screen after a level switch.
+	if chrome != null:
+		chrome.queue_redraw()
 	_refresh_anchors()
 
 
@@ -897,6 +994,14 @@ func _refresh_anchors() -> void:
 	table["hud:gem"] = gem_local * hud.scale + hud.position
 	fly.set_anchors(table)
 	fly.set_clock(_clock)
+	_tick_level_next()
+	# The chrome draws the energy countdown, so it has to repaint when the second
+	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
+	var second := int(floor(_clock))
+	if second != _last_chrome_second:
+		_last_chrome_second = second
+		if chrome != null:
+			chrome.queue_redraw()
 
 
 # --------------------------------------------------------------------- events
@@ -964,6 +1069,34 @@ func _process(delta: float) -> void:
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
+	_tick_level_next()
+	# The chrome draws the energy countdown, so it has to repaint when the second
+	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
+	var second := int(floor(_clock))
+	if second != _last_chrome_second:
+		_last_chrome_second = second
+		if chrome != null:
+			chrome.queue_redraw()
+
+
+## A completed level waits LEVEL_NEXT_DELAY before advancing; the scheduled command is
+## applied through _apply_free so the take replays it at the same moment.
+func _tick_level_next() -> void:
+	if evaluator == null or evaluator.sim == null:
+		return
+	if not bool(evaluator.sim.level_complete_pending):
+		_level_next_at = -1.0
+		return
+	if _level_next_at < 0.0:
+		_level_next_at = _clock + LEVEL_NEXT_DELAY
+		return
+	if _clock < _level_next_at:
+		return
+	_level_next_at = -1.0
+	var result: Dictionary = _apply_free("level_next", {})
+	if not bool(result.get("ok", false)):
+		# No next level: stay put instead of retrying every frame.
+		_level_next_at = -1.0
 
 
 ## One place for the sim's verdict: the counters stay as they were (sim_rejected /
@@ -1048,14 +1181,8 @@ func _begin_press(point: Vector2) -> void:
 	_dragging = false
 	_press_tapped = false
 	_drag_from = Vector2i(-1, -1)
-	# Generators answer on press: a press-and-drag-out used to look dead because the
-	# spawn only happened on release, and only when the pointer was still on the cell.
-	if evaluator != null and evaluator.sim != null and _press_cell.x >= 0 			and evaluator.sim.board.has_item(_press_cell):
-		var item: Dictionary = evaluator.sim.board.item(_press_cell)
-		var entity_id := String(item.get("entity", ""))
-		if String(model.entity(entity_id).get("kind", "")) == "generator":
-			_free_click_at(_press_point)
-			_press_tapped = true
+	# 2026-11-05: a generator spawns on a plain click and moves on a drag, so the spawn
+	# can no longer fire on press (a press that crosses DRAG_THRESHOLD is a move).
 
 
 ## A press on a chip that moves more than DRAG_THRESHOLD becomes a drag: the chip and
@@ -1071,7 +1198,9 @@ func _maybe_start_drag(point: Vector2) -> void:
 		return
 	var item: Dictionary = evaluator.sim.board.item(_press_cell)
 	var entity_id := String(item.get("entity", ""))
-	if String(model.entity(entity_id).get("kind", "")) != "chip":
+	# 2026-11-05: generators are draggable too — releasing on a free cell moves them.
+	var kind := String(model.entity(entity_id).get("kind", ""))
+	if kind != "chip" and kind != "generator":
 		return
 	_dragging = true
 	_drag_from = _press_cell
@@ -1107,10 +1236,17 @@ func _end_press(release_point: Vector2) -> void:
 		var from := _drag_from
 		_drag_from = Vector2i(-1, -1)
 		var kind := String(action.get("kind", ""))
-		if kind == FreeMode.ACTION_MERGE or kind == FreeMode.ACTION_SWAP:
+		if kind == FreeMode.ACTION_MERGE or kind == FreeMode.ACTION_SWAP \
+				or kind == FreeMode.ACTION_MOVE:
 			_last_click_at = _clock
 			var event_type := "drag" if kind == FreeMode.ACTION_MERGE else "swap"
+			if kind == FreeMode.ACTION_MOVE:
+				event_type = "move"
 			var result: Dictionary = _apply_free(event_type, action.get("payload", {}))
+			if bool(result.get("ok", false)):
+				# merge pops (0.4 s up/down), a move/swap lands with a short shrink
+				if kind != FreeMode.ACTION_MOVE:
+					board.pulse(to, "merge" if kind == FreeMode.ACTION_MERGE else "settle", _clock)
 			print("[game] drag %s %s -> %s ok=%s" % [event_type, str(from), str(to),
 					str(result.get("ok", false))])
 			_record_click(point, {"kind": event_type, "ok": bool(result.get("ok", false)),
@@ -1153,6 +1289,8 @@ func _free_click_at(point: Vector2) -> Dictionary:
 				board.start_fly(evaluator.sim.last_spawn, _clock)
 		elif kind == FreeMode.ACTION_MERGE:
 			out["ok"] = bool(_apply_free("merge", action.get("payload", {})).get("ok", false))
+			if out["ok"]:
+				board.pulse(cell, "merge", _clock)
 		elif kind == FreeMode.ACTION_SELECT or kind == FreeMode.ACTION_CLEAR:
 			_sync_from_sim()
 			out["ok"] = true
@@ -1349,6 +1487,14 @@ func _reset_run() -> void:
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
+	_tick_level_next()
+	# The chrome draws the energy countdown, so it has to repaint when the second
+	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
+	var second := int(floor(_clock))
+	if second != _last_chrome_second:
+		_last_chrome_second = second
+		if chrome != null:
+			chrome.queue_redraw()
 
 
 # -------------------------------------------------------------------- cursor

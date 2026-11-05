@@ -61,6 +61,7 @@ const UiFonts := preload("res://src/core/ui_fonts.gd")
 const IceCell := preload("res://src/core/ice_cell.gd")
 const FlyPath := preload("res://src/core/fly_path.gd")
 const Safeboxes := preload("res://src/core/safeboxes.gd")
+const Pulse := preload("res://src/core/pulse.gd")
 
 ## §20.6 item 1: main_bg_01_bottom is 1080x1536 at (0,384) and fills to the bottom,
 ## main_bg_01_top is 1080x400 and covers the top band.
@@ -121,6 +122,9 @@ const COLOR_GLOW := Color(0.35, 0.84, 0.42)
 ## brackets, so the procedural frame carries both: yellow brackets + yellow glow.
 const COLOR_SELECT := Color("#FFC427")
 const SELECT_SCALE := 1.08
+## The white brackets are drawn slightly larger while dragging, so a 1.34x chip still
+## sits inside them (the frame, not the cell, is the size reference in hand).
+const DRAG_FRAME_GROW := 1.14
 const SELECT_LIFT := Vector2(0.0, -5.0)
 const SELECT_TOWARD := 7.0
 const COLOR_CAPSULE := Color(0.10, 0.15, 0.21, 0.82)
@@ -175,6 +179,10 @@ var ice_elapsed: float = 0.0
 var _flys: Array = []
 ## Safebox layout handed in by the screen (the sim owns the truth).
 var safeboxes: Array = []
+## Pickup time of the running drag (scale-in) and a one-shot pulse on one cell after a
+## merge (0.4 s) or a drop (0.2 s shrink).
+var _drag_started: float = 0.0
+var _pulse: Dictionary = {}
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
@@ -313,6 +321,8 @@ func set_drag_state(state: Dictionary) -> void:
 	if state.is_empty():
 		_drag = {}
 	else:
+		if _drag.is_empty():
+			_drag_started = _clock
 		var from := _to_cell(state.get("from", [-1, -1]))
 		_drag = {
 			"from": from,
@@ -348,6 +358,15 @@ func _process(_delta: float) -> void:
 	_flys = alive
 	if _flys.is_empty():
 		set_process(false)
+
+
+## One-shot scale feedback on a cell: kind is "merge" (0.4 s pop) or "settle" (0.2 s
+## shrink after a drop).
+func pulse(cell: Vector2i, kind: String, started_at: float = -1.0) -> void:
+	if cell.x < 0:
+		return
+	_pulse = {"cell": cell, "kind": kind, "started": _clock if started_at < 0.0 else started_at}
+	queue_redraw()
 
 
 func set_safeboxes(boxes: Array) -> void:
@@ -545,7 +564,7 @@ func _draw() -> void:
 					continue
 				if _is_fly_target(cell):
 					continue
-				_draw_item(cell, _items[cell])
+				_draw_item_pulsed(cell, _items[cell])
 
 	for cell in _completed.keys():
 		if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
@@ -697,6 +716,29 @@ func _inner_cell_rect(r: Rect2) -> Rect2:
 	return Rect2(left, top, maxf(right - left, 0.0), maxf(bottom - top, 0.0))
 
 
+## Item draw with the running merge/settle pulse, if this is the pulsing cell.
+func _draw_item_pulsed(key: Vector2i, item: Dictionary) -> void:
+	if _pulse.is_empty() or Vector2i(_pulse.get("cell", Vector2i(-1, -1))) != key:
+		_draw_item(key, item)
+		return
+	var kind := String(_pulse.get("kind", ""))
+	var started := float(_pulse.get("started", 0.0))
+	if _clock - started >= Pulse.duration_of(kind):
+		_pulse = {}
+		_draw_item(key, item)
+		return
+	var scale := Pulse.scale_at(kind, started, _clock)
+	var centre := cell_rect(key.x, key.y).get_center()
+	draw_set_transform(centre, 0.0, Vector2(scale, scale))
+	_draw_item_at_origin(key, item)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+func _draw_item_at_origin(key: Vector2i, item: Dictionary) -> void:
+	var cell := cell_rect(key.x, key.y)
+	_draw_item_rect(Rect2(Vector2(-cell.size.x * 0.5, -cell.size.y * 0.5), cell.size), item)
+
+
 func _draw_item(key: Vector2i, item: Dictionary) -> void:
 	_draw_item_rect(cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5), item)
 
@@ -845,10 +887,11 @@ func _draw_stamina_badge(r: Rect2) -> void:
 	if source.x <= 0.0 or source.y <= 0.0:
 		return
 	var size := Vector2(26.0, 26.0 * source.y / source.x)
-	# Clamp to the plate's inner area so the badge never sits on the blue border
-	# (the generator owns cell (0,0), whose corner is exactly on the border).
-	var inner := _inner_cell_rect(r)
-	draw_texture_rect(stamina, Rect2(inner.end.x - size.x - 2.0, inner.end.y - size.y - 2.0, size.x, size.y), false)
+	# 2026-11-05: position against the rect that was handed in, not the board-clamped
+	# cell — the drag draws with a transform around the pointer, and the board clamp
+	# used to park the badge on a fixed cell (the "drifting lightning").
+	var inner := r.grow(-2.0)
+	draw_texture_rect(stamina, Rect2(inner.end.x - size.x, inner.end.y - size.y, size.x, size.y), false)
 
 
 func _draw_special(r: Rect2, item: Dictionary) -> void:
@@ -1137,12 +1180,12 @@ func _draw_selection(key: Vector2i) -> void:
 
 ## White corner frame centred on `center` (page space). Drag passes the pointer
 ## position, so the same frame travels with the chip; the slot uses the cell centre.
-func _draw_selection_at(center: Vector2, offset: Vector2) -> void:
+func _draw_selection_at(center: Vector2, offset: Vector2, frame_scale: float = 1.0) -> void:
 	var texture := _ui_texture(UI_SELECT)
 	if texture != null:
 		# §20.6 item 7: the frame covers the whole cell, centred on it. The chip
 		# above still carries the lift/scale; the frame itself does not travel.
-		var frame_size := texture.get_size()
+		var frame_size := texture.get_size() * frame_scale
 		if frame_size.x > 0.0 and frame_size.y > 0.0:
 			draw_texture_rect(texture, Rect2(center + offset - frame_size * 0.5, frame_size), false)
 			return
@@ -1179,12 +1222,19 @@ func _draw_drag() -> void:
 	var cell := cell_rect(from.x, from.y)
 	var base := cell.grow(-float(CELL_GAP) * 0.5)
 	var half := base.size * 0.5
-	draw_set_transform(pos, 0.0, Vector2(SELECT_SCALE, SELECT_SCALE))
+	var drag_scale := Pulse.drag_scale(_drag_started, _clock)
+	draw_set_transform(pos, 0.0, Vector2(drag_scale, drag_scale))
 	_draw_item_rect(Rect2(-half, base.size), _items[from])
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _completed.has(from):
-		_draw_complete_mark_at(pos, SELECT_SCALE)
-	_draw_selection_at(pos, Vector2.ZERO)
+		_draw_complete_mark_at(pos, drag_scale)
+	_draw_selection_at(pos, Vector2.ZERO, DRAG_FRAME_GROW)
+	# 2026-11-05: the stamina badge is the top-most layer of a dragged generator, so it
+	# is painted after the white frame instead of underneath it.
+	if String((_items[from] as Dictionary).get("kind", "chip")) == "generator":
+		draw_set_transform(pos, 0.0, Vector2(drag_scale, drag_scale))
+		_draw_stamina_badge(Rect2(-half, base.size))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## The level line sits in the free strip above the board container (466 - 46).

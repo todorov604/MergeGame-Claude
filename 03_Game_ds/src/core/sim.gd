@@ -56,10 +56,19 @@ func setup(model_in, seed_value_in: int) -> void:
 
 # ---------------------------------------------------------------- level state
 
+## 2026-11-05: the badge number comes from the level data (`level_number`).
+func _apply_level_number(lvl: Dictionary, index: int) -> void:
+	hud["level"] = int(lvl.get("level_number", index + 1))
+
+
 func _load_level(index: int) -> void:
 	var lvl: Dictionary = {}
 	if model != null:
 		lvl = model.level(index)
+	if hud.is_empty() and model != null:
+		hud = model.hud_initial()
+	# 2026-11-05: the badge number comes from the level data, not from its index.
+	_apply_level_number(lvl, index)
 	board.load_level(lvl)
 	# Multi-cell safeboxes: the level declares the sizes it wants (e.g. ["1x7","2x4"]);
 	# their cells are blocked for the whole level, so no spawn/drop/merge lands there.
@@ -340,8 +349,11 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 	if cfg.is_empty():
 		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no generator behaviour")
 	var gs: Dictionary = _generator_slot(entity_id, cfg)
-	if int(gs["charges"]) <= 0:
-		return _err("SIM_NO_CHARGES", "\"" + entity_id + "\" has no charges left")
+	# 2026-11-05: the generator's stock IS the energy bar — no separate charge counter,
+	# so "88 energy" means exactly 88 taps.
+	gs["charges"] = int(hud.get("energy", 0))
+	if int(hud.get("energy", 0)) <= 0:
+		return _err("SIM_NO_ENERGY", "out of energy")
 	if time < float(gs["ready_at"]):
 		return _err("SIM_COOLDOWN", "\"" + entity_id + "\" ready at " + str(gs["ready_at"]))
 	# Check for space BEFORE drawing from the RNG: a rejected command must not
@@ -363,7 +375,8 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 	board.put(free, spawn_entity, spawn_level)
 	last_spawn = {"from": [pos.x, pos.y], "to": [free.x, free.y],
 			"entity": spawn_entity, "level": spawn_level}
-	gs["charges"] = int(gs["charges"]) - 1
+	hud["energy"] = int(hud.get("energy", 0)) - 1
+	gs["charges"] = int(hud["energy"])
 	gs["ready_at"] = time + float(cfg.get("cooldown", 0.0))
 	return _ok("spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
 
@@ -413,6 +426,25 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 ## Drag-and-drop swap (2026-11-05): a chip trades places with another chip on an
 ## unlocked cell, or slides into an empty one. A same entity+level drop is a merge
 ## instead — that decision is made by FreeMode.drag_action before this command runs.
+## Move a generator to another free cell (drag to reposition).
+func _do_move(payload: Dictionary) -> Dictionary:
+	var from := _to_pos((payload as Dictionary).get("from", null))
+	var to := _to_pos((payload as Dictionary).get("to", null))
+	if not board.in_bounds(from) or not board.in_bounds(to):
+		return _err("SIM_SLOT_OOB", "move endpoints are out of bounds")
+	if from == to:
+		return _err("SIM_NOOP", "move target equals source")
+	if board.is_blocked(to) or board.has_item(to):
+		return _err("SIM_BLOCKED", "move target is occupied or blocked")
+	if not board.has_item(from):
+		return _err("SIM_NO_ITEM", "move source is empty")
+	var item: Dictionary = board.item(from)
+	board.take(from)
+	board.put(to, String(item.get("entity", "")), int(item.get("level", 1)))
+	last_spawn = {}
+	return _ok("moved to " + str(to))
+
+
 func _do_swap(payload: Dictionary) -> Dictionary:
 	var from := _to_pos(payload.get("from", null))
 	var to := _to_pos(payload.get("to", null))

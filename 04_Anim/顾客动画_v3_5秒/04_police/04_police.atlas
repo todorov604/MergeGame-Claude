@@ -1,0 +1,68 @@
+04_police_atlas.png
+size: 434, 609
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+body
+  rotate: false
+  xy: 2, 2
+  size: 430, 509
+  orig: 430, 509
+  offset: 0, 0
+  index: -1
+eyelids_01
+  rotate: false
+  xy: 2, 515
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_02
+  rotate: false
+  xy: 94, 515
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_03
+  rotate: false
+  xy: 186, 515
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_04
+  rotate: false
+  xy: 278, 515
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_05
+  rotate: false
+  xy: 2, 561
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_06
+  rotate: false
+  xy: 94, 561
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_07
+  rotate: false
+  xy: 186, 561
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1
+eyelids_08
+  rotate: false
+  xy: 278, 561
+  size: 88, 42
+  orig: 88, 42
+  offset: 0, 0
+  index: -1

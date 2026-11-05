@@ -658,7 +658,7 @@ func _test_sample_run(t) -> void:
 	t.ok(s.level_complete_pending, "order_2 leaves level_2 complete")
 	t.ok(not s.board_full_pending, "the sample never fills the board")
 	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 9, "level_2 generator reset to 10 then tapped once")
-	t.eq(int(s.board.item_count()), 4, "4 items left on the level_2 board")
+	t.eq(int(s.board.item_count()), 3, "3 items left on the level_2 board")
 	t.ok(s.board.has_item(Vector2i(5, 0)) == false, "claimed mission items were consumed")
 
 	var before: String = s.digest()

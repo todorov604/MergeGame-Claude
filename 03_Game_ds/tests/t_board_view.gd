@@ -113,14 +113,14 @@ func _parsing(t) -> void:
 	var r: Dictionary = v.build_from_project(SAMPLE, 0)
 	t.ok(bool(r.get("ok", false)), "level 1 builds", String(r.get("error", "")))
 	t.eq(int(r.get("cells", 0)), 63, "7x9 board = 63 cells")
-	t.eq(int(r.get("items", 0)), 6, "level 1 has 6 items")
+	t.eq(int(r.get("items", 0)), 5, "level 1 has 5 items")
 	t.eq(int(r.get("obstacles", 0)), 4, "level 1 has 4 obstacles")
 	t.eq(String(r.get("level_id", "")), "level_1", "level id comes from the project")
 
 	var types: Array = r.get("obstacle_types", [])
 	types.sort()
-	t.eq(types, ["bubble", "ice", "lock", "web"], "obstacle types == {lock,web,bubble,ice}")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=6 obstacles=4"), "summary matches level 1",
+	t.eq(types, ["bag", "ice", "lock", "web"], "obstacle types == {lock,web,bag,ice} for level 1")
+	t.ok(v.debug_summary().begins_with("board=7x9 items=5 obstacles=4"), "summary matches level 1",
 			v.debug_summary())
 	var first: String = v.debug_summary()
 	v.build_from_project(SAMPLE, 0)
@@ -128,7 +128,7 @@ func _parsing(t) -> void:
 
 	var r2: Dictionary = v.build_from_project(SAMPLE, 1)
 	t.ok(bool(r2.get("ok", false)), "level 2 builds", String(r2.get("error", "")))
-	t.eq(int(r2.get("items", 0)), 8, "level 2 has 8 items")
+	t.eq(int(r2.get("items", 0)), 7, "level 2 has 7 items")
 	t.eq(int(r2.get("obstacles", 0)), 2, "level 2 has 2 obstacles")
 	t.eq(String(r2.get("level_id", "")), "level_2", "level 2 id")
 
@@ -247,7 +247,7 @@ func _chip_icons(t) -> void:
 		v.set_chip_icons(loader, project)
 	var resolved: int = v.chip_icon_count()
 	t.eq(resolved, 4, "level 1 resolves exactly four chip textures (generator + special stay procedural)")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=6 obstacles=4"),
+	t.ok(v.debug_summary().begins_with("board=7x9 items=5 obstacles=4"),
 			"summary prefix is unchanged with chip icons", v.debug_summary())
 	t.ok(resolved <= v.item_count(), "chip_icon_count never exceeds the item count",
 			"%d of %d" % [resolved, v.item_count()])
@@ -315,7 +315,7 @@ func _degraded(t) -> void:
 	t.eq(v.chip_icon_count(), 0, "no loader -> chip_icon_count() is 0")
 	t.eq(v.ui_ids().size(), 0, "no loader -> ui_ids() is empty")
 	t.eq(v.ui_summary(), "", "no loader -> ui_summary() is empty")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=6 obstacles=4"),
+	t.ok(v.debug_summary().begins_with("board=7x9 items=5 obstacles=4"),
 			"summary keeps its prefix without a chip loader", v.debug_summary())
 	t.eq(v.cell_rect(0, 0), Rect2(48, 466, 140.428571, 140.333333),
 			"the geometry stays the §20.5 geometry without a theme")

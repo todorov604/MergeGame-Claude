@@ -60,6 +60,7 @@ const PLATE_PAD := 16.0
 const UiFonts := preload("res://src/core/ui_fonts.gd")
 const IceCell := preload("res://src/core/ice_cell.gd")
 const FlyPath := preload("res://src/core/fly_path.gd")
+const Safeboxes := preload("res://src/core/safeboxes.gd")
 
 ## §20.6 item 1: main_bg_01_bottom is 1080x1536 at (0,384) and fills to the bottom,
 ## main_bg_01_top is 1080x400 and covers the top band.
@@ -89,9 +90,20 @@ const UI_LOCK := "lock"
 const UI_WEB := "web"
 const UI_BUBBLE := "bubble"
 const UI_ICE := "ice"
+const UI_SAFE_1X7 := "safe_1x7"
+const UI_SAFE_2X2 := "safe_2x2"
+const UI_SAFE_2X3 := "safe_2x3"
+const UI_SAFE_2X4 := "safe_2x4"
+const UI_SAFE_FRAME := "safe_frame"
+const UI_SAFE_LOCK := "safe_lock"
+const UI_SAFE_UNKNOWN := "safe_unknown"
+const SAFE_KEYS := {
+	"1x7": UI_SAFE_1X7, "2x2": UI_SAFE_2X2, "2x3": UI_SAFE_2X3, "2x4": UI_SAFE_2X4,
+}
 const UI_KEYS := [
 	UI_BG_BOTTOM, UI_BG_TOP, UI_BOARD_FRAME, UI_BOARD_PLATE, UI_CELL_LIGHT, UI_CELL, UI_SELECT,
 	UI_FINISH, UI_GENERATOR, UI_STAMINA, UI_LOCK, UI_WEB, UI_BUBBLE, UI_ICE,
+	UI_SAFE_1X7, UI_SAFE_2X2, UI_SAFE_2X3, UI_SAFE_2X4, UI_SAFE_FRAME, UI_SAFE_LOCK, UI_SAFE_UNKNOWN,
 ]
 
 const COLOR_PAGE := Color("#E6EDF6")
@@ -119,7 +131,7 @@ const FONT_INK := 30
 const FONT_CAPS := 22
 const FONT_COUNTER := 26
 
-const OBSTACLE_TYPES := ["lock", "web", "bubble", "ice"]
+const OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice"]
 const DEFAULT_SELECTED := [3, 3]
 const DEFAULT_COMPLETED := [[1, 4]]
 
@@ -158,7 +170,11 @@ var _font_display: Font = null
 var ice_elapsed: float = 0.0
 ## Spawn flight: {"spawn": sim.last_spawn, "started": level time}. While it runs the
 ## produced chip is drawn on the arc instead of its slot.
-var _fly: Dictionary = {}
+## Spawn flights, one per accepted tap: [{"spawn", "started"}]. Rapid taps each get
+## their own arc instead of waiting for the previous chip to land.
+var _flys: Array = []
+## Safebox layout handed in by the screen (the sim owns the truth).
+var safeboxes: Array = []
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
@@ -310,12 +326,33 @@ func set_drag_state(state: Dictionary) -> void:
 func start_fly(spawn: Dictionary, started_at: float) -> void:
 	if spawn.is_empty():
 		return
-	_fly = {"spawn": spawn.duplicate(true), "started": started_at}
+	_flys.append({"spawn": spawn.duplicate(true), "started": started_at})
+	set_process(true)
 	queue_redraw()
 
 
 func fly_active() -> bool:
-	return not _fly.is_empty()
+	return not _flys.is_empty()
+
+
+## Drives every running flight at display rate; stops itself when they all landed.
+func _process(_delta: float) -> void:
+	if _flys.is_empty():
+		set_process(false)
+		return
+	queue_redraw()
+	var alive: Array = []
+	for fly in _flys:
+		if FlyPath.progress(float(fly.get("started", 0.0)), _clock) < 1.0:
+			alive.append(fly)
+	_flys = alive
+	if _flys.is_empty():
+		set_process(false)
+
+
+func set_safeboxes(boxes: Array) -> void:
+	safeboxes = boxes.duplicate(true)
+	queue_redraw()
 
 
 func set_ice_elapsed(value: float) -> void:
@@ -489,6 +526,8 @@ func _draw() -> void:
 			if _obstacles.has(cell):
 				_draw_obstacle(cell, String(_obstacles[cell]))
 
+	_draw_safeboxes()
+
 	# 2026-11-05: a mission-satisfied chip reads as green cell + finish badge.
 	# While the chip is being dragged its cell is skipped here — the green must not be
 	# left behind as an empty square; it lands on the target cell after the drop, when
@@ -504,7 +543,7 @@ func _draw() -> void:
 			if _items.has(cell):
 				if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
 					continue
-				if not _fly.is_empty() and cell == _fly_target():
+				if _is_fly_target(cell):
 					continue
 				_draw_item(cell, _items[cell])
 
@@ -513,8 +552,8 @@ func _draw() -> void:
 			continue
 		_draw_complete_mark(cell)
 
-	if not _fly.is_empty() and not _draw_fly():
-		_fly = {}
+	for fly in _flys:
+		_draw_fly(fly)
 
 	if not _drag.is_empty():
 		_draw_drag()
@@ -613,23 +652,24 @@ func _draw_cell(x: int, y: int) -> void:
 	_rounded(Rect2(r.position + Vector2(3.0, 3.0), Vector2(r.size.x - 6.0, 5.0)), 3, COLOR_CELL_LIP)
 
 
-func _fly_target() -> Vector2i:
-	var to = (_fly.get("spawn", {}) as Dictionary).get("to", [])
-	if typeof(to) != TYPE_ARRAY or (to as Array).size() < 2:
-		return Vector2i(-1, -1)
-	return Vector2i(int((to as Array)[0]), int((to as Array)[1]))
+func _is_fly_target(cell: Vector2i) -> bool:
+	for fly in _flys:
+		var to = (fly.get("spawn", {}) as Dictionary).get("to", [])
+		if typeof(to) == TYPE_ARRAY and (to as Array).size() >= 2 \
+				and Vector2i(int((to as Array)[0]), int((to as Array)[1])) == cell:
+			return true
+	return false
 
 
-## Returns false once the flight is over, so the caller drops the state.
-func _draw_fly() -> bool:
-	var t := FlyPath.progress(float(_fly.get("started", 0.0)), _clock)
+func _draw_fly(fly: Dictionary) -> void:
+	var t := FlyPath.progress(float(fly.get("started", 0.0)), _clock)
 	if t >= 1.0:
-		return false
-	var spawn: Dictionary = _fly.get("spawn", {})
+		return
+	var spawn: Dictionary = fly.get("spawn", {})
 	var from = spawn.get("from", [])
 	var to = spawn.get("to", [])
 	if typeof(from) != TYPE_ARRAY or typeof(to) != TYPE_ARRAY:
-		return false
+		return
 	var a := Vector2i(int((from as Array)[0]), int((from as Array)[1]))
 	var b := Vector2i(int((to as Array)[0]), int((to as Array)[1]))
 	var start: Vector2 = cell_rect(a.x, a.y).get_center()
@@ -645,12 +685,8 @@ func _draw_fly() -> bool:
 	else:
 		_draw_chip(Rect2(-half, base.size), item)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	return true
 
 
-## Clamp a light-cell rect to the plate's inner area. Only the outer ring of cells is
-## affected (interior cells keep their 4px gap), so the checkerboard tiles never paint
-## over the 8px border or outside the rounded corners.
 func _inner_cell_rect(r: Rect2) -> Rect2:
 	var inner := Rect2(BOARD_ORIGIN + Vector2(PLATE_PAD, PLATE_PAD),
 			BOARD_SIZE - Vector2(PLATE_PAD * 2.0, PLATE_PAD * 2.0))
@@ -828,6 +864,8 @@ func _draw_special(r: Rect2, item: Dictionary) -> void:
 func _draw_obstacle(key: Vector2i, type: String) -> void:
 	var r := cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5)
 	match type:
+		"safe":
+			return  # one multi-cell group, drawn by _draw_safeboxes()
 		"lock":
 			if not _draw_ui_art(UI_LOCK, r):
 				_draw_lock(r)
@@ -845,6 +883,9 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 				_draw_web(r.get_center())
 		"bubble":
 			if not _draw_ui_art(UI_BUBBLE, r):
+				_draw_bubble(r.get_center())
+		"bag":
+			if not _draw_ui_art(UI_SAFE_UNKNOWN, r):
 				_draw_bubble(r.get_center())
 		"ice":
 			# 2026-11-05: a deterministic chip is frozen under the ice and the timer
@@ -929,6 +970,109 @@ func _draw_ice(r: Rect2) -> void:
 	draw_line(c + Vector2(6.0, 6.0), c + Vector2(34.0, 40.0), Color(1.0, 1.0, 1.0, 0.55), 3.0, true)
 	draw_line(c + Vector2(28.0, -38.0), c + Vector2(10.0, -12.0), Color(1.0, 1.0, 1.0, 0.35), 2.0, true)
 
+
+
+## Multi-cell safeboxes: one art per box, then bubble + lightning/charges + Lv frame +
+## lock on top. Geometry and labels come from the sim's layout, so the film and the
+## live board agree without any extra state.
+func _draw_safeboxes() -> void:
+	for raw in safeboxes:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var box: Dictionary = raw
+		var x0 := int(box.get("x", 0))
+		var y0 := int(box.get("y", 0))
+		var w := int(box.get("w", 1))
+		var h := int(box.get("h", 1))
+		if w <= 0 or h <= 0:
+			continue
+		var rect := cell_rect(x0, y0).merge(cell_rect(x0 + w - 1, y0 + h - 1))
+		var art := _ui_texture(SAFE_KEYS.get(String(box.get("size", "")), ""))
+		if art != null:
+			draw_texture_rect(art, rect, false)
+		_draw_safe_overlay(rect, box)
+
+
+func _draw_safe_overlay(rect: Rect2, box: Dictionary) -> void:
+	var tpl: Dictionary = Safeboxes.TEMPLATE
+	var centre := rect.get_center()
+	var bubble := _ui_texture(UI_BUBBLE)
+	if bubble != null:
+		var bs: float = tpl["bubble"]
+		draw_texture_rect(bubble, Rect2(centre + Vector2(0.0, float(tpl["bubble_offset_y"]))
+				- Vector2(bs, bs) * 0.5, Vector2(bs, bs)), false)
+	var bolt := _ui_texture(UI_STAMINA)
+	if bolt != null:
+		var bsize: Vector2 = tpl["bolt"]
+		draw_texture_rect(bolt, Rect2(centre + Vector2(0.0, float(tpl["bolt_offset_y"]))
+				- bsize * 0.5, bsize), false)
+	_draw_safe_label(Rect2(rect.position.x, centre.y + float(tpl["x_offset_y"]) - 20.0,
+			rect.size.x, 40.0), "x%d" % int(box.get("charges", 0)), int(tpl["x_size"]), Color(1, 1, 1, 1))
+	var frame := _ui_texture(UI_SAFE_FRAME)
+	var fsize: Vector2 = tpl["frame"]
+	var frame_rect := Rect2(centre + Vector2(0.0, float(tpl["frame_offset_y"])) - fsize * 0.5, fsize)
+	if frame != null:
+		var src := frame.get_size()
+		_draw_nine(frame, frame_rect, minf(14.0, minf(src.x, src.y) * 0.34))
+	_draw_safe_label_left(frame_rect.grow(-float(tpl["lv_pad_x"])),
+			"Lv.%d" % int(box.get("level", 10)), int(tpl["lv_size"]), Color("#33475B"))
+	var lock := _ui_texture(UI_SAFE_LOCK)
+	if lock != null:
+		var lsize: Vector2 = tpl["lock"]
+		draw_texture_rect(lock, Rect2(Vector2(frame_rect.end.x - lsize.x * 0.32,
+				frame_rect.get_center().y - lsize.y * 0.5), lsize), false)
+
+
+## 9-slice draw: corners stay 1:1, edges/centre stretch, so a rounded plate keeps its
+## radius at any size.
+func _draw_nine(texture: Texture2D, r: Rect2, corner: float) -> void:
+	var src := texture.get_size()
+	var c := minf(corner, minf(src.x, src.y) * 0.5)
+	if c <= 0.0:
+		draw_texture_rect(texture, r, false)
+		return
+	var inner_w := maxf(r.size.x - c * 2.0, 0.0)
+	var inner_h := maxf(r.size.y - c * 2.0, 0.0)
+	var sw := src.x - c * 2.0
+	var sh := src.y - c * 2.0
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y, c, c), Rect2(0, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y, c, c), Rect2(src.x - c, 0, c, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.end.y - c, c, c), Rect2(0, src.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.end.y - c, c, c), Rect2(src.x - c, src.y - c, c, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y, inner_w, c), Rect2(c, 0, sw, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.end.y - c, inner_w, c), Rect2(c, src.y - c, sw, c))
+	draw_texture_rect_region(texture, Rect2(r.position.x, r.position.y + c, c, inner_h), Rect2(0, c, c, sh))
+	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y + c, c, inner_h), Rect2(src.x - c, c, c, sh))
+	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y + c, inner_w, inner_h),
+			Rect2(c, c, sw, sh))
+
+
+## Centered label with a dark outline, drawn with the project display font.
+func _draw_safe_label(r: Rect2, text: String, size: int, color: Color) -> void:
+	if _font_display == null:
+		_font_display = UiFonts.load_font(UiFonts.DISPLAY_BOLD)
+	var font := _font_display if _font_display != null else _font
+	if font == null:
+		return
+	var baseline := Vector2(r.position.x, r.get_center().y + float(size) * 0.36)
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, size,
+				Color(0.16, 0.25, 0.36, 0.85))
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, size, color)
+
+
+## Left-aligned label with the same dark outline.
+func _draw_safe_label_left(r: Rect2, text: String, size: int, color: Color) -> void:
+	if _font_display == null:
+		_font_display = UiFonts.load_font(UiFonts.DISPLAY_BOLD)
+	var font := _font_display if _font_display != null else _font
+	if font == null:
+		return
+	var baseline := Vector2(r.position.x, r.get_center().y + float(size) * 0.36)
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+				Color(0.16, 0.25, 0.36, 0.85))
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
 func _draw_complete_mark(key: Vector2i) -> void:

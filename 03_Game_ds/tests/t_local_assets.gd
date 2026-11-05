@@ -51,6 +51,13 @@ const LOCAL_IDS := [
 	"ui_items_bar",
 	"ui_level_badge_bg",
 	"ui_reminder",
+	"ui_safe_1x7",
+	"ui_safe_2x2",
+	"ui_safe_2x3",
+	"ui_safe_2x4",
+	"ui_safe_frame",
+	"ui_safe_lock",
+	"ui_safe_unknown",
 	"ui_stamina",
 ]
 
@@ -71,6 +78,13 @@ const LOCAL_FILES := {
 	"ui_generator_icon": "generator_icon.png",
 	"ui_icon_finish": "main_icon_finish.png",
 	"ui_reminder": "reminder.png",
+	"ui_safe_1x7": "safe_1x7.png",
+	"ui_safe_2x2": "safe_2x2.png",
+	"ui_safe_2x3": "safe_2x3.png",
+	"ui_safe_2x4": "safe_2x4.png",
+	"ui_safe_frame": "safe_frame.png",
+	"ui_safe_lock": "safe_lock.png",
+	"ui_safe_unknown": "safe_unknown.png",
 	"ui_stamina": "stamina.png",
 	"ui_items_bar": "items.png",
 	"ui_level_badge_bg": "main_bar_level_bg.png",
@@ -101,6 +115,13 @@ const UI_KEYS := {
 	"reminder": "ui_reminder",
 	"coin_reward": "ui_coin_reward",
 	"generator": "ui_generator_icon",
+	"safe_1x7": "ui_safe_1x7",
+	"safe_2x2": "ui_safe_2x2",
+	"safe_2x3": "ui_safe_2x3",
+	"safe_2x4": "ui_safe_2x4",
+	"safe_frame": "ui_safe_frame",
+	"safe_lock": "ui_safe_lock",
+	"safe_unknown": "ui_safe_unknown",
 	"stamina": "ui_stamina",
 	"line": "ui_common_line",
 	"part1": "char_part1",
@@ -115,6 +136,13 @@ const EXPECTED_SIZE := {
 	"board_bg": Vector2i(1080, 1536),
 	"ui_items_bar": Vector2i(693, 183),
 	"ui_reminder": Vector2i(58, 58),
+	"ui_safe_1x7": Vector2i(980, 140),
+	"ui_safe_2x2": Vector2i(280, 280),
+	"ui_safe_2x3": Vector2i(420, 280),
+	"ui_safe_2x4": Vector2i(560, 280),
+	"ui_safe_frame": Vector2i(64, 48),
+	"ui_safe_lock": Vector2i(58, 68),
+	"ui_safe_unknown": Vector2i(140, 140),
 	"ui_stamina": Vector2i(39, 53),
 	"ui_bg_top": Vector2i(1080, 400),
 	"char_part1": Vector2i(373, 370),
@@ -189,7 +217,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 199, "index = 180 snapshot records + 19 local records")
+	t.eq(guard.index.size(), 206, "index = 180 snapshot records + 26 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -390,7 +418,7 @@ func _test_default_theme_ui_block(t) -> void:
 	if ui.has("common_line") and not ui.has("line"):
 		ui["line"] = ui["common_line"]
 		ui.erase("common_line")
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 29 layout keys")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 36 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

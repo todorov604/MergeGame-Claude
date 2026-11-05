@@ -10,6 +10,7 @@ extends RefCounted
 ## meaningful test instead of a coincidence.
 
 const BoardState = preload("res://src/core/board_state.gd")
+const Safeboxes := preload("res://src/core/safeboxes.gd")
 const ProjectModel = preload("res://src/core/project_model.gd")
 const Rng = preload("res://src/core/rng.gd")
 const StateDigest = preload("res://src/core/state_digest.gd")
@@ -26,6 +27,8 @@ var time: float = 0.0
 ## Last accepted generator drop: {"from", "to", "entity", "level"}. The views use it
 ## to fly the chip in; empty on a rejected tap.
 var last_spawn: Dictionary = {}
+## Multi-cell safeboxes for the current level (empty when the level declares none).
+var safeboxes: Array = []
 var hud: Dictionary = {}
 var orders: Array = []
 var generator_state: Dictionary = {}
@@ -58,6 +61,17 @@ func _load_level(index: int) -> void:
 	if model != null:
 		lvl = model.level(index)
 	board.load_level(lvl)
+	# Multi-cell safeboxes: the level declares the sizes it wants (e.g. ["1x7","2x4"]);
+	# their cells are blocked for the whole level, so no spawn/drop/merge lands there.
+	safeboxes = []
+	var sizes = lvl.get("safes", [])
+	if typeof(sizes) == TYPE_ARRAY and not (sizes as Array).is_empty():
+		var occupied: Array = []
+		for pos in board.cells.keys():
+			occupied.append(pos)
+		safeboxes = Safeboxes.layout(board.width, board.height, seed_value, index, sizes, occupied)
+		for cell in Safeboxes.cells(safeboxes):
+			board.add_obstacle(cell, "safe")
 
 	orders = []
 	var raw_orders = lvl.get("orders", [])

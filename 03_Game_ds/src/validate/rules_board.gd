@@ -1,13 +1,13 @@
 extends RefCounted
 ## Board geometry rules: 7x9 baseline, slot coordinates, occupancy, slot levels,
-## obstacles (lock / web / bubble / ice).
+## obstacles (lock / web / bubble / bag / ice).
 ##
 ## Obstacles are grid decorations, not slots: per the M0 sample an obstacle may sit
 ## on an empty cell (that is exactly how a "blocked but empty" cell looks).
 
 const Ctx = preload("res://src/validate/validate_ctx.gd")
 
-const KNOWN_OBSTACLE_TYPES := ["lock", "web", "bubble", "ice"]
+const KNOWN_OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice"]
 const M0_BOARD_W := 7
 const M0_BOARD_H := 9
 const M0_MAX_LEVEL := 10

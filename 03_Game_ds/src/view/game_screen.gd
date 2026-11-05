@@ -186,6 +186,7 @@ class Chrome extends Control:
 	const BAR_LINE_COLOR := FilmLayout.BAR_LINE_COLOR
 	const BAR_COIN_OFFSET_Y := FilmLayout.BAR_COIN_OFFSET_Y
 	const BAR_BUY := FilmLayout.BAR_BUY
+	const BAG_GROW := FilmLayout.BAG_GROW
 	const BAR_BUY_OFFSET_Y := FilmLayout.BAR_BUY_OFFSET_Y
 	const BAR_BUY_SIZE_Y := FilmLayout.BAR_BUY_SIZE_Y
 	const BAR_BUY_COLOR := FilmLayout.BAR_BUY_COLOR
@@ -230,7 +231,7 @@ class Chrome extends Control:
 				str(BAR_COIN_REWARD), 36, Color(1.0, 1.0, 1.0, 1.0), Color("#2F6B1E"))
 		if not draw_ui_fit("exit", LAYOUT_EXIT):
 			rounded(LAYOUT_EXIT.grow(-8.0), 30, Color(1, 1, 1, 0.92))
-		if not draw_ui_fit("bag", LAYOUT_BAG):
+		if not draw_ui_fit("bag", LAYOUT_BAG.grow(BAG_GROW)):
 			rounded(LAYOUT_BAG.grow(-6.0), 18, Color(1, 1, 1, 0.92))
 
 	## Stretch a ui slot to the exact rect with a tint (the common_line rule).
@@ -432,6 +433,9 @@ var _press_point := Vector2.ZERO
 var _press_cell := Vector2i(-1, -1)
 var _drag_from := Vector2i(-1, -1)
 var _drag_grab := Vector2.ZERO
+## A generator tap fires on press, so moving the pointer out of the cell afterwards
+## cannot cancel it; the matching release must not fire a second click.
+var _press_tapped := false
 ## `--no-render` records the take without starting the film (debug / test runs).
 var _auto_render: bool = true
 
@@ -549,6 +553,8 @@ func _ready() -> void:
 		# at the frozen time, otherwise it would expire before the screen is shot
 		_clock = _t_target
 		board.set_clock(_clock)
+	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
+		board.set_safeboxes(evaluator.sim.safeboxes)
 		while evaluator.cursor < evaluator.events.size():
 			var ev: Dictionary = evaluator.events[evaluator.cursor]
 			if float(ev.get("at", 0.0)) > _t_target:
@@ -803,6 +809,8 @@ func _sync_from_sim() -> void:
 			_generators_live(snap))
 	board.apply_state({"selected": _to_array(_selected), "completed": _completed_cells(snap)})
 	board.set_clock(_clock)
+	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
+		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
 	orders.sync_orders(_as_array(snap.get("orders", [])))
 	_refresh_anchors()
@@ -953,6 +961,8 @@ func _process(delta: float) -> void:
 	if _cursor_layer != null:
 		_cursor_layer.queue_redraw()
 	board.set_clock(_clock)
+	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
+		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 
 
@@ -1019,32 +1029,41 @@ func _input(event: InputEvent) -> void:
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if mouse.pressed:
-			_begin_press()
+			_begin_press(mouse.position)
 		else:
-			_end_press()
+			_end_press(mouse.position)
 	elif event is InputEventMouseMotion and _pressing:
-		_maybe_start_drag()
-		_update_drag()
+		_maybe_start_drag(event.position)
+		_update_drag(event.position)
 
 
 # ------------------------------------------------------------------ free mode
 
 ## Press starts either a click or a drag. Nothing is applied until release, so a
 ## gesture never both selects and merges by accident.
-func _begin_press() -> void:
-	_press_point = get_global_mouse_position()
+func _begin_press(point: Vector2) -> void:
+	_press_point = point
 	_press_cell = _cell_at(_press_point)
 	_pressing = true
 	_dragging = false
+	_press_tapped = false
 	_drag_from = Vector2i(-1, -1)
+	# Generators answer on press: a press-and-drag-out used to look dead because the
+	# spawn only happened on release, and only when the pointer was still on the cell.
+	if evaluator != null and evaluator.sim != null and _press_cell.x >= 0 			and evaluator.sim.board.has_item(_press_cell):
+		var item: Dictionary = evaluator.sim.board.item(_press_cell)
+		var entity_id := String(item.get("entity", ""))
+		if String(model.entity(entity_id).get("kind", "")) == "generator":
+			_free_click_at(_press_point)
+			_press_tapped = true
 
 
 ## A press on a chip that moves more than DRAG_THRESHOLD becomes a drag: the chip and
 ## its white frame follow the pointer (board_view renders both), selection is dropped.
-func _maybe_start_drag() -> void:
+func _maybe_start_drag(point: Vector2) -> void:
 	if not _pressing or _dragging:
 		return
-	if _press_point.distance_to(get_global_mouse_position()) < DRAG_THRESHOLD:
+	if _press_point.distance_to(point) < DRAG_THRESHOLD:
 		return
 	if evaluator == null or evaluator.sim == null or evaluator.sim.board == null:
 		return
@@ -1063,18 +1082,22 @@ func _maybe_start_drag() -> void:
 	board.set_drag_state({"from": _drag_from, "pos": centre})
 
 
-func _update_drag() -> void:
+func _update_drag(point: Vector2) -> void:
 	if not _dragging:
 		return
-	board.set_drag_state({"from": _drag_from, "pos": get_global_mouse_position() + _drag_grab})
+	board.set_drag_state({"from": _drag_from, "pos": point + _drag_grab})
 
 
 ## Release: a drag either merges (same entity+level) or cancels; a press without
 ## movement stays the old click semantics (select / tap / claim / next).
-func _end_press() -> void:
+func _end_press(release_point: Vector2) -> void:
 	if not _pressing:
 		return
-	var point := get_global_mouse_position()
+	if _press_tapped:
+		_press_tapped = false
+		_pressing = false
+		return
+	var point := release_point
 	if _dragging:
 		var to := _cell_at(point)
 		var action: Dictionary = FreeMode.drag_action(_drag_from, to, evaluator.sim, model,
@@ -1211,7 +1234,11 @@ func _apply_free(type: String, payload: Dictionary) -> Dictionary:
 	var result: Dictionary = sim.apply(event)
 	_note_sim_result(result)
 	_sync_from_sim()
-	if _recording:
+	# 2026-11-05: only accepted sim commands go into the take. A click the sim
+	# refused live (cooldown, blocked cell, ...) stays in the click log for the cursor
+	# but must not become a timeline event, or the replay would reject it and the
+	# render would stop at exit 3 with only the .avi on disk.
+	if _recording and bool(result.get("ok", false)):
 		_rec_events.append({"id": String(event["id"]), "at": at, "type": type,
 				"channel": "sim", "payload": payload.duplicate(true)})
 	return result
@@ -1319,6 +1346,8 @@ func _reset_run() -> void:
 	evaluator.load_timeline(_as_array(model.project.get("timeline", [])))
 	_sync_from_sim()
 	board.set_clock(_clock)
+	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
+		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 
 

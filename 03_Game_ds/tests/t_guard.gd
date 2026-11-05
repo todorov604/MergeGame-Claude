@@ -17,7 +17,7 @@ func run(t) -> void:
 	# 180 snapshot records + the 9 PRODUCTION ids that data/assets_local.json adds for
 	# the M1 layout art the snapshot does not carry yet (see tests/t_local_assets.gd).
 	# `obstacle_ice` is already a snapshot record, so it is not among them.
-	t.ok(strict_guard.index.size() == 199, "index has 180 snapshot + 19 local records", str(strict_guard.index.size()))
+	t.ok(strict_guard.index.size() == 206, "index has 180 snapshot + 26 local records", str(strict_guard.index.size()))
 
 	var loose_guard = AssetGuard.new()
 	loose_guard.load_from(INDEX, true)
@@ -134,8 +134,8 @@ func _test_allowed_ids(t, strict_guard, loose_guard) -> void:
 	t.ok(not strict_allowed.has("board_frame"), "allowed_ids excludes placeholder without the flag")
 	t.ok(not strict_allowed.has("audio_bgm"), "allowed_ids excludes TODO")
 	t.ok(not strict_allowed.has("chip_clean_ca_lv07"), "allowed_ids lists canonical ids only, never aliases")
-	t.eq(strict_allowed.size(), 174, "strict allowed_ids is the 155 PRODUCTION snapshot records + 19 local ones")
-	t.eq(loose_allowed.size(), 194, "loose allowed_ids adds the 20 placeholders to the same 174")
+	t.eq(strict_allowed.size(), 181, "strict allowed_ids is the 155 PRODUCTION snapshot records + 26 local ones")
+	t.eq(loose_allowed.size(), 201, "loose allowed_ids adds the 20 placeholders to the same 181")
 
 
 func _test_load_failure(t) -> void:

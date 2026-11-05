@@ -31,6 +31,7 @@ const TakeIo = preload("res://src/core/take_io.gd")
 const CompletedCells = preload("res://src/core/completed_cells.gd")
 const IceCell = preload("res://src/core/ice_cell.gd")
 const FlyPath = preload("res://src/core/fly_path.gd")
+const Safeboxes = preload("res://src/core/safeboxes.gd")
 
 const FPS := 60
 const MANIFEST_INDEX := "res://data/manifest_index.json"
@@ -79,6 +80,9 @@ const BAR_LINE_COLOR := Color("#C4D7E2")
 ## 金币按钮：整块下移，把 "Buy" 标题让到按钮上方的空白处。
 const BAR_COIN_OFFSET_Y := 46.0
 const BAR_BUY := "Buy"
+## 2026-11-05: the bottom-right fridge/bag art reads a size small, so it is drawn a
+## ring larger than its layout rect (the rect itself stays put).
+const BAG_GROW := 10.0
 const BAR_BUY_OFFSET_Y := 12.0
 const BAR_BUY_SIZE_Y := 30.0
 const BAR_BUY_COLOR := Color("#93A9BE")
@@ -207,9 +211,9 @@ var _toast_text := ""
 var _toast_at := -1.0e9
 var _frame := 0
 
-## Generator -> slot flight from the replayed tap, keyed by the event's `at` so the
-## film draws the same curve the live screen does.
-var _fly: Dictionary = {}
+## Generator -> slot flights, one per replayed tap: [{"spawn", "started"}]. Several can
+## be in the air at once, exactly like the live board.
+var _flys: Array = []
 var _t := 0.0
 var _total_frames := 0
 var _end_time := 0.0
@@ -559,6 +563,86 @@ func _draw_plate(texture: Texture2D, rect: Rect2, corner: float) -> void:
 			Rect2(c, c, src_inner_w, src_inner_h))
 
 
+## Multi-cell safeboxes, same layout function as the live board.
+func _draw_safeboxes(level_index: int) -> void:
+	var sizes: Array = []
+	if _model != null:
+		sizes = _model.level(level_index).get("safes", [])
+	var boxes: Array = Safeboxes.layout(_cols, _rows, seed_value, level_index, sizes)
+	for raw in boxes:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var box: Dictionary = raw
+		var x0 := int(box.get("x", 0))
+		var y0 := int(box.get("y", 0))
+		var w := int(box.get("w", 1))
+		var h := int(box.get("h", 1))
+		if w <= 0 or h <= 0:
+			continue
+		var rect: Rect2 = _slot_rect(x0, y0).merge(_slot_rect(x0 + w - 1, y0 + h - 1))
+		var art := _ui("safe_" + String(box.get("size", "")))
+		if art != null:
+			draw_texture_rect(art, rect, false)
+		_draw_safe_overlay(rect, box)
+
+
+func _draw_safe_overlay(rect: Rect2, box: Dictionary) -> void:
+	var tpl: Dictionary = Safeboxes.TEMPLATE
+	var centre := rect.get_center()
+
+	var bubble := _ui("bubble")
+	if bubble != null:
+		var bs: float = tpl["bubble"]
+		draw_texture_rect(bubble, Rect2(centre + Vector2(0.0, float(tpl["bubble_offset_y"]))
+				- Vector2(bs, bs) * 0.5, Vector2(bs, bs)), false)
+
+	var bolt := _ui("stamina")
+	if bolt != null:
+		var bsize: Vector2 = tpl["bolt"]
+		draw_texture_rect(bolt, Rect2(centre + Vector2(0.0, float(tpl["bolt_offset_y"]))
+				- bsize * 0.5, bsize), false)
+
+	_draw_safe_label(Rect2(rect.position.x, centre.y + float(tpl["x_offset_y"]) - 20.0,
+			rect.size.x, 40.0), "x%d" % int(box.get("charges", 0)), int(tpl["x_size"]), Color(1, 1, 1, 1))
+
+	var frame := _ui("safe_frame")
+	var fsize: Vector2 = tpl["frame"]
+	var frame_rect := Rect2(centre + Vector2(0.0, float(tpl["frame_offset_y"])) - fsize * 0.5, fsize)
+	if frame != null:
+		var src := frame.get_size()
+		_draw_plate(frame, frame_rect, minf(14.0, minf(src.x, src.y) * 0.34))
+	_draw_safe_label_left(frame_rect.grow(-float(tpl["lv_pad_x"])),
+			"Lv.%d" % int(box.get("level", 10)), int(tpl["lv_size"]), Color("#33475B"))
+
+	var lock := _ui("safe_lock")
+	if lock != null:
+		var lsize: Vector2 = tpl["lock"]
+		draw_texture_rect(lock, Rect2(Vector2(frame_rect.end.x - lsize.x * 0.32,
+				frame_rect.get_center().y - lsize.y * 0.5), lsize), false)
+
+
+func _draw_safe_label_left(r: Rect2, text: String, size: int, color: Color) -> void:
+	var font := _font_display_bold if _font_display_bold != null else _font_zh
+	if font == null:
+		return
+	var baseline := Vector2(r.position.x, r.get_center().y + float(size) * 0.36)
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size,
+				Color(0.16, 0.25, 0.36, 0.85))
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
+
+func _draw_safe_label(r: Rect2, text: String, size: int, color: Color) -> void:
+	var font := _font_display_bold if _font_display_bold != null else _font_zh
+	if font == null:
+		return
+	var baseline := Vector2(r.position.x, r.get_center().y + float(size) * 0.36)
+	for offset in [Vector2(-1.5, 0.0), Vector2(1.5, 0.0), Vector2(0.0, -1.5), Vector2(0.0, 1.5)]:
+		draw_string(font, baseline + offset, text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, size,
+				Color(0.16, 0.25, 0.36, 0.85))
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, size, color)
+
+
 ## Finish badge exactly like board_view: the ui_icon_finish texture, centred at
 ## cell centre + (36,34), at the texture's own size.
 func _draw_finish_badge(cell: Vector2i) -> void:
@@ -642,6 +726,20 @@ func _process(_delta: float) -> void:
 
 ## Feeds every event whose resolved time is <= t. The evaluator does the ordering
 ## and the sim mutation; this scene only reads the resulting snapshot.
+## True when the take's click log records a refused click at this timestamp.
+func _failed_live_at(at: float) -> bool:
+	if at < 0.0:
+		return false
+	for raw in (_take.get("clicks", []) as Array):
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		if bool((raw as Dictionary).get("ok", true)):
+			continue
+		if absf(float((raw as Dictionary).get("t", -99.0)) - at) <= 0.004:
+			return true
+	return false
+
+
 func _advance_to(t: float) -> void:
 	if _evaluator == null:
 		return
@@ -656,15 +754,21 @@ func _advance_to(t: float) -> void:
 		# whose `channel` is missing used to fail EV_CHANNEL here while the film kept
 		# rendering the cursor over a frozen board (the "merge did nothing" dud).
 		if not bool(r.get("ok", false)):
-			_rejected.append({
-				"id": String(r.get("id", "")),
-				"channel": channel,
-				"code": String(r.get("code", "")),
-			})
+			# A command the player already got refused in free mode (the click log has
+			# ok=false at that instant) is not a broken take: older recorders wrote
+			# every attempt, and failing the whole film over it left only the .avi.
+			if channel == "sim" and _failed_live_at(float(r.get("at", -1.0))):
+				pass
+			else:
+				_rejected.append({
+					"id": String(r.get("id", "")),
+					"channel": channel,
+					"code": String(r.get("code", "")),
+				})
 		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
 			var spawn: Dictionary = _evaluator.sim.last_spawn
 			if not spawn.is_empty():
-				_fly = {"spawn": spawn.duplicate(true), "started": float(r.get("at", t))}
+				_flys.append({"spawn": spawn.duplicate(true), "started": float(r.get("at", t))})
 		if channel == "sim":
 			# §7 item 4: the film shows the same prompt the live screen shows, either
 			# as an explicit board_full marker or as the sim's verdict on some event.
@@ -964,15 +1068,21 @@ func _draw_board(snap: Dictionary) -> void:
 		draw_rect(Rect2(_origin, _board_size), Color(tint_color.r, tint_color.g, tint_color.b, tint), true)
 
 	var cells: Array = board.get("cells", [])
-	var flying_to := Vector2i(-1, -1)
-	if not _fly.is_empty():
-		var to_raw = (_fly.get("spawn", {}) as Dictionary).get("to", [])
+	var flying_to: Array = []
+	for fly in _flys:
+		var to_raw = (fly.get("spawn", {}) as Dictionary).get("to", [])
 		if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
-			flying_to = Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1]))
+			flying_to.append(Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])))
+	var now := float(_frame) / float(FPS)
+	var alive: Array = []
+	for fly in _flys:
+		if FlyPath.progress(float(fly.get("started", 0.0)), now) < 1.0:
+			alive.append(fly)
+	_flys = alive
 	for raw in cells:
 		if typeof(raw) == TYPE_ARRAY and (raw as Array).size() >= 4:
 			var item_pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
-			if item_pos == flying_to and _draw_fly():
+			if flying_to.has(item_pos):
 				continue
 			_draw_item(item_pos, String((raw as Array)[2]), int((raw as Array)[3]))
 
@@ -983,6 +1093,11 @@ func _draw_board(snap: Dictionary) -> void:
 		var pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
 		for kind in (raw as Array)[2]:
 			_draw_obstacle(pos, String(kind))
+
+	_draw_safeboxes(int(snap.get("level_index", 0)))
+
+	for fly in _flys:
+		_draw_fly(fly)
 
 	for cell in completed:
 		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
@@ -1050,7 +1165,7 @@ func _draw_bottom_bar(snap: Dictionary) -> void:
 			c + Vector2(28.0, -12.0), c + Vector2(28.0, 12.0), c + Vector2(2.0, 12.0),
 			c + Vector2(2.0, 28.0),
 		]), _palette("ink", COLOR_INK))
-	if not _draw_ui_fit("bag", LAYOUT_BAG):
+	if not _draw_ui_fit("bag", LAYOUT_BAG.grow(BAG_GROW)):
 		_hud_pill(LAYOUT_BAG.grow(-6.0), _palette("card", COLOR_PILL),
 				_palette("card_edge", COLOR_PILL_EDGE), 18)
 		draw_rect(Rect2(LAYOUT_BAG.position + Vector2(22.0, 24.0),
@@ -1164,17 +1279,16 @@ func _draw_stamina_badge(r: Rect2) -> void:
 	draw_texture_rect(stamina, Rect2(inner.end.x - size.x - 2.0, inner.end.y - size.y - 2.0, size.x, size.y), false)
 
 
-## Generator -> slot flight. Returns false when finished (the caller clears _fly).
-func _draw_fly() -> bool:
-	var t := FlyPath.progress(float(_fly.get("started", 0.0)), float(_frame) / float(FPS))
+## Generator -> slot flight, one draw per active spawn.
+func _draw_fly(fly: Dictionary) -> void:
+	var t := FlyPath.progress(float(fly.get("started", 0.0)), float(_frame) / float(FPS))
 	if t >= 1.0:
-		_fly = {}
-		return false
-	var spawn: Dictionary = _fly.get("spawn", {})
+		return
+	var spawn: Dictionary = fly.get("spawn", {})
 	var from = spawn.get("from", [])
 	var to = spawn.get("to", [])
 	if typeof(from) != TYPE_ARRAY or typeof(to) != TYPE_ARRAY:
-		return false
+		return
 	var a := Vector2i(int((from as Array)[0]), int((from as Array)[1]))
 	var b := Vector2i(int((to as Array)[0]), int((to as Array)[1]))
 	var at := FlyPath.point(_slot_rect(a.x, a.y).get_center(), _slot_rect(b.x, b.y).get_center(), t)
@@ -1182,11 +1296,10 @@ func _draw_fly() -> bool:
 	var half := base.size * 0.5
 	var texture := _chip_texture(String(spawn.get("entity", "")), int(spawn.get("level", 1)))
 	if texture == null:
-		return false
+		return
 	draw_set_transform(at, 0.0, Vector2.ONE)
 	_draw_chip_texture(Rect2(-half, base.size), texture)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	return true
 
 
 func _draw_obstacle(pos: Vector2i, kind: String) -> void:
@@ -1195,6 +1308,8 @@ func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 	# art otherwise. An ice cell freezes a deterministic chip and shows its level
 	# through the project display font (the old hard-coded timer is gone).
 	match kind:
+		"safe":
+			return  # one multi-cell group is drawn by _draw_safeboxes()
 		"lock":
 			if _draw_ui_fit("lock", r):
 				return
@@ -1227,6 +1342,11 @@ func _draw_obstacle(pos: Vector2i, kind: String) -> void:
 						var am := a0 + TAU / 16.0
 						pts.append(c + Vector2(cos(am), sin(am)) * float(ring) * 0.86)
 				draw_polyline(pts, white, 2.5, true)
+		"bag":
+			if _draw_ui_fit("safe_unknown", r):
+				return
+			if _draw_ui_fit("bubble", r):
+				return
 		"bubble":
 			if _draw_ui_fit("bubble", r):
 				return

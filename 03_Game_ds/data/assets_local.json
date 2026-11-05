@@ -241,6 +241,97 @@
       "fit": "stretch",
       "pending_manifest": true,
       "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_1x7": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱 1×7（最下一行整排）",
+      "file_name": "safe_1x7.png",
+      "source": "01_icon\\HotelManor_icon\\界面切图\\common_main_icon_lock_1x7.png",
+      "target_size": "980×140",
+      "actual_size": "980×140",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_2x2": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱 2×2",
+      "file_name": "safe_2x2.png",
+      "source": "01_icon\\HotelManor_icon\\界面切图\\common_main_icon_lock_2x2.png",
+      "target_size": "280×280",
+      "actual_size": "280×280",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_2x3": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱 2×3",
+      "file_name": "safe_2x3.png",
+      "source": "01_icon\\HotelManor_icon\\界面切图\\common_main_icon_lock_2x3.png",
+      "target_size": "420×280",
+      "actual_size": "420×280",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_2x4": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱 2×4",
+      "file_name": "safe_2x4.png",
+      "source": "01_icon\\HotelManor_icon\\界面切图\\common_main_icon_lock_2x4.png",
+      "target_size": "560×280",
+      "actual_size": "560×280",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_frame": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱 Lv 小框（拉伸成标签条）",
+      "file_name": "safe_frame.png",
+      "source": "北京Icon/常用资产汇总\\界面ui\\common_main_frame_label.png",
+      "target_size": "64×48",
+      "actual_size": "64×48",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_lock": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱小锁头",
+      "file_name": "safe_lock.png",
+      "source": "北京Icon/常用资产汇总\\界面ui\\common_main_icon_lock.png",
+      "target_size": "58×68",
+      "actual_size": "58×68",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_safe_unknown": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "界面",
+      "use": "保险箱气泡（未知道具「?」卡片），包住闪电",
+      "file_name": "safe_unknown.png",
+      "source": "北京Icon/常用资产汇总/界面ui/common_main_icon_unknown.png",
+      "target_size": "140×140",
+      "actual_size": "140×140",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
     }
   }
 }

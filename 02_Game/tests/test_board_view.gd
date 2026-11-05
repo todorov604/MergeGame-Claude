@@ -24,17 +24,41 @@ func run(r) -> void:
 	r.check(bool(frame["ok"]), "allow_placeholders=true 时 PLACEHOLDER 应可加载: " + str(frame["error"]))
 	r.check(frame["texture"] != null, "board_frame 纹理不应为 null")
 
+	# PSD §20.5 布局常量与源图尺寸：回归时直接失败。
+	r.eq(BoardView.BOARD_ORIGIN, Vector2(48.0, 466.0), "棋盘容器原点应为 (48,466)")
+	r.eq(BoardView.BOARD_SIZE, Vector2(983.0, 1263.0), "棋盘容器尺寸应为 983×1263")
+	r.eq(BoardView.BG_BOTTOM_RECT, Rect2(0.0, 384.0, 1080.0, 1536.0), "底部背景应为 1080×1536 @ y=384")
+	r.eq(BoardView.BG_TOP_RECT, Rect2(0.0, 0.0, 1080.0, 400.0), "顶部背景应为 1080×400 @ (0,0)")
+	r.eq(BoardView.ITEMS_RECT, Rect2(193.0, 1731.0, 693.0, 183.0), "底部信息条应为 693×183 @ (193,1731)")
+	r.eq(BoardView.EXIT_RECT.size, Vector2(164.0, 174.0), "左下退出按钮应为 164×174")
+	r.eq(BoardView.CABINET_RECT.size, Vector2(109.0, 147.0), "右下背包应为 109×147")
+	r.eq(BoardView.CHIP_ICON_MAX, 140.0, "chip 图标最大绘制尺寸应为 140")
+
+	var expected_sizes := {
+		"board_frame": Vector2(983.0, 1263.0),
+		"board_bg": Vector2(1080.0, 1536.0),
+		"local_bg_top": Vector2(1080.0, 400.0),
+		"local_items_bar": Vector2(693.0, 183.0),
+		"ui_select_frame": Vector2(160.0, 164.0),
+		"ui_order_card": Vector2(120.0, 180.0),
+		"char_order_01_idle": Vector2(373.0, 370.0),
+		"char_order_02_idle": Vector2(373.0, 524.0),
+	}
+	for asset_id in expected_sizes.keys():
+		var asset_result: Dictionary = loader_allowed.load_texture(String(asset_id))
+		r.check(bool(asset_result.get("ok", false)), "PSD 素材应可加载: %s (%s)" % [asset_id, str(asset_result.get("error", ""))])
+		var texture_v: Variant = asset_result.get("texture")
+		if texture_v is Texture2D:
+			r.eq((texture_v as Texture2D).get_size(), expected_sizes[asset_id], "PSD 素材源尺寸: %s" % asset_id)
+
 	var font: Dictionary = loader.load_font("font_en")
 	r.check(bool(font["ok"]), "PRODUCTION 字体应可加载: " + str(font["error"]))
 	r.check(font["font"] != null, "font_en 字体不应为 null")
 
-	var reference: Dictionary = loader.load_texture("chip_clean_ca_lv01")
-	r.check(not bool(reference["ok"]), "REFERENCE_ONLY 资源必须被拒绝")
-	var reference_error := str(reference["error"])
-	r.check(
-		reference_error.find("未在 assets.json 中定义") != -1 or reference_error.find("禁止加载") != -1,
-		"REFERENCE_ONLY 错误文案（实际=%s）" % reference_error
-	)
+	# 真实棋子图标在 M1 已登记为 PRODUCTION 并打包进 assets/。
+	var chip_icon: Dictionary = loader.load_texture("chip_clean_ca_lv01")
+	r.check(bool(chip_icon["ok"]), "PRODUCTION 棋子图标应可加载: " + str(chip_icon["error"]))
+	r.check(chip_icon["texture"] != null, "棋子图标纹理不应为 null")
 
 	var unknown: Dictionary = loader.load_texture("no_such_asset")
 	r.check(not bool(unknown["ok"]), "未知资源必须被拒绝")

@@ -9,11 +9,11 @@ extends Control
 
 const AssetLoader := preload("res://game/asset_loader.gd")
 
-const MAIN_RECT := Rect2(0.0, 560.0, 1080.0, 120.0)
-const CTA_RECT := Rect2(0.0, 1560.0, 1080.0, 120.0)
+const MAIN_RECT := Rect2(180.0, 800.0, 720.0, 110.0)
+const CTA_RECT := Rect2(340.0, 1540.0, 400.0, 110.0)
 const BOARD_FULL_RECT := Rect2(284.0, 1000.0, 512.0, 128.0)
-const MAIN_FONT_SIZE := 64
-const CTA_FONT_SIZE := 56
+const MAIN_FONT_SIZE := 48
+const CTA_FONT_SIZE := 48
 const BOARD_FULL_FONT_SIZE := 48
 const DEFAULT_TEXT_SECONDS := 2.0
 const DEFAULT_LEVELUP_SECONDS := 1.5
@@ -57,6 +57,10 @@ func setup(project_data_arg: Dictionary, board_view_arg, order_view_arg, theme_a
 
 	_main_label = _ensure_label(_main_label, MAIN_RECT, MAIN_FONT_SIZE)
 	_cta_label = _ensure_label(_cta_label, CTA_RECT, CTA_FONT_SIZE)
+	_main_label.add_theme_stylebox_override("normal", _make_style(Color(1.0, 1.0, 1.0, 0.94), 30, Color("#7fb2e5"), 4))
+	_main_label.add_theme_color_override("font_color", Color("#2b4a7a"))
+	_cta_label.add_theme_stylebox_override("normal", _make_style(Color("#3ddc6a"), 30, Color("#a9f7bd"), 4))
+	_cta_label.add_theme_color_override("font_color", Color.WHITE)
 	var font := _ui_font()
 	if font != null:
 		_main_label.add_theme_font_override("font", font)
@@ -443,6 +447,15 @@ func _ensure_label(existing: Label, rect: Rect2, font_size: int) -> Label:
 	label.text = ""
 	label.visible = false
 	return label
+
+
+func _make_style(fill: Color, corner: int, border: Color, border_width: int) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = fill
+	style.set_corner_radius_all(corner)
+	style.set_border_width_all(border_width)
+	style.border_color = border
+	return style
 
 
 func _ui_font() -> Font:

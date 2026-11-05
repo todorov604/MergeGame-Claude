@@ -11,7 +11,7 @@ func run(r) -> void:
 	var manifest_path := "res://data/manifest_index.json"
 	var manifest = ManifestDoc.new()
 	r.check(manifest.load_file(manifest_path), "manifest 应能加载")
-	r.eq(manifest.resources.size(), 74, "manifest 资源数应为 74")
+	r.eq(manifest.resources.size(), 180, "manifest 资源数应为 180")
 
 	# 1) 真 manifest 通过
 	var vm = Validator.new()
@@ -65,6 +65,11 @@ func run(r) -> void:
 	_expect_error(r, manifest, base, "timeline", "锚点循环", func(d): d["timeline"].append({"id": "c1", "channel": "view", "type": "text", "at": {"after": "c2", "offset": 0.0}, "payload": {"text_key": "cta.play"}}); d["timeline"].append({"id": "c2", "channel": "view", "type": "text", "at": {"after": "c1", "offset": 0.0}, "payload": {"text_key": "cta.play"}}))
 	_expect_error(r, manifest, base, "timeline", "订单", func(d): d["timeline"][3]["payload"]["order"] = "order_missing")
 
+	# 5b) chips.<entity>.icons 映射：未知资源 / 非法等级 / 未定义实体
+	_expect_error(r, manifest, base, "chips.CleanSet_Ca.icons.1", "未定义", func(d): d["chips"] = {"CleanSet_Ca": {"icons": {"1": "no_such_asset"}}})
+	_expect_error(r, manifest, base, "chips.CleanSet_Ca.icons.11", "1-10", func(d): d["chips"] = {"CleanSet_Ca": {"icons": {"11": "chip_clean_ca_lv01"}}})
+	_expect_error(r, manifest, base, "chips.Ghost", "未定义", func(d): d["chips"] = {"Ghost": {"icons": {"1": "chip_clean_ca_lv01"}}})
+
 	# 警告项（不阻断）
 	var w1 = _validate_with(manifest, base, func(d): d["meta"]["duration"] = 30)
 	r.check(_has_warning(w1.warnings, "duration"), "meta.duration 应产生警告")
@@ -82,7 +87,7 @@ func run(r) -> void:
 	_check(r, vmm.errors, "resources[%d].file" % frame_index, "缺图", "manifest 缺图应报错")
 
 	var m3 = _fresh_manifest()
-	m3.resources[0]["usage"] = "PRODUCTION"
+	m3.resources[0]["usage"] = "REFERENCE_ONLY"
 	var vm3 = Validator.new()
 	vm3.validate_manifest(m3)
 	_check(r, vm3.errors, "resources[0]", "status", "status/usage 不一致应报错")
@@ -130,8 +135,24 @@ func run(r) -> void:
 	# 10) 主题目录不存在应报错
 	_expect_error(r, manifest, theme_base, "theme", "主题文件不存在", func(d): d["theme"] = "themes/does_not_exist")
 
-	# 11) 主题引用 REFERENCE_ONLY 资源（真实 manifest 守卫）应报错
-	_expect_error(r, manifest, theme_base, "theme", "REFERENCE_ONLY", func(d): d["theme"] = "tests/fixtures/themes/reference")
+	# 11) 主题 chip_icons 引用 REFERENCE_ONLY 资源应报错。
+	# 新 manifest 已无 REFERENCE_ONLY 条目，用内存变异把 pet_shop 引用的 chip_clean_ca_lv01 改为 REFERENCE_ONLY。
+	var ref_manifest = _fresh_manifest()
+	ref_manifest.by_id["chip_clean_ca_lv01"]["usage"] = "REFERENCE_ONLY"
+	var p_ref = ProjectDoc.new()
+	p_ref.from_dict(theme_base.duplicate(true), "<theme_ref>")
+	var v_ref = Validator.new()
+	v_ref.validate_project(p_ref, ref_manifest, true)
+	r.check(
+		_has(v_ref.errors, "theme.chip_icons", "REFERENCE_ONLY"),
+		"主题 chip_icons 引用 REFERENCE_ONLY 应报错: " + _join(v_ref.errors)
+	)
+
+	# 11b) 主题 chip_icons 引用未定义资源应报错
+	_expect_error(r, manifest, theme_base, "theme.chip_icons", "未定义", func(d): d["theme"] = "tests/fixtures/themes/chip_unknown")
+
+	# 11c) manifest 为 PRODUCTION 但未打包（不在 assets.json）的主题引用必须被门禁拦下
+	_expect_error(r, manifest, theme_base, "theme.chip_icons", "未打包", func(d): d["theme"] = "tests/fixtures/themes/chip_unpackaged")
 
 	# 12) allow=false：主题的 PLACEHOLDER 资源应被守卫拒绝
 	var p_theme_blocked = ProjectDoc.new()

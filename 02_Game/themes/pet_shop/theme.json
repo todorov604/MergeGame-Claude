@@ -1,1 +1,34 @@
-{"name":"pet_shop","background":{"top":"#35455f","bottom":"#101a2b"},"board_frame":"board_frame","fonts":{"ui":"font_zh"},"star":"ui_icon_star","chip_palette":["#ff8a5c","#5cc8ff","#a07cff","#6be585","#ffd83d","#ff6fa5","#4fd1c5","#c0d3e8"]}
+{
+	"name": "pet_shop",
+	"background": {"top": "#35455f", "bottom": "#101a2b"},
+	"board_frame": "board_frame",
+	"fonts": {"ui": "font_zh"},
+	"star": "ui_icon_star",
+	"chip_palette": ["#ff8a5c", "#5cc8ff", "#a07cff", "#6be585", "#ffd83d", "#ff6fa5", "#4fd1c5", "#c0d3e8"],
+	"chip_icons": {
+		"CleanSet_Ca": {
+			"1": "chip_clean_ca_lv01",
+			"2": "chip_clean_ca_lv02",
+			"3": "chip_clean_ca_lv03",
+			"4": "chip_clean_ca_lv04",
+			"5": "chip_clean_ca_lv05",
+			"6": "chip_clean_ca_lv06",
+			"7": "icon_10002107",
+			"8": "icon_10002108",
+			"9": "icon_10002109",
+			"10": "icon_10002110"
+		},
+		"CleanSet_Cb": {
+			"1": "chip_clean_cb_lv01",
+			"2": "chip_clean_cb_lv02",
+			"3": "chip_clean_cb_lv03",
+			"4": "chip_clean_cb_lv04",
+			"5": "chip_clean_cb_lv05",
+			"6": "chip_clean_cb_lv06",
+			"7": "icon_10002207",
+			"8": "icon_10002208",
+			"9": "icon_10002209",
+			"10": "icon_10002210"
+		}
+	}
+}

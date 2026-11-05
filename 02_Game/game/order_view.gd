@@ -6,8 +6,8 @@ extends Control
 
 const AssetLoader := preload("res://game/asset_loader.gd")
 
-const CARD_RECT := Rect2(40.0, 150.0, 580.0, 240.0)
-const CHARACTER_CENTER := Vector2(860.0, 360.0)
+const CHARACTER_SIZE_01 := Vector2(373.0, 370.0)
+const CHARACTER_SIZE_02 := Vector2(373.0, 524.0)
 const COMPLETE_HEX := "#3ddc6a"
 const STATE_CLAIMED := "claimed"
 const STATE_READY := "ready"
@@ -35,6 +35,8 @@ var _palette: Array[Color] = [
 var _font_cache: Font = null
 var _star_texture: Texture2D = null
 var _star_checked := false
+var _texture_cache: Dictionary = {}
+var _card_style: StyleBoxTexture = null
 var _character_alpha := 1.0
 var _character_done := false
 var _level_complete_text := ""
@@ -51,6 +53,8 @@ func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, allow_placeho
 	_font_cache = null
 	_star_texture = null
 	_star_checked = false
+	_texture_cache = {}
+	_card_style = null
 	_level_complete_text = ""
 	_active_level_index = -1
 	_character_alpha = 1.0
@@ -91,9 +95,21 @@ func get_order_state() -> String:
 	return order_state
 
 
-## OrderView 本地坐标（角色头/身的整体中心）。
+## OrderView 本地坐标（角色头/身的整体中心）。char_01 在左、char_02 在右，贴近棋盘.psd。
 func character_center() -> Vector2:
-	return CHARACTER_CENTER
+	if character_id == "char_01":
+		return Vector2(500.0, 230.0)
+	if character_id == "char_02":
+		return Vector2(860.0, 290.0)
+	return Vector2(860.0, 300.0)
+
+
+## 订单卡位置：左角色配左卡、右角色配右卡。宽度 560 为容纳标题/奖励行，
+## 比 PSD 预览的卡片略宽（M1-3 已登记差异）。
+func _card_rect() -> Rect2:
+	if character_id == "char_01":
+		return Rect2(210.0, 250.0, 560.0, 190.0)
+	return Rect2(490.0, 260.0, 560.0, 190.0)
 
 
 ## 交单动画：90×90 token 从棋盘格飞向角色 → 角色完成对号 → 奖励上浮 → 角色淡出。
@@ -308,21 +324,22 @@ func _find_level_order(level: Dictionary, order_id: String) -> Dictionary:
 # ---------------------------------------------------------------------------
 
 func _draw() -> void:
-	_draw_order_card()
 	_draw_character()
+	_draw_order_card()
 	_draw_level_complete()
 
 
 func _draw_order_card() -> void:
 	if active_order.is_empty():
 		return
+	var card := _card_rect()
 	var font := _ui_font()
-	draw_style_box(_make_style(Color("#1d2c4d"), 28, Color("#5b7fae"), 5), CARD_RECT)
+	_draw_card_background(card)
 
 	var title := "订单 %s" % active_order_id()
-	draw_string(font, CARD_RECT.position + Vector2(28.0, 56.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 34, Color("#eaf2ff"))
+	draw_string(font, card.position + Vector2(28.0, 52.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 32, Color("#2b4a7a"))
 
-	var row_y := CARD_RECT.position.y + 100.0
+	var row_y := card.position.y + 104.0
 	for item_v in active_mission:
 		if typeof(item_v) != TYPE_DICTIONARY:
 			continue
@@ -330,32 +347,55 @@ func _draw_order_card() -> void:
 		var entity := _string_field(item, "entity")
 		var item_level := _int_field(item, "level")
 		var entity_color := _entity_color(entity)
-		var block := Rect2(CARD_RECT.position.x + 32.0, row_y - 22.0, 44.0, 44.0)
-		draw_style_box(_make_style(entity_color, 10, entity_color.lightened(0.3), 3), block)
+		var block := Rect2(card.position.x + 32.0, row_y - 26.0, 52.0, 52.0)
+		var icon := _chip_texture(entity, item_level)
+		if icon != null:
+			draw_texture_rect(icon, block, false)
+		else:
+			draw_style_box(_make_style(entity_color, 10, entity_color.lightened(0.3), 3), block)
 		draw_string(
 			font,
-			Vector2(block.position.x + 58.0, row_y + 10.0),
+			Vector2(block.position.x + 68.0, row_y + 10.0),
 			"%s Lv%d" % [entity, item_level],
 			HORIZONTAL_ALIGNMENT_LEFT,
 			-1.0,
 			28,
-			Color(1.0, 1.0, 1.0, 0.92)
+			Color("#2b4a7a")
 		)
-		row_y += 56.0
+		row_y += 58.0
 
-	var reward_y := CARD_RECT.end.y - 44.0
-	_draw_coin(Vector2(CARD_RECT.position.x + 62.0, reward_y), _int_field(active_order, "coin"), font)
-	_draw_star(Vector2(CARD_RECT.position.x + 250.0, reward_y), _int_field(active_order, "star"), font)
+	var reward_y := card.end.y - 42.0
+	_draw_coin(Vector2(card.position.x + 62.0, reward_y), _int_field(active_order, "coin"), font)
+	_draw_star(Vector2(card.position.x + 250.0, reward_y), _int_field(active_order, "star"), font)
 
 	if order_state == STATE_READY:
-		_draw_ready_pill(Rect2(CARD_RECT.position.x + 360.0, CARD_RECT.end.y - 76.0, 200.0, 64.0))
+		_draw_ready_pill(Rect2(card.position.x + 340.0, card.end.y - 70.0, 180.0, 58.0))
+
+
+func _draw_card_background(card: Rect2) -> void:
+	var texture := _texture_or_null("ui_order_card")
+	if texture != null:
+		if _card_style == null:
+			_card_style = StyleBoxTexture.new()
+			_card_style.texture = texture
+			_card_style.texture_margin_left = 28.0
+			_card_style.texture_margin_right = 28.0
+			_card_style.texture_margin_top = 36.0
+			_card_style.texture_margin_bottom = 36.0
+		draw_style_box(_card_style, card)
+		return
+	draw_style_box(_make_style(Color("#dcecff"), 28, Color("#7fa9e0"), 5), card)
 
 
 func _draw_coin(center: Vector2, coin: int, font: Font) -> void:
-	draw_circle(center, 22.0, Color("#f5b83d"))
-	draw_circle(center, 17.0, Color("#ffd76a"))
-	draw_arc(center, 22.0, 0.0, TAU, 32, Color("#b07a18"), 3.0, true)
-	draw_string(font, center + Vector2(30.0, 10.0), "+%d" % coin, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 30, Color("#ffe9a8"))
+	var texture := _texture_or_null("token_coin")
+	if texture != null:
+		draw_texture_rect(texture, Rect2(center - Vector2(22.0, 22.0), Vector2(44.0, 44.0)), false)
+	else:
+		draw_circle(center, 22.0, Color("#f5b83d"))
+		draw_circle(center, 17.0, Color("#ffd76a"))
+		draw_arc(center, 22.0, 0.0, TAU, 32, Color("#b07a18"), 3.0, true)
+	draw_string(font, center + Vector2(30.0, 10.0), "+%d" % coin, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 30, Color("#8a5a00"))
 
 
 func _draw_star(center: Vector2, star: int, font: Font) -> void:
@@ -364,7 +404,7 @@ func _draw_star(center: Vector2, star: int, font: Font) -> void:
 		draw_texture_rect(texture, Rect2(center - Vector2(22.0, 22.0), Vector2(44.0, 44.0)), false)
 	else:
 		_draw_star_polygon(center, 22.0)
-	draw_string(font, center + Vector2(30.0, 10.0), "+%d" % star, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 30, Color("#fff2a8"))
+	draw_string(font, center + Vector2(30.0, 10.0), "+%d" % star, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 30, Color("#8a5a00"))
 
 
 func _draw_star_polygon(center: Vector2, radius: float) -> void:
@@ -391,26 +431,67 @@ func _draw_character() -> void:
 	if alpha <= 0.001:
 		return
 	var dim := 0.45 if order_state == STATE_CLAIMED else 1.0
+	var center := character_center()
+	var texture := _character_texture()
+	if texture != null:
+		var target_size := CHARACTER_SIZE_02 if character_id == "char_02" else CHARACTER_SIZE_01
+		var rect := Rect2(center - target_size * 0.5, target_size)
+		draw_texture_rect(texture, rect, false, Color(1.0, 1.0, 1.0, alpha * dim))
+		if order_state == STATE_READY or _character_done:
+			_draw_finish_badge(center + Vector2(118.0, -128.0), alpha * dim)
+		return
+
 	var base := _entity_color(character_id)
 	var skin := _with_alpha(base, alpha * dim)
 	var body := _with_alpha(base.darkened(0.18), alpha * dim)
 	var outline := _with_alpha(base.lightened(0.25), alpha * dim)
 
-	var head_center := CHARACTER_CENTER + Vector2(0.0, -70.0)
+	var head_center := center + Vector2(0.0, -70.0)
 	draw_style_box(
 		_make_style(body, 40, outline, 4),
-		Rect2(CHARACTER_CENTER + Vector2(-78.0, -30.0), Vector2(156.0, 160.0))
+		Rect2(center + Vector2(-78.0, -30.0), Vector2(156.0, 160.0))
 	)
 	draw_circle(head_center, 54.0, skin)
 	draw_arc(head_center, 54.0, 0.0, TAU, 48, _with_alpha(Color(1.0, 1.0, 1.0, 0.75), alpha * dim), 3.0, true)
 	draw_circle(head_center + Vector2(-18.0, -6.0), 8.0, _with_alpha(Color("#243044"), alpha * dim))
 	draw_circle(head_center + Vector2(18.0, -6.0), 8.0, _with_alpha(Color("#243044"), alpha * dim))
 
-	var font := _ui_font()
-	_draw_text_centered(font, character_id, CHARACTER_CENTER + Vector2(0.0, 170.0), 30, _with_alpha(Color(1.0, 1.0, 1.0, 0.92), alpha * dim))
-
 	if order_state == STATE_READY or _character_done:
-		_draw_check_badge(CHARACTER_CENTER + Vector2(82.0, -108.0), 26.0, alpha * dim)
+		_draw_finish_badge(center + Vector2(82.0, -108.0), alpha * dim)
+
+
+func _character_texture() -> Texture2D:
+	var base := ""
+	if character_id == "char_01":
+		base = "char_order_01"
+	elif character_id == "char_02":
+		base = "char_order_02"
+	if base.is_empty():
+		return null
+	var suffix := "_done" if (order_state == STATE_CLAIMED or _character_done) else "_idle"
+	return _texture_or_null(base + suffix)
+
+
+func _chip_texture(entity: String, level: int) -> Texture2D:
+	if theme_doc == null or not theme_doc.has_method("chip_texture"):
+		return null
+	var texture_v: Variant = theme_doc.chip_texture(entity, level)
+	if texture_v is Texture2D:
+		return texture_v
+	return null
+
+
+func _draw_finish_badge(center: Vector2, alpha: float) -> void:
+	var texture := _texture_or_null("local_icon_finish")
+	if texture != null:
+		draw_texture_rect(
+			texture,
+			Rect2(center - Vector2(26.0, 26.0), Vector2(52.0, 52.0)),
+			false,
+			Color(1.0, 1.0, 1.0, alpha)
+		)
+		return
+	_draw_check_badge(center, 26.0, alpha)
 
 
 func _draw_check_badge(center: Vector2, radius: float, alpha: float) -> void:
@@ -524,6 +605,20 @@ func _spawn_popup(text: String, color: Color, start: Vector2) -> void:
 # ---------------------------------------------------------------------------
 # 通用工具
 # ---------------------------------------------------------------------------
+
+## 按资源 ID 取纹理并缓存（每帧调用不会重复解码）。
+func _texture_or_null(resource_id: String) -> Texture2D:
+	if _texture_cache.has(resource_id):
+		return _texture_cache[resource_id] as Texture2D
+	var texture: Texture2D = null
+	if loader != null:
+		var result: Dictionary = loader.load_texture(resource_id)
+		var texture_v: Variant = result.get("texture")
+		if bool(result.get("ok", false)) and texture_v is Texture2D:
+			texture = texture_v
+	_texture_cache[resource_id] = texture
+	return texture
+
 
 func _star_texture_or_null() -> Texture2D:
 	if theme_doc != null:

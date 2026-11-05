@@ -1,0 +1,41 @@
+{
+	"version": 1,
+	"description": "M1 本地登记素材（未进 00_design/resource_manifest.json）：usage=PRODUCTION、license=公司自有。待补登 00_design manifest，清单见 10_report/CC02/M1实施报告-1105.md。",
+	"assets": [
+		{
+			"id": "local_bg_top",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_bg_01_top.png",
+			"note": "棋盘.psd 顶部房间背景 1080×400；待补登 manifest"
+		},
+		{
+			"id": "local_items_bar",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "00_design/images/psd_slices/items.png",
+			"note": "棋盘.psd 底部信息条 693×183；待补登 manifest"
+		},
+		{
+			"id": "local_icon_exit",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_icon_exit.png",
+			"note": "左下退出按钮图标；待补登 manifest"
+		},
+		{
+			"id": "local_icon_gem",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "00_design/images/psd_slices/raw_icon_90000003.png",
+			"note": "顶栏宝石图标（PSD 切片）；待补登 manifest"
+		},
+		{
+			"id": "local_icon_finish",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_icon_finish.png",
+			"note": "完成对号 52×52（PSD 已有，manifest 未登记）；待补登 manifest"
+		}
+	]
+}

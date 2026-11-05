@@ -15,6 +15,13 @@ const HINT_CHIP_SCALE := 1.08
 const HINT_CHIP_OFFSET := 6.0
 const SELECT_HEX := "#ffd83d"
 const COMPLETE_HEX := "#3ddc6a"
+## 棋盘.psd §20.5 布局数值。
+const BG_BOTTOM_RECT := Rect2(0.0, 384.0, 1080.0, 1536.0)
+const BG_TOP_RECT := Rect2(0.0, 0.0, 1080.0, 400.0)
+const ITEMS_RECT := Rect2(193.0, 1731.0, 693.0, 183.0)
+const EXIT_RECT := Rect2(20.0, 1734.0, 164.0, 174.0)
+const CABINET_RECT := Rect2(938.0, 1739.0, 109.0, 147.0)
+const CHIP_ICON_MAX := 140.0
 
 var project_data: Dictionary = {}
 var snapshot: Dictionary = {}
@@ -36,6 +43,8 @@ var _palette: Array[Color] = [
 	Color("#c0d3e8"),
 ]
 var _font_cache: Font = null
+var _texture_cache: Dictionary = {}
+var _shadow_style: StyleBoxFlat = null
 
 
 func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, selection_arg: Array, completed_arg: Array, allow_placeholders_flag = true, theme_arg = null) -> void:
@@ -46,6 +55,8 @@ func setup(project_data_arg: Dictionary, snapshot_arg: Dictionary, selection_arg
 	allow_placeholders = bool(allow_placeholders_flag)
 	theme_doc = theme_arg
 	_font_cache = null
+	_texture_cache = {}
+	_shadow_style = null
 	_hint_slots = []
 	loader = AssetLoader.new()
 	loader.setup("res://assets/assets.json", bool(allow_placeholders_flag))
@@ -122,6 +133,7 @@ func obstacle_count() -> int:
 
 func _draw() -> void:
 	_draw_background()
+	_draw_chrome()
 	_draw_board_frame()
 	_draw_slots()
 	_draw_chips()
@@ -134,6 +146,17 @@ func _draw_background() -> void:
 	var canvas := size
 	if canvas.x <= 0.0 or canvas.y <= 0.0:
 		canvas = DESIGN_SIZE
+	var bg_bottom := _texture_or_null("board_bg")
+	var bg_top := _texture_or_null("local_bg_top")
+	if bg_bottom != null or bg_top != null:
+		draw_rect(Rect2(Vector2.ZERO, canvas), Color("#101a2b"))
+		if bg_bottom != null:
+			draw_texture_rect(bg_bottom, BG_BOTTOM_RECT, false)
+		if bg_top != null:
+			draw_texture_rect(bg_top, BG_TOP_RECT, false)
+		_draw_theme_tint(canvas)
+		return
+
 	var top := Color("#35455f")
 	var bottom := Color("#101a2b")
 	if theme_doc != null:
@@ -151,6 +174,38 @@ func _draw_background() -> void:
 	# 顶部柔光 + 底部暗角，增强竖向渐变感。
 	draw_circle(Vector2(canvas.x * 0.5, canvas.y * 0.18), canvas.x * 0.55, Color(0.45, 0.6, 0.85, 0.10))
 	draw_rect(Rect2(0.0, canvas.y * 0.82, canvas.x, canvas.y * 0.18), Color(0.02, 0.04, 0.08, 0.35))
+
+
+## 贴图背景上叠一层很淡的主题色，保证换主题成片仍不同，又不盖住 PSD 画面。
+func _draw_theme_tint(canvas: Vector2) -> void:
+	if theme_doc == null:
+		return
+	var top_v: Variant = theme_doc.background_top
+	var bottom_v: Variant = theme_doc.background_bottom
+	if typeof(top_v) != TYPE_COLOR or typeof(bottom_v) != TYPE_COLOR:
+		return
+	var top: Color = top_v
+	var bottom: Color = bottom_v
+	var bands := 16
+	var band_height := canvas.y / float(bands)
+	for i in range(bands):
+		var t := float(i) / float(bands - 1)
+		var color := top.lerp(bottom, t)
+		color.a = 0.05 + 0.03 * t
+		draw_rect(Rect2(0.0, band_height * float(i), canvas.x, band_height + 1.0), color)
+
+
+## 底部信息条 / 左下退出 / 右下背包（棋盘.psd §20.5）。
+func _draw_chrome() -> void:
+	var items := _texture_or_null("local_items_bar")
+	if items != null:
+		draw_texture_rect(items, ITEMS_RECT, false)
+	var exit_icon := _texture_or_null("local_icon_exit")
+	if exit_icon != null:
+		draw_texture_rect(exit_icon, EXIT_RECT, false)
+	var cabinet := _texture_or_null("ui_button_secondary")
+	if cabinet != null:
+		draw_texture_rect(cabinet, CABINET_RECT, false)
 
 
 func _draw_board_frame() -> void:
@@ -173,11 +228,15 @@ func _draw_board_frame() -> void:
 
 func _draw_slots() -> void:
 	var dims := _board_dims()
+	var slot_texture := _texture_or_null("slot_empty")
 	for y in range(dims.y):
 		for x in range(dims.x):
 			var rect := _cell_rect(x, y).grow(-CELL_INSET)
-			var fill := Color("#223550") if ((x + y) % 2) == 0 else Color("#2a4160")
-			draw_style_box(_make_style(fill, 12, Color("#1a2a40"), 2), rect)
+			if slot_texture != null:
+				draw_texture_rect(slot_texture, rect, false)
+				continue
+			var fill := Color("#c7dcef") if ((x + y) % 2) == 0 else Color("#cfe3f4")
+			draw_style_box(_make_style(fill, 18, Color("#7fb2e5"), 5), rect)
 
 
 func _draw_chips() -> void:
@@ -204,6 +263,10 @@ func _draw_chips() -> void:
 
 func _draw_chip(x: int, y: int, entity: String, level: int, font: Font) -> void:
 	var chip_rect := _chip_draw_rect(x, y)
+	var icon := chip_icon_texture(entity, level)
+	if icon != null:
+		_draw_chip_icon(icon, _icon_draw_rect(x, y))
+		return
 	var fill := _entity_color(entity)
 	var border := fill.lightened(clampf(0.22 + 0.06 * float(maxi(level, 0)), 0.22, 0.9))
 	draw_style_box(_make_style(fill, 20, border, 4), chip_rect)
@@ -213,12 +276,52 @@ func _draw_chip(x: int, y: int, entity: String, level: int, font: Font) -> void:
 	_draw_text_centered(font, entity.substr(0, 8), Vector2(center.x, center.y + chip_rect.size.y * 0.16), 20, Color(1.0, 1.0, 1.0, 0.8))
 
 
+## chip 图标纹理（主题优先）；未配置/加载失败返回 null，绘制回退为自绘 chip。
+func chip_icon_texture(entity: String, level: int) -> Texture2D:
+	if theme_doc == null or not theme_doc.has_method("chip_texture"):
+		return null
+	var texture_v: Variant = theme_doc.chip_texture(entity, level)
+	if texture_v is Texture2D:
+		return texture_v
+	return null
+
+
+## fit=scale：182→约 140，保持宽高比、格内底边对齐，并加轻微阴影。
+## 不在最后二次钳到 140：base 矩形本身约 140，hint 时 1.08 放大应生效。
+func _draw_chip_icon(icon: Texture2D, draw_rect: Rect2) -> void:
+	var source_size := icon.get_size()
+	if source_size.x <= 0.0 or source_size.y <= 0.0:
+		return
+	var scale := minf(draw_rect.size.x / source_size.x, draw_rect.size.y / source_size.y)
+	var draw_size := source_size * scale
+	var icon_rect := Rect2(
+		Vector2(draw_rect.get_center().x - draw_size.x * 0.5, draw_rect.end.y - draw_size.y - 2.0),
+		draw_size
+	)
+	var shadow_rect := Rect2(
+		Vector2(icon_rect.position.x + draw_size.x * 0.18, icon_rect.end.y - 10.0),
+		Vector2(draw_size.x * 0.64, 12.0)
+	)
+	if _shadow_style == null:
+		_shadow_style = _make_style(Color(0.0, 0.0, 0.0, 0.16), 6, Color(0.0, 0.0, 0.0, 0.0), 0)
+	draw_style_box(_shadow_style, shadow_rect)
+	draw_texture_rect(icon, icon_rect, false)
+
+
 ## chip 的实际绘制矩形：普通格子返回原矩形；提示格围绕格心放大并向首个提示槽偏移。
 ## 只用于绘制，cell_rect / 命中检测保持不变。
 func _chip_draw_rect(x: int, y: int) -> Rect2:
-	var chip_rect := _cell_rect(x, y).grow(-CHIP_INSET)
+	return _hint_rect(x, y, _cell_rect(x, y).grow(-CHIP_INSET))
+
+
+## chip 图标的绘制矩形：贴齐格子（底边对齐），提示时同样放大/偏移。
+func _icon_draw_rect(x: int, y: int) -> Rect2:
+	return _hint_rect(x, y, _cell_rect(x, y))
+
+
+func _hint_rect(x: int, y: int, base: Rect2) -> Rect2:
 	if not hint_active() or not _hint_has_slot(x, y):
-		return chip_rect
+		return base
 	var cell_center := _cell_rect(x, y).get_center()
 	var center := cell_center
 	var dims := _board_dims()
@@ -227,7 +330,7 @@ func _chip_draw_rect(x: int, y: int) -> Rect2:
 		var direction := _cell_rect(first.x, first.y).get_center() - cell_center
 		if direction.length_squared() > 0.0001:
 			center += direction.normalized() * HINT_CHIP_OFFSET
-	var scaled_size := chip_rect.size * HINT_CHIP_SCALE
+	var scaled_size := base.size * HINT_CHIP_SCALE
 	return Rect2(center - scaled_size * 0.5, scaled_size)
 
 
@@ -256,13 +359,29 @@ func _draw_obstacles() -> void:
 			continue
 		match _string_field(obstacle, "type"):
 			"lock":
-				_draw_lock(x, y)
+				var lock_texture := _texture_or_null("obstacle_lock")
+				if lock_texture != null:
+					draw_texture_rect(lock_texture, _cell_rect(x, y), false)
+				else:
+					_draw_lock(x, y)
 			"web":
-				_draw_web(x, y)
+				var web_texture := _texture_or_null("obstacle_web")
+				if web_texture != null:
+					draw_texture_rect(web_texture, _cell_rect(x, y), false)
+				else:
+					_draw_web(x, y)
 			"bubble":
-				_draw_bubble(x, y)
+				var bubble_texture := _texture_or_null("obstacle_bubble")
+				if bubble_texture != null:
+					draw_texture_rect(bubble_texture, _cell_rect(x, y), false)
+				else:
+					_draw_bubble(x, y)
 			"ice":
-				_draw_ice(x, y)
+				var ice_texture := _texture_or_null("obstacle_ice")
+				if ice_texture != null:
+					draw_texture_rect(ice_texture, _cell_rect(x, y), false)
+				else:
+					_draw_ice(x, y)
 
 
 func _draw_lock(x: int, y: int) -> void:
@@ -318,24 +437,37 @@ func _draw_ice(x: int, y: int) -> void:
 
 func _draw_selection() -> void:
 	var dims := _board_dims()
+	var select_texture := _texture_or_null("ui_select_frame")
 	for item_v in selection:
 		var xy := _parse_xy(item_v)
 		if not _in_bounds(xy, dims):
 			continue
-		var rect := _cell_rect(xy.x, xy.y).grow(-3.0)
+		var rect := _cell_rect(xy.x, xy.y)
+		if select_texture != null:
+			draw_texture_rect(select_texture, rect.grow(2.0), false)
+			continue
 		var style := _make_style(Color(0.0, 0.0, 0.0, 0.0), 16, Color(SELECT_HEX), 6)
 		style.draw_center = false
-		draw_style_box(style, rect)
+		draw_style_box(style, rect.grow(-3.0))
 
 
 func _draw_completed() -> void:
 	var dims := _board_dims()
+	var finish_texture := _texture_or_null("local_icon_finish")
 	for item_v in completed:
 		var xy := _parse_xy(item_v)
 		if not _in_bounds(xy, dims):
 			continue
 		var rect := _cell_rect(xy.x, xy.y).grow(-CELL_INSET)
 		var center := rect.position + Vector2(rect.size.x * 0.82, rect.size.y * 0.18)
+		if finish_texture != null:
+			var finish_size := 52.0
+			draw_texture_rect(
+				finish_texture,
+				Rect2(center - Vector2(finish_size * 0.5, finish_size * 0.5), Vector2(finish_size, finish_size)),
+				false
+			)
+			continue
 		var radius := minf(rect.size.x, rect.size.y) * 0.16
 		draw_circle(center, radius, Color(COMPLETE_HEX))
 		draw_arc(center, radius, 0.0, TAU, 32, Color(1.0, 1.0, 1.0, 0.9), 2.0, true)
@@ -431,6 +563,28 @@ func _ui_font() -> Font:
 	if _font_cache == null:
 		_font_cache = ThemeDB.fallback_font
 	return _font_cache
+
+
+## 按资源 ID 取纹理并缓存（每帧逐格调用不会重复解码）。
+## 大面积背景在运行时降采样一半再放大绘制：保持 §20.5 的布局尺寸，
+## 但降低逐帧 PNG 编码耗时，保证 30s 出片 ≤5 分钟。
+func _texture_or_null(resource_id: String) -> Texture2D:
+	if _texture_cache.has(resource_id):
+		return _texture_cache[resource_id] as Texture2D
+	var texture: Texture2D = null
+	if loader != null:
+		var result: Dictionary = loader.load_texture(resource_id)
+		var texture_v: Variant = result.get("texture")
+		if bool(result.get("ok", false)) and texture_v is Texture2D:
+			texture = texture_v
+	if texture != null and (resource_id == "board_bg" or resource_id == "local_bg_top"):
+		var image := texture.get_image()
+		if image != null and not image.is_empty():
+			image = image.duplicate()
+			image.resize(maxi(1, image.get_width() / 2), maxi(1, image.get_height() / 2), Image.INTERPOLATE_BILINEAR)
+			texture = ImageTexture.create_from_image(image)
+	_texture_cache[resource_id] = texture
+	return texture
 
 
 func _make_style(fill: Color, corner: int, border: Color, border_width: int) -> StyleBoxFlat:

@@ -32,12 +32,15 @@ var palette: Array[Color] = []
 var board_frame_id := DEFAULT_FRAME_ID
 var font_ui_id := DEFAULT_FONT_ID
 var star_id := DEFAULT_STAR_ID
+## chip 图标映射：entity -> {"1": resource_id, ...}。优先级 project_data.chips.<entity>.icons < theme.chip_icons。
+var chip_icons: Dictionary = {}
 var warnings: Array = []
 var loader: AssetLoader = null
 
 var _board_frame_texture: Texture2D = null
 var _star_texture: Texture2D = null
 var _ui_font: Font = null
+var _chip_textures: Dictionary = {}
 
 
 func load_theme(theme_dir_arg: String, project_data: Dictionary, allow_placeholders := true) -> bool:
@@ -50,6 +53,7 @@ func load_theme(theme_dir_arg: String, project_data: Dictionary, allow_placehold
 		return _fail(loader.setup_error)
 
 	_apply_project_icons(project_data)
+	_apply_project_chips(project_data)
 
 	var theme_path := theme_dir
 	if not theme_path.begins_with("res://"):
@@ -87,6 +91,37 @@ func ui_font() -> Font:
 	return _ui_font
 
 
+## chip 图标资源 ID；未配置返回空字符串。
+func chip_icon_id(entity: String, level: int) -> String:
+	var entity_v: Variant = chip_icons.get(entity, null)
+	if typeof(entity_v) != TYPE_DICTIONARY:
+		return ""
+	var levels: Dictionary = entity_v
+	var id_v: Variant = levels.get(str(level), "")
+	if typeof(id_v) == TYPE_STRING:
+		return String(id_v)
+	return ""
+
+
+## chip 图标纹理；未配置或加载失败返回 null（调用方回退自绘 chip）。
+func chip_texture(entity: String, level: int) -> Texture2D:
+	var key := "%s:%d" % [entity, level]
+	if _chip_textures.has(key):
+		return _chip_textures[key] as Texture2D
+	var id := chip_icon_id(entity, level)
+	if id.is_empty() or loader == null:
+		_chip_textures[key] = null
+		return null
+	var result: Dictionary = loader.load_texture(id)
+	var texture_v: Variant = result.get("texture")
+	if bool(result.get("ok", false)) and texture_v is Texture2D:
+		_chip_textures[key] = texture_v
+		return texture_v
+	warnings.append("chip 图标加载失败（回退自绘）: %s -> %s" % [id, str(result.get("error", ""))])
+	_chip_textures[key] = null
+	return null
+
+
 func _reset_defaults() -> void:
 	ok = false
 	error = ""
@@ -98,11 +133,13 @@ func _reset_defaults() -> void:
 	board_frame_id = DEFAULT_FRAME_ID
 	font_ui_id = DEFAULT_FONT_ID
 	star_id = DEFAULT_STAR_ID
+	chip_icons = {}
 	warnings = []
 	loader = null
 	_board_frame_texture = null
 	_star_texture = null
 	_ui_font = null
+	_chip_textures = {}
 
 
 func _apply_project_icons(project_data: Dictionary) -> void:
@@ -132,6 +169,54 @@ func _apply_project_icons(project_data: Dictionary) -> void:
 			font_ui_id = String(font_v)
 		else:
 			warnings.append("project_data.icons.font_ui 不是字符串，已忽略")
+
+
+## project_data.chips.<entity>.icons.<level> -> 资源 ID（优先级最低，theme.chip_icons 覆盖）。
+func _apply_project_chips(project_data: Dictionary) -> void:
+	var chips_v: Variant = project_data.get("chips", null)
+	if chips_v == null:
+		return
+	if typeof(chips_v) != TYPE_DICTIONARY:
+		warnings.append("project_data.chips 不是 Dictionary，已忽略")
+		return
+	var chips: Dictionary = chips_v
+	for entity_key in chips.keys():
+		var entity := String(entity_key)
+		var def_v: Variant = chips[entity_key]
+		if typeof(def_v) != TYPE_DICTIONARY:
+			warnings.append("project_data.chips.%s 不是 Dictionary，已忽略" % entity)
+			continue
+		var icons_v: Variant = (def_v as Dictionary).get("icons", null)
+		if icons_v == null:
+			continue
+		if typeof(icons_v) != TYPE_DICTIONARY:
+			warnings.append("project_data.chips.%s.icons 不是 Dictionary，已忽略" % entity)
+			continue
+		_merge_chip_map(entity, icons_v, "project_data.chips.%s.icons" % entity, false, "")
+
+
+## 合并 entity 的 level -> id 映射。strict=true 时结构错误使主题加载失败；否则记 warning 并跳过。
+func _merge_chip_map(entity: String, levels: Dictionary, context: String, strict: bool, path: String) -> bool:
+	var entity_map: Dictionary = chip_icons.get(entity, {})
+	for level_key in levels.keys():
+		var level_text := str(level_key)
+		var level := -1
+		if level_text.is_valid_int():
+			level = int(level_text)
+		var id_v: Variant = levels[level_key]
+		var problem := ""
+		if level < 1 or level > 10:
+			problem = "等级必须是 1-10 的整数: %s" % level_text
+		elif typeof(id_v) != TYPE_STRING or String(id_v).is_empty():
+			problem = "资源 ID 必须是非空字符串: %s" % str(id_v)
+		if not problem.is_empty():
+			if strict:
+				return _fail("theme.json %s.%s: %s（%s）" % [context, level_text, problem, path])
+			warnings.append("%s.%s: %s" % [context, level_text, problem])
+			continue
+		entity_map[str(level)] = String(id_v)
+	chip_icons[entity] = entity_map
+	return true
 
 
 func _apply_theme_doc(theme: Dictionary, path: String) -> bool:
@@ -194,6 +279,21 @@ func _apply_theme_doc(theme: Dictionary, path: String) -> bool:
 				return _fail("theme.json %s: %s" % [entry_result["error"], path])
 			next_palette.append(entry_result["color"])
 		palette = next_palette
+
+	if theme.has("chip_icons"):
+		var chip_icons_v: Variant = theme["chip_icons"]
+		if typeof(chip_icons_v) != TYPE_DICTIONARY:
+			return _fail("theme.json chip_icons 必须是 Dictionary: %s" % path)
+		var theme_chip_icons: Dictionary = chip_icons_v
+		for entity_key in theme_chip_icons.keys():
+			var entity := String(entity_key)
+			if entity.is_empty():
+				return _fail("theme.json chip_icons 实体不能为空: %s" % path)
+			var levels_v: Variant = theme_chip_icons[entity_key]
+			if typeof(levels_v) != TYPE_DICTIONARY:
+				return _fail("theme.json chip_icons.%s 必须是 Dictionary: %s" % [entity, path])
+			if not _merge_chip_map(entity, levels_v, "chip_icons.%s" % entity, true, path):
+				return false
 
 	return true
 

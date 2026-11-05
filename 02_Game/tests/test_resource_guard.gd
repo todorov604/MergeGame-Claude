@@ -11,7 +11,7 @@ func run(r) -> void:
 	r.check(FileAccess.file_exists(manifest_path), "内嵌 manifest 快照应存在: " + manifest_path)
 	var manifest = ManifestDoc.new()
 	r.check(manifest.load_file(manifest_path), "manifest 应能加载: " + manifest_path)
-	r.eq(manifest.resources.size(), 74, "manifest 资源数应为 74")
+	r.eq(manifest.resources.size(), 180, "manifest 资源数应为 180")
 	r.check(manifest.has_resource("chip_clean_ca_lv01"), "manifest 应包含 chip_clean_ca_lv01")
 	r.check(manifest.has_resource("font_zh"), "manifest 应包含 font_zh")
 
@@ -20,12 +20,21 @@ func run(r) -> void:
 	r.check(not unloaded.ok, "未 setup 的守卫应拒绝加载")
 	r.contains(unloaded.error, "manifest 未加载", "未 setup 错误文案")
 
-	guard.setup(manifest, false)
-	var reference = guard.check("chip_clean_ca_lv01")
+	# 新 manifest 已无 REFERENCE_ONLY 条目；用合成 manifest 覆盖 REFERENCE_ONLY 拒绝规则。
+	var synthetic = ManifestDoc.new()
+	synthetic.ok = true
+	synthetic.version = 7
+	var synthetic_entry := {"id": "synthetic_reference", "usage": "REFERENCE_ONLY", "license": "test"}
+	synthetic.resources = [synthetic_entry]
+	synthetic.by_id = {"synthetic_reference": synthetic_entry}
+	var synthetic_guard = ResourceGuard.new()
+	synthetic_guard.setup(synthetic, true)
+	var reference = synthetic_guard.check("synthetic_reference")
 	r.check(not reference.ok, "REFERENCE_ONLY 必须被拒绝")
 	r.eq(reference.usage, "REFERENCE_ONLY", "REFERENCE_ONLY usage 回传")
 	r.contains(reference.error, "REFERENCE_ONLY 资源禁止打包/出片", "REFERENCE_ONLY 错误文案")
 
+	guard.setup(manifest, false)
 	var placeholder_blocked = guard.check("board_frame")
 	r.check(not placeholder_blocked.ok, "PLACEHOLDER 默认必须被拒绝")
 	r.contains(placeholder_blocked.error, "allow_placeholders=true", "PLACEHOLDER 错误文案")
@@ -39,6 +48,11 @@ func run(r) -> void:
 	r.eq(production.usage, "PRODUCTION", "PRODUCTION usage 回传")
 	r.eq(production.license, "Noto Sans OFL 1.1", "PRODUCTION license 回传")
 
+	var chip_icon = guard.check("chip_clean_ca_lv01")
+	r.check(chip_icon.ok, "真实棋子图标（PRODUCTION）应允许")
+	r.eq(chip_icon.usage, "PRODUCTION", "棋子图标 usage 回传")
+	r.eq(chip_icon.license, "公司自有/自研", "棋子图标 license 回传")
+
 	var unknown = guard.check("no_such_resource")
 	r.check(not unknown.ok, "未知资源必须被拒绝")
 	r.contains(unknown.error, "资源未在 manifest 中定义", "未知资源错误文案")
@@ -46,5 +60,5 @@ func run(r) -> void:
 	guard.setup(manifest, true)
 	var placeholder_allowed = guard.check("board_frame")
 	r.check(placeholder_allowed.ok, "allow_placeholders=true 时 PLACEHOLDER 应允许")
-	var reference_still_blocked = guard.check("chip_clean_ca_lv01")
+	var reference_still_blocked = synthetic_guard.check("synthetic_reference")
 	r.check(not reference_still_blocked.ok, "allow_placeholders=true 不能放行 REFERENCE_ONLY")

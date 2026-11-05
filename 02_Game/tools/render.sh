@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# M0 出片脚本：Godot Movie Maker (PNG 序列) -> FFmpeg H.264 MP4 -> ffprobe 校验。
+# M1 出片脚本：Godot Movie Maker -> FFmpeg H.264 MP4 -> ffprobe 校验。
+# 默认用 AVI/MJPEG 中间产物（1080×1920@60，编码约 23ms/帧，单条 30s ≤5 分钟）；
+# --png-frames 可切回 M0 的 PNG 序列路径（素材细节多时很慢，仅调试用）。
 # 用法：
-#   tools/render.sh [--project <path>] [--out <file.mp4>] [--keep-frames] [--verify]
+#   tools/render.sh [--project <path>] [--out <file.mp4>] [--png-frames] [--keep-frames] [--verify]
 #                   [--crf N] [--preset P]
 # 环境变量：GODOT_BIN 可覆盖 Godot 可执行文件路径。
 set -euo pipefail
@@ -11,6 +13,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 GODOT_BIN="${GODOT_BIN:-E:/Program Files/Godot/Godot_v4.7.2.exe}"
 PROJECT_PATH="res://data/projects/sample_30s.json"
 OUT_MP4=""
+MOVIE_FORMAT="avi"
 KEEP_FRAMES=0
 VERIFY=0
 CRF=18
@@ -22,7 +25,8 @@ usage() {
 用法: tools/render.sh [选项]
   --project <path>   项目 JSON（默认 res://data/projects/sample_30s.json）
   --out <file.mp4>   输出 MP4（默认 02_Game/output/<项目名>.mp4）
-  --keep-frames      保留 PNG 序列（默认转码后删除）
+  --png-frames       用 PNG 序列中间产物（M0 路径；慢，仅调试）
+  --keep-frames      保留中间产物（隐含 --png-frames）
   --verify           连跑两遍并比对 framemd5（确定性验收）
   --crf <n>          x264 CRF（默认 18）
   --preset <p>       x264 preset（默认 medium）
@@ -33,7 +37,8 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--project) PROJECT_PATH="$2"; shift 2 ;;
 		--out) OUT_MP4="$2"; shift 2 ;;
-		--keep-frames) KEEP_FRAMES=1; shift ;;
+		--png-frames) MOVIE_FORMAT="png"; shift ;;
+		--keep-frames) KEEP_FRAMES=1; MOVIE_FORMAT="png"; shift ;;
 		--verify) VERIFY=1; shift ;;
 		--crf) CRF="$2"; shift 2 ;;
 		--preset) PRESET="$2"; shift 2 ;;
@@ -52,6 +57,9 @@ if [ -z "$OUT_MP4" ]; then
 fi
 OUT_DIR="$(dirname "$OUT_MP4")"
 mkdir -p "$OUT_DIR"
+# Movie Maker 把相对 --write-movie 路径解析到工程根；统一转绝对路径，避免 02_Game/02_Game 嵌套。
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
+OUT_MP4="$OUT_DIR/$(basename "$OUT_MP4")"
 
 if [ "$KEEP_FRAMES" != "1" ]; then
 	trap 'rm -rf "$OUT_DIR"/.frames_render.*' EXIT
@@ -87,35 +95,68 @@ fi
 
 render_once() {
 	local out_file="$1"
-	local frames_dir
+	local work_dir
 	local log_file="$OUT_DIR/.render_log.txt"
-	frames_dir="$(mktemp -d "$OUT_DIR/.frames_render.XXXXXX")"
+	work_dir="$(mktemp -d "$OUT_DIR/.frames_render.XXXXXX")"
 	echo ""
-	echo "== 录制：$FRAMES 帧 @ ${FPS}fps -> $frames_dir =="
+	echo "== 录制：$FRAMES 帧 @ ${FPS}fps（${MOVIE_FORMAT}）-> $work_dir =="
 	local start_ts
 	start_ts="$(date +%s)"
-	"$GODOT_BIN" --path "$PROJECT_ROOT" \
-		--write-movie "$frames_dir/frame.png" \
-		--fixed-fps "$FPS" --quit-after "$FRAMES" \
-		-- --project "$PROJECT_PATH" --render 2>&1 | tee "$log_file"
-	local recorded_frames
-	recorded_frames="$(sed -n 's/^\([0-9][0-9]*\) frames at .*/\1/p' "$log_file" | tail -1)"
-	local count
-	count="$(find "$frames_dir" -maxdepth 1 -name 'frame*.png' | wc -l | tr -d ' ')"
-	local first_name last_name last_expected
-	first_name="$(find "$frames_dir" -maxdepth 1 -name 'frame*.png' -printf '%f\n' | sort | head -1)"
-	last_name="$(find "$frames_dir" -maxdepth 1 -name 'frame*.png' -printf '%f\n' | sort | tail -1)"
-	last_expected="$(printf 'frame%08d.png' $((FRAMES - 1)))"
-	if [ "$count" != "$FRAMES" ] \
-		|| [ "$first_name" != "frame00000000.png" ] || [ "$last_name" != "$last_expected" ]; then
-		echo "帧数校验失败：文件数=$count，首帧=${first_name:-?}，末帧=${last_name:-?}（期望 $FRAMES）" >&2
-		exit 1
+	local godot_rc=0
+	local recorded_frames=""
+	local count="$FRAMES"
+
+	if [ "$MOVIE_FORMAT" = "png" ]; then
+		set +e
+		"$GODOT_BIN" --path "$PROJECT_ROOT" \
+			--write-movie "$work_dir/frame.png" --disable-vsync \
+			--fixed-fps "$FPS" --quit-after "$FRAMES" \
+			-- --project "$PROJECT_PATH" --render 2>&1 | tee "$log_file"
+		godot_rc=${PIPESTATUS[0]}
+		set -e
+		[ "$godot_rc" -eq 0 ] || { echo "Godot 退出码 $godot_rc，出片失败（日志: $log_file）" >&2; exit 1; }
+		recorded_frames="$(sed -n 's/^\([0-9][0-9]*\) frames at .*/\1/p' "$log_file" | tail -1)"
+		count="$(find "$work_dir" -maxdepth 1 -name 'frame*.png' | wc -l | tr -d ' ')"
+		local first_name last_name last_expected
+		first_name="$(find "$work_dir" -maxdepth 1 -name 'frame*.png' -printf '%f\n' | sort | head -1)"
+		last_name="$(find "$work_dir" -maxdepth 1 -name 'frame*.png' -printf '%f\n' | sort | tail -1)"
+		last_expected="$(printf 'frame%08d.png' $((FRAMES - 1)))"
+		if [ "$count" != "$FRAMES" ] \
+			|| [ "$first_name" != "frame00000000.png" ] || [ "$last_name" != "$last_expected" ]; then
+			echo "帧数校验失败：文件数=$count，首帧=${first_name:-?}，末帧=${last_name:-?}（期望 $FRAMES）" >&2
+			exit 1
+		fi
+		# Godot 4.7.2 的退出摘要偶发少报实际帧数（曾见 232 vs 1800 个完整文件）；
+		# 帧目录是每次渲染独立的临时目录，因此以文件序列为准，摘要仅告警。
+		if [ "$recorded_frames" != "$FRAMES" ]; then
+			echo "WARN Godot 摘要帧数=${recorded_frames:-?}，与文件数 $count 不一致；以文件序列为准" >&2
+		fi
+	else
+		local movie_file="$work_dir/movie.avi"
+		set +e
+		"$GODOT_BIN" --path "$PROJECT_ROOT" \
+			--write-movie "$movie_file" --disable-vsync \
+			--fixed-fps "$FPS" --quit-after "$FRAMES" \
+			-- --project "$PROJECT_PATH" --render 2>&1 | tee "$log_file"
+		godot_rc=${PIPESTATUS[0]}
+		set -e
+		[ "$godot_rc" -eq 0 ] || { echo "Godot 退出码 $godot_rc，出片失败（日志: $log_file）" >&2; exit 1; }
+		[ -s "$movie_file" ] || { echo "AVI 中间产物不存在或为空: $movie_file" >&2; exit 1; }
+		recorded_frames="$(sed -n 's/^\([0-9][0-9]*\) frames at .*/\1/p' "$log_file" | tail -1)"
+		local mw mh mfr mnb
+		mw="$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 "$movie_file")"
+		mh="$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 "$movie_file")"
+		mfr="$(ffprobe -v error -select_streams v:0 -show_entries stream=avg_frame_rate -of csv=p=0 "$movie_file")"
+		mnb="$(ffprobe -v error -select_streams v:0 -show_entries stream=nb_frames -of csv=p=0 "$movie_file")"
+		[ "$mw" = "$WIDTH" ] && [ "$mh" = "$HEIGHT" ] || { echo "AVI 分辨率不符：${mw}x${mh}" >&2; exit 1; }
+		[ "$mfr" = "60/1" ] || { echo "AVI 帧率不符：$mfr" >&2; exit 1; }
+		[ "$mnb" = "$FRAMES" ] || { echo "AVI 帧数不符：$mnb/$FRAMES" >&2; exit 1; }
+		echo "AVI 校验通过：${mw}x${mh} ${mfr} frames=${mnb}"
+		if [ "$recorded_frames" != "$FRAMES" ]; then
+			echo "WARN Godot 摘要帧数=${recorded_frames:-?}，与 AVI 帧数 $mnb 不一致；以 ffprobe 为准" >&2
+		fi
 	fi
-	# Godot 4.7.2 的退出摘要偶发少报实际帧数（曾见 232 vs 1800 个完整文件）；
-	# 帧目录是每次渲染独立的临时目录，因此以文件序列为准，摘要仅告警。
-	if [ "$recorded_frames" != "$FRAMES" ]; then
-		echo "WARN Godot 摘要帧数=${recorded_frames:-?}，与文件数 $count 不一致；以文件序列为准" >&2
-	fi
+
 	# 每次录制后立即扫描本次日志；$log_file 会被下一次录制覆盖，不能延后扫描。
 	if grep -q "SCRIPT ERROR" "$log_file"; then
 		echo "检测到 SCRIPT ERROR，出片失败（日志: $log_file）" >&2
@@ -126,11 +167,18 @@ render_once() {
 	echo "录制完成：$count 帧，用时 ${record_ts}s"
 
 	echo "== FFmpeg 转码 -> $out_file =="
-	ffmpeg -y -v error -framerate "$FPS" -start_number 0 \
-		-i "$frames_dir/frame%08d.png" -frames:v "$FRAMES" \
-		-c:v libx264 -preset "$PRESET" -crf "$CRF" -pix_fmt yuv420p -r "$FPS" \
-		-an -map_metadata -1 -fflags +bitexact -flags:v +bitexact -threads 1 \
-		-movflags +faststart "$out_file"
+	if [ "$MOVIE_FORMAT" = "png" ]; then
+		ffmpeg -y -v error -framerate "$FPS" -start_number 0 \
+			-i "$work_dir/frame%08d.png" -frames:v "$FRAMES" \
+			-c:v libx264 -preset "$PRESET" -crf "$CRF" -pix_fmt yuv420p -r "$FPS" \
+			-an -map_metadata -1 -fflags +bitexact -flags:v +bitexact -threads 1 \
+			-movflags +faststart "$out_file"
+	else
+		ffmpeg -y -v error -i "$work_dir/movie.avi" -frames:v "$FRAMES" \
+			-c:v libx264 -preset "$PRESET" -crf "$CRF" -pix_fmt yuv420p -r "$FPS" \
+			-an -map_metadata -1 -fflags +bitexact -flags:v +bitexact -threads 1 \
+			-movflags +faststart "$out_file"
+	fi
 
 	local fw fh fr fnb fdur
 	fw="$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 "$out_file")"
@@ -148,9 +196,9 @@ render_once() {
 	echo "单次出片耗时: $(( $(date +%s) - start_ts ))s（录制 ${record_ts}s）"
 
 	if [ "$KEEP_FRAMES" != "1" ]; then
-		rm -rf "$frames_dir"
+		rm -rf "$work_dir"
 	else
-		echo "已保留帧序列: $frames_dir"
+		echo "已保留帧序列: $work_dir"
 	fi
 }
 

@@ -7,7 +7,7 @@ extends SceneTree
 const TestResults = preload("res://tests/test_results.gd")
 ## 与当前实测 checks 精确一致：任何测试脚本整体消失/被跳过都会使计数低于此值而失败。
 ## 增删测试时同步更新本常量与 README。
-const MIN_CHECKS := 499
+const MIN_CHECKS := 717
 const TEST_SCRIPTS := [
 	preload("res://tests/test_event_evaluator.gd"),
 	preload("res://tests/test_core_defects.gd"),
@@ -24,6 +24,7 @@ const TEST_SCRIPTS := [
 	preload("res://tests/test_theme_doc.gd"),
 	preload("res://tests/test_autosave.gd"),
 	preload("res://tests/test_p0_features.gd"),
+	preload("res://tests/test_manifest_snapshot.gd"),
 ]
 
 

@@ -4,6 +4,13 @@
 	"manifest_path": "res://data/manifest_index.json",
 	"assets": [
 		{
+			"id": "board_bg",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_bg_01_bottom.png",
+			"file": "res://assets/board_bg.png"
+		},
+		{
 			"id": "board_frame",
 			"usage": "PLACEHOLDER",
 			"license": "PIL 生成",
@@ -30,6 +37,118 @@
 			"license": "Twemoji CC-BY 4.0 / PIL",
 			"source": "01_icon/HotelManor_icon/剩余图标/box_treasure_y.png",
 			"file": "res://assets/box_treasure_y.png"
+		},
+		{
+			"id": "char_order_01_done",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/char_order_01_done.png",
+			"file": "res://assets/char_order_01_done.png"
+		},
+		{
+			"id": "char_order_01_idle",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/char_order_01_idle.png",
+			"file": "res://assets/char_order_01_idle.png"
+		},
+		{
+			"id": "char_order_02_done",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/char_order_02_done.png",
+			"file": "res://assets/char_order_02_done.png"
+		},
+		{
+			"id": "char_order_02_idle",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/char_order_02_idle.png",
+			"file": "res://assets/char_order_02_idle.png"
+		},
+		{
+			"id": "chip_clean_ca_lv01",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002101.png",
+			"file": "res://assets/chip_clean_ca_lv01.png"
+		},
+		{
+			"id": "chip_clean_ca_lv02",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002102.png",
+			"file": "res://assets/chip_clean_ca_lv02.png"
+		},
+		{
+			"id": "chip_clean_ca_lv03",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002103.png",
+			"file": "res://assets/chip_clean_ca_lv03.png"
+		},
+		{
+			"id": "chip_clean_ca_lv04",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002104.png",
+			"file": "res://assets/chip_clean_ca_lv04.png"
+		},
+		{
+			"id": "chip_clean_ca_lv05",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002105.png",
+			"file": "res://assets/chip_clean_ca_lv05.png"
+		},
+		{
+			"id": "chip_clean_ca_lv06",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002106.png",
+			"file": "res://assets/chip_clean_ca_lv06.png"
+		},
+		{
+			"id": "chip_clean_cb_lv01",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002201.png",
+			"file": "res://assets/chip_clean_cb_lv01.png"
+		},
+		{
+			"id": "chip_clean_cb_lv02",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002202.png",
+			"file": "res://assets/chip_clean_cb_lv02.png"
+		},
+		{
+			"id": "chip_clean_cb_lv03",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002203.png",
+			"file": "res://assets/chip_clean_cb_lv03.png"
+		},
+		{
+			"id": "chip_clean_cb_lv04",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002204.png",
+			"file": "res://assets/chip_clean_cb_lv04.png"
+		},
+		{
+			"id": "chip_clean_cb_lv05",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002205.png",
+			"file": "res://assets/chip_clean_cb_lv05.png"
+		},
+		{
+			"id": "chip_clean_cb_lv06",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002206.png",
+			"file": "res://assets/chip_clean_cb_lv06.png"
 		},
 		{
 			"id": "cta_app_icon",
@@ -130,6 +249,149 @@
 			"file": "res://assets/fx_star_fly.png"
 		},
 		{
+			"id": "icon_10002107",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002107.png",
+			"file": "res://assets/icon_10002107.png"
+		},
+		{
+			"id": "icon_10002108",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002108.png",
+			"file": "res://assets/icon_10002108.png"
+		},
+		{
+			"id": "icon_10002109",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002109.png",
+			"file": "res://assets/icon_10002109.png"
+		},
+		{
+			"id": "icon_10002110",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002110.png",
+			"file": "res://assets/icon_10002110.png"
+		},
+		{
+			"id": "icon_10002207",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002207.png",
+			"file": "res://assets/icon_10002207.png"
+		},
+		{
+			"id": "icon_10002208",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002208.png",
+			"file": "res://assets/icon_10002208.png"
+		},
+		{
+			"id": "icon_10002209",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002209.png",
+			"file": "res://assets/icon_10002209.png"
+		},
+		{
+			"id": "icon_10002210",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/棋子icon/icon_10002210.png",
+			"file": "res://assets/icon_10002210.png"
+		},
+		{
+			"id": "local_bg_top",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_bg_01_top.png",
+			"file": "res://assets/local_bg_top.png",
+			"local": true,
+			"note": "棋盘.psd 顶部房间背景 1080×400；待补登 manifest"
+		},
+		{
+			"id": "local_icon_exit",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_icon_exit.png",
+			"file": "res://assets/local_icon_exit.png",
+			"local": true,
+			"note": "左下退出按钮图标；待补登 manifest"
+		},
+		{
+			"id": "local_icon_finish",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "01_icon/HotelManor_icon/界面切图/main_icon_finish.png",
+			"file": "res://assets/local_icon_finish.png",
+			"local": true,
+			"note": "完成对号 52×52（PSD 已有，manifest 未登记）；待补登 manifest"
+		},
+		{
+			"id": "local_icon_gem",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "00_design/images/psd_slices/raw_icon_90000003.png",
+			"file": "res://assets/local_icon_gem.png",
+			"local": true,
+			"note": "顶栏宝石图标（PSD 切片）；待补登 manifest"
+		},
+		{
+			"id": "local_items_bar",
+			"usage": "PRODUCTION",
+			"license": "公司自有",
+			"source": "00_design/images/psd_slices/items.png",
+			"file": "res://assets/local_items_bar.png",
+			"local": true,
+			"note": "棋盘.psd 底部信息条 693×183；待补登 manifest"
+		},
+		{
+			"id": "obstacle_bubble",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_btn_bubble.png",
+			"file": "res://assets/obstacle_bubble.png"
+		},
+		{
+			"id": "obstacle_ice",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/obstacle_ice.png",
+			"file": "res://assets/obstacle_ice.png"
+		},
+		{
+			"id": "obstacle_lock",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/common_main_icon_lock_1x1.png",
+			"file": "res://assets/obstacle_lock.png"
+		},
+		{
+			"id": "obstacle_web",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/obstacle_web.png",
+			"file": "res://assets/obstacle_web.png"
+		},
+		{
+			"id": "slot_empty",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_checkerboard_bg.png",
+			"file": "res://assets/slot_empty.png"
+		},
+		{
+			"id": "token_coin",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/token_coin.png",
+			"file": "res://assets/token_coin.png"
+		},
+		{
 			"id": "ui_board_full_toast",
 			"usage": "PLACEHOLDER",
 			"license": "PIL 生成",
@@ -137,11 +399,46 @@
 			"file": "res://assets/ui_board_full_toast.png"
 		},
 		{
+			"id": "ui_button_secondary",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/common_main_btn_cabinet.png",
+			"file": "res://assets/ui_button_secondary.png"
+		},
+		{
+			"id": "ui_energy_timer",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_icon_countdown.png",
+			"file": "res://assets/ui_energy_timer.png"
+		},
+		{
+			"id": "ui_icon_coin",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/ui_icon_coin.png",
+			"file": "res://assets/ui_icon_coin.png"
+		},
+		{
+			"id": "ui_icon_energy",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/剩余图标/ui_icon_energy.png",
+			"file": "res://assets/ui_icon_energy.png"
+		},
+		{
 			"id": "ui_icon_star",
 			"usage": "PLACEHOLDER",
 			"license": "Twemoji CC-BY 4.0 / PIL",
 			"source": "01_icon/HotelManor_icon/剩余图标/ui_icon_star.png",
 			"file": "res://assets/ui_icon_star.png"
+		},
+		{
+			"id": "ui_level_badge",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_bar_level.png",
+			"file": "res://assets/ui_level_badge.png"
 		},
 		{
 			"id": "ui_level_complete",
@@ -156,6 +453,27 @@
 			"license": "Twemoji CC-BY 4.0 + PIL",
 			"source": "01_icon/HotelManor_icon/剩余图标/ui_level_intro.png",
 			"file": "res://assets/ui_level_intro.png"
+		},
+		{
+			"id": "ui_order_card",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_frame_message.png",
+			"file": "res://assets/ui_order_card.png"
+		},
+		{
+			"id": "ui_select_frame",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/common_main_frame_s.png",
+			"file": "res://assets/ui_select_frame.png"
+		},
+		{
+			"id": "ui_topbar",
+			"usage": "PRODUCTION",
+			"license": "公司自有/自研",
+			"source": "01_icon/HotelManor_icon/界面切图/main_money_bg.png",
+			"file": "res://assets/ui_topbar.png"
 		}
 	]
 }

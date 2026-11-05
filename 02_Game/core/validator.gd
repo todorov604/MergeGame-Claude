@@ -29,6 +29,8 @@ const ORDER_EVENT_TYPES := ["deliver", "order_claim"]
 
 var errors: Array = []
 var warnings: Array = []
+var _packaged_ids_cache: Dictionary = {}
+var _packaged_ids_loaded := false
 
 
 func add_error(path: String, message: String) -> void:
@@ -110,14 +112,16 @@ func validate_manifest(manifest) -> void:
 			if usage_v != STATUS_TO_USAGE[status_v]:
 				add_error(path + ".status", "status 与 usage 不一致: %s / %s" % [status_v, str(usage_v)])
 
-		# M9 仅对会打包的 PLACEHOLDER/PRODUCTION 校验文件存在性；
-		# REFERENCE_ONLY/TODO 不进入工程（内嵌快照只保留溯源路径，干净副本中不存在）。
+		# M9 只校验工程内/绝对路径的存在性：快照中的 res://assets 为已打包资源；
+		# 未打包的 PRODUCTION 保留仓库相对溯源路径（干净副本中可能不存在，不能判缺图）。
 		if typeof(usage_v) == TYPE_STRING and (usage_v == "PLACEHOLDER" or usage_v == "PRODUCTION"):
 			var file_v: Variant = entry.get("file")
 			if not _is_non_empty_string(file_v):
 				add_error(path + ".file", "file 为空")
-			elif not FileAccess.file_exists(file_v):
-				add_error(path + ".file", "缺图: %s" % file_v)
+			else:
+				var file_text := String(file_v)
+				if (file_text.begins_with("res://") or file_text.is_absolute_path()) and not FileAccess.file_exists(file_text):
+					add_error(path + ".file", "缺图: %s" % file_text)
 
 		# M10 license 非空
 		var license_v: Variant = entry.get("license")
@@ -385,6 +389,7 @@ func validate_project(project, manifest, allow_placeholders: bool) -> void:
 			var theme_data_v: Variant = _load_theme(theme_dir)
 			if typeof(theme_data_v) == TYPE_DICTIONARY:
 				_collect_theme_refs(theme_data_v, theme_refs)
+		theme_refs.append_array(_validate_chips(data, entities, entities_ok))
 		theme_refs.append_array(_validate_icons(data))
 		if manifest != null and manifest.ok:
 			_check_theme_refs(theme_refs, manifest, allow_placeholders)
@@ -455,6 +460,46 @@ func _validate_theme_fields(theme: Dictionary) -> void:
 				if typeof(color_v) != TYPE_STRING or not String(color_v).is_valid_html_color():
 					add_error("theme.chip_palette[%d]" % i, "颜色必须是合法 HTML 颜色")
 
+	# theme.chip_icons：entity -> level(1-10) -> 资源 ID
+	if theme.has("chip_icons"):
+		var chip_icons_v: Variant = theme["chip_icons"]
+		if typeof(chip_icons_v) != TYPE_DICTIONARY:
+			add_error("theme.chip_icons", "chip_icons 必须是对象")
+		else:
+			var chip_icons: Dictionary = chip_icons_v
+			for entity_key in chip_icons.keys():
+				var entity := String(entity_key)
+				if entity.is_empty():
+					add_error("theme.chip_icons", "实体 ID 不能为空")
+					continue
+				var entity_path := "theme.chip_icons.%s" % entity
+				var levels_v: Variant = chip_icons[entity_key]
+				if typeof(levels_v) != TYPE_DICTIONARY:
+					add_error(entity_path, "必须是对象")
+					continue
+				var levels: Dictionary = levels_v
+				for level_key in levels.keys():
+					var level_path := _validate_chip_level(levels, level_key, entity_path)
+					if level_path.is_empty():
+						continue
+
+
+## 校验单个 level -> 资源 ID 项；合法返回 JSON 路径，非法返回空串（error 已记录）。
+func _validate_chip_level(levels: Dictionary, level_key: Variant, base_path: String) -> String:
+	var level_text := str(level_key)
+	var level_path := "%s.%s" % [base_path, level_text]
+	var level := -1
+	if level_text.is_valid_int():
+		level = int(level_text)
+	if level < 1 or level > 10:
+		add_error(level_path, "等级必须是 1-10 的整数")
+		return ""
+	var id_v: Variant = levels[level_key]
+	if not _is_non_empty_string(id_v):
+		add_error(level_path, "资源 ID 必须是非空字符串")
+		return ""
+	return level_path
+
 
 ## 校验可选 icons 字段；返回其中合法的资源引用 [{id, path}]。
 func _validate_icons(data: Dictionary) -> Array:
@@ -476,6 +521,47 @@ func _validate_icons(data: Dictionary) -> Array:
 	return refs
 
 
+## 校验可选 chips.<entity>.icons 映射；返回其中合法的资源引用 [{id, path}]。
+## 优先级 theme.chip_icons > chips.<entity>.icons > 默认自绘，运行时由 ThemeDoc 合并。
+func _validate_chips(data: Dictionary, entities: Dictionary, entities_ok: bool) -> Array:
+	var refs: Array = []
+	if not data.has("chips"):
+		return refs
+	var chips_v: Variant = data["chips"]
+	if typeof(chips_v) != TYPE_DICTIONARY:
+		add_error("chips", "chips 必须是对象")
+		return refs
+	var chips: Dictionary = chips_v
+	for entity_key in chips.keys():
+		var entity := String(entity_key)
+		var entity_path := "chips.%s" % entity
+		if entity.is_empty():
+			add_error("chips", "实体 ID 不能为空")
+			continue
+		if entities_ok and not entities.has(entity):
+			add_error(entity_path, "实体未定义: %s" % entity)
+		var def_v: Variant = chips[entity_key]
+		if typeof(def_v) != TYPE_DICTIONARY:
+			add_error(entity_path, "必须是对象")
+			continue
+		var icons_v: Variant = (def_v as Dictionary).get("icons", null)
+		if icons_v == null:
+			continue
+		if typeof(icons_v) != TYPE_DICTIONARY:
+			add_error(entity_path + ".icons", "icons 必须是对象")
+			continue
+		var icons: Dictionary = icons_v
+		if icons.is_empty():
+			add_error(entity_path + ".icons", "icons 不能为空")
+			continue
+		for level_key in icons.keys():
+			var level_path := _validate_chip_level(icons, level_key, entity_path + ".icons")
+			if level_path.is_empty():
+				continue
+			refs.append({"id": String(icons[level_key]), "path": level_path})
+	return refs
+
+
 func _collect_theme_refs(theme: Dictionary, refs: Array) -> void:
 	var board_frame_v: Variant = theme.get("board_frame")
 	if _is_non_empty_string(board_frame_v):
@@ -488,9 +574,25 @@ func _collect_theme_refs(theme: Dictionary, refs: Array) -> void:
 		var ui_v: Variant = (fonts_v as Dictionary).get("ui")
 		if _is_non_empty_string(ui_v):
 			refs.append({"id": String(ui_v), "path": "theme.fonts.ui"})
+	var chip_icons_v: Variant = theme.get("chip_icons")
+	if typeof(chip_icons_v) == TYPE_DICTIONARY:
+		var chip_icons: Dictionary = chip_icons_v
+		for entity_key in chip_icons.keys():
+			var levels_v: Variant = chip_icons[entity_key]
+			if typeof(levels_v) != TYPE_DICTIONARY:
+				continue
+			var levels: Dictionary = levels_v
+			for level_key in levels.keys():
+				var id_v: Variant = levels[level_key]
+				if _is_non_empty_string(id_v):
+					refs.append({
+						"id": String(id_v),
+						"path": "theme.chip_icons.%s.%s" % [String(entity_key), str(level_key)],
+					})
 
 
 func _check_theme_refs(refs: Array, manifest, allow_placeholders: bool) -> void:
+	var packaged := _packaged_ids()
 	var seen: Dictionary = {}
 	for ref_v in refs:
 		var ref: Dictionary = ref_v
@@ -513,6 +615,33 @@ func _check_theme_refs(refs: Array, manifest, allow_placeholders: bool) -> void:
 			add_error(ref_path, "TODO 资源未补齐: %s" % id)
 		elif usage == "PLACEHOLDER" and not allow_placeholders:
 			add_error(ref_path, "PLACEHOLDER 资源需 allow_placeholders=true: %s" % id)
+		# manifest 为 PRODUCTION 但未打包（不在 assets.json）时，运行时会加载失败并静默回退；
+		# 出片门禁必须提前阻断。
+		if not packaged.is_empty() and not packaged.has(id):
+			add_error(ref_path, "资源未打包（不在 assets.json）: %s" % id)
+
+
+## assets.json 中的可用资源 ID 集合；文件不存在时返回空（不做额外门禁）。
+func _packaged_ids() -> Dictionary:
+	if _packaged_ids_loaded:
+		return _packaged_ids_cache
+	_packaged_ids_loaded = true
+	var path := "res://assets/assets.json"
+	if not FileAccess.file_exists(path):
+		return _packaged_ids_cache
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if typeof(parsed) != TYPE_DICTIONARY:
+		return _packaged_ids_cache
+	var assets_v: Variant = (parsed as Dictionary).get("assets")
+	if typeof(assets_v) != TYPE_ARRAY:
+		return _packaged_ids_cache
+	for item_v in (assets_v as Array):
+		if typeof(item_v) != TYPE_DICTIONARY:
+			continue
+		var id_v: Variant = (item_v as Dictionary).get("id")
+		if typeof(id_v) == TYPE_STRING and not String(id_v).is_empty():
+			_packaged_ids_cache[String(id_v)] = true
+	return _packaged_ids_cache
 
 
 # ---------------------------------------------------------------------------
@@ -557,9 +686,19 @@ func validate_assets_record(record_path: String, manifest) -> void:
 				add_error(path + ".id", "资源 ID 重复: %s" % asset_id)
 			else:
 				seen_ids[asset_id] = true
+			var is_local := false
+			var local_v: Variant = item.get("local", false)
+			if typeof(local_v) == TYPE_BOOL:
+				is_local = bool(local_v)
 			if not manifest.has_resource(asset_id):
-				add_error(path + ".id", "资源未定义: %s" % asset_id)
+				# M1 本地登记：未进 00_design manifest 的 PSD 切片，只允许 PRODUCTION。
+				if not is_local:
+					add_error(path + ".id", "资源未定义: %s" % asset_id)
+				elif usage_v != "PRODUCTION":
+					add_error(path + ".usage", "本地登记资源只允许 PRODUCTION: %s" % asset_id)
 			else:
+				if is_local:
+					add_error(path + ".id", "本地登记资源与 manifest 冲突: %s" % asset_id)
 				var manifest_entry: Dictionary = manifest.get_resource(asset_id)
 				if usage_v != manifest_entry.get("usage"):
 					add_error(path + ".usage", "usage 与 manifest 记录不一致")

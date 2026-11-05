@@ -1,1 +1,34 @@
-{"name":"candy","background":{"top":"#5a2f4a","bottom":"#1e0f1a"},"board_frame":"board_frame","fonts":{"ui":"font_zh"},"star":"ui_icon_star","chip_palette":["#ff6fa5","#ffb347","#ffe066","#7ce0c3","#ff8a5c","#c084fc","#5cc8ff","#f9a8d4"]}
+{
+	"name": "candy",
+	"background": {"top": "#5a2f4a", "bottom": "#1e0f1a"},
+	"board_frame": "board_frame",
+	"fonts": {"ui": "font_zh"},
+	"star": "ui_icon_star",
+	"chip_palette": ["#ff6fa5", "#ffb347", "#ffe066", "#7ce0c3", "#ff8a5c", "#c084fc", "#5cc8ff", "#f9a8d4"],
+	"chip_icons": {
+		"CleanSet_Ca": {
+			"1": "chip_clean_cb_lv01",
+			"2": "chip_clean_cb_lv02",
+			"3": "chip_clean_cb_lv03",
+			"4": "chip_clean_cb_lv04",
+			"5": "chip_clean_cb_lv05",
+			"6": "chip_clean_cb_lv06",
+			"7": "icon_10002207",
+			"8": "icon_10002208",
+			"9": "icon_10002209",
+			"10": "icon_10002210"
+		},
+		"CleanSet_Cb": {
+			"1": "chip_clean_ca_lv01",
+			"2": "chip_clean_ca_lv02",
+			"3": "chip_clean_ca_lv03",
+			"4": "chip_clean_ca_lv04",
+			"5": "chip_clean_ca_lv05",
+			"6": "chip_clean_ca_lv06",
+			"7": "icon_10002107",
+			"8": "icon_10002108",
+			"9": "icon_10002109",
+			"10": "icon_10002110"
+		}
+	}
+}

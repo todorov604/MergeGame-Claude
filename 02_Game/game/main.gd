@@ -69,6 +69,8 @@ func _ready() -> void:
 	if not _theme.load_theme(theme_dir, _project_data, true):
 		_fail_start("主题加载失败: %s" % _theme.error)
 		return
+	for warning_v in _theme.warnings:
+		push_warning("主题警告: %s" % str(warning_v))
 
 	_build_views()
 	_running = true

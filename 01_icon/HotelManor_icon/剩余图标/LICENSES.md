@@ -18,12 +18,12 @@
 ## 生成占位
 - ui_level_complete / ui_level_intro / ui_coin_reward_popup / ui_board_full_toast / fx_level_transition / cta_*：由 PIL 用 Twemoji + Noto 字体生成，仅作占位。
 
-## 鼠标光标（2026-11-05）
-- 文件：`cursor_hand.png`（64×64，原图字节未改，sha256 `a565cc1141ae27a4ed0fc08c75a171fb774458161993633e1c09f7488b80f303`）
-- 来源：[Kenney Cursor Pack](https://kenney.nl/assets/cursor-pack)，取 `PNG/Outline/Double/hand_point.png`
-- 许可：**Creative Commons CC0 1.0**（公共领域奉献，署名非必需；官方页面写明可用于个人/教育/商业项目）
-- 用途：自由模式试玩窗口的系统光标 + 成片里的光标 overlay
-- 选型理由：Outline 白手套 + 黑描边，与参考图（白色卡通手套）风格一致
+## 鼠标光标（2026-11-05，项目自有素材）
+- 文件：`cursor_hand.png`（256×256 透明 PNG，sha256 `95d976801f08824ddb86ecdb8e2c7eebf786cdbfe2f582a9457f361e4b9db6eb`）
+- 来源：项目方素材 `E:\北京Icon\常用资产汇总\棋盘界面拆解\手指.png`（2074×2048，白色 3D 手套）；原图另存为 `cursor_hand_source.png` 备查
+- 许可：**公司自有（北京Icon 资产汇总）**，非开源素材
+- 处理：PIL 按 alpha 裁边 → 透明区 RGB 填白（防缩放黑边）→ 等比放入 256×256 画布 → LANCZOS 缩放
+- 用途：自由模式试玩窗口的手型光标（OS 光标隐藏，窗口内绘制）+ 成片里的光标 overlay，均按 72×72 显示，热点为指尖
 
 ## 注意
 - Twemoji 是扁平 emoji 风格，与项目现有 3D 卡通宠物店风格仍有差距；正式投放前建议替换为项目自绘/外包资源。

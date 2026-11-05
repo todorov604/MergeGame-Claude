@@ -95,7 +95,7 @@ const EXPECTED_SIZE := {
 	"ui_icon_finish": Vector2i(52, 52),
 	"ui_btn_plus": Vector2i(48, 48),
 	"ui_button_shop": Vector2i(142, 132),
-	"ui_cursor_hand": Vector2i(64, 64),
+	"ui_cursor_hand": Vector2i(256, 256),
 	"ui_level_badge_bg": Vector2i(118, 104),
 }
 

@@ -3071,14 +3071,14 @@
       "priority": "P1",
       "status": "可用",
       "usage": "PRODUCTION",
-      "license": "CC0 1.0（Kenney Cursor Pack）",
-      "file": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\剩余图标\\cursor_hand.png",
-      "target_size": "64×64",
-      "actual_size": "64×64",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "file": "E:\\北京Icon\\常用资产汇总\\棋盘界面拆解\\手指.png",
+      "target_size": "256×256",
+      "actual_size": "256×256",
       "fit": "exact",
       "nine_slice": "n/a",
       "animation": "static",
-      "notes": "2026-11-05 新增：自由模式光标 + 成片 overlay；来源 Kenney Cursor Pack（CC0 1.0），取 PNG/Outline/Double/hand_point.png，原图字节未改"
+      "notes": "2026-11-05 换为项目方白色 3D 手套（源 2074×2048，自带 alpha）；PIL 裁边 + 256×256 透明化后入库，运行时按 96px 绘制，热点=指尖比例 0.135/0.004"
     }
   ]
 }

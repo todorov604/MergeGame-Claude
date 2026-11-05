@@ -35,11 +35,12 @@ const FreeMode := preload("res://src/core/free_mode.gd")
 ## next to the film it produced, `take_<stamp>.mp4`.
 const MOV_DIR := "res://output/mov"
 const TAKE_FPS := 60
-## 64x64 CC0 outline hand (Kenney Cursor Pack). The fingertip is the hotspot, in
-## image pixels, so the same number works for the OS cursor and the film overlay.
+## White 3D glove cursor (北京Icon 资产汇总 · 棋盘界面拆解/手指.png, processed to a
+## 256x256 transparent PNG). The hotspot is the fingertip and is stored as a ratio of
+## the source square, so the OS cursor, the window overlay and the film all agree for
+## any source size.
 const CURSOR_ID := "ui_cursor_hand"
 const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
-const CURSOR_HOTSPOT := Vector2i(10, 8)
 const PAGE := Vector2(1080.0, 1920.0)
 ## Interactive window size. The design surface stays 1080x1920 (project.godot
 ## viewport_width/height, stretch canvas_items+keep); only the *real window* is
@@ -232,8 +233,10 @@ class Chrome extends Control:
 ## order cards and the fly layer, and it must not swallow clicks (mouse_filter is
 ## IGNORE, the screen itself owns input).
 class Cursor extends Control:
-	const HOTSPOT := Vector2(10.0, 8.0)
-	const SIZE := 64.0
+	## Fingertip position as a fraction of the square texture, plus the drawn size in
+	## page pixels. Ratios keep this correct if the cursor art is replaced again.
+	const HOTSPOT := Vector2(0.135, 0.004)
+	const SIZE := 96.0
 	const PRESS_SECONDS := 0.10
 	const PRESS_SCALE := 0.92
 
@@ -248,8 +251,8 @@ class Cursor extends Control:
 		var press := 1.0
 		if host._clock - float(host._last_click_at) <= PRESS_SECONDS:
 			press = PRESS_SCALE
-		draw_texture_rect(host._cursor_tex,
-				Rect2(point - HOTSPOT * press, Vector2(SIZE, SIZE) * press), false)
+		var size := Vector2(SIZE, SIZE) * press
+		draw_texture_rect(host._cursor_tex, Rect2(point - HOTSPOT * size, size), false)
 
 
 var board

@@ -64,7 +64,7 @@ F5 默认进**自由模式**（`free_mode=true`）：没有时间轴替你走，
 
 - **R = 开始 / 停止录制；停下就自动出片**，不需要终端：第二次按 R 后，take 存到 `output/mov/take_<时间戳>.take.json`，同目录随后出现 `take_<时间戳>.mp4`（另有 `.manifest.json` 资源清单和 `.log` 出片日志）。成片 1080×1920@60，文件名带时间戳，不会互相覆盖。
 - 出片是**后台进程**（`tools/render_take.gd`，headless）：它先等 Movie Maker 子进程录完 AVI，再调 ffmpeg 转 MP4，然后把 AVI 删掉。游戏窗口不卡，可以接着玩下一局。耗时约 **3× 片长**（2.5s 的片 ≈ 8s，30s 的片 ≈ 90–120s）。
-- 窗口里的手是**画在窗口内的**（`game_screen.gd` 的 `Cursor` 层，OS 光标隐藏）：图标 `ui_cursor_hand`（[Kenney Cursor Pack](https://kenney.nl/assets/cursor-pack)，CC0），按下缩到 0.92 保持 100ms；和成片里那只手是同一张图、同一套按压规则，所以**预览就是成片**。
+- 窗口里的手是**画在窗口内的**（`game_screen.gd` 的 `Cursor` 层，OS 光标隐藏）：图标 `ui_cursor_hand`（项目方素材 `北京Icon/常用资产汇总/棋盘界面拆解/手指.png`，白色 3D 手套，256×256 透明 PNG，按 96px 绘制，热点=指尖），按下缩到 0.92 保持 100ms；和成片里那只手是同一张图、同一套按压规则，所以**预览就是成片**。
 - 只想录、先不出片：`F5 -- --no-render`（take 照常保存，不启动出片）。想换参数重出同一条 take：
 
 ```bash
@@ -80,7 +80,7 @@ bash tools/render.sh --take output/mov/take_20261105_153012.take.json --out outp
 ```
 03_Game_ds/
 ├─ project.godot           1080×1920、stretch=canvas_items/keep；main_scene=game_screen
-├─ assets/                 49 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER + 21 张界面切图 + 1 个 CC0 光标）+ PROVENANCE.md
+├─ assets/                 49 个载荷副本（20 张真实 chip 图标 + 2 个字体 + 5 个 PLACEHOLDER + 21 张界面切图 + 1 个光标）+ PROVENANCE.md
 │  ├─ chips/               icon_10002101..110（Ca Lv.1–10）、icon_10002201..110（Cb Lv.1–10）整字节复制
 │  ├─ fonts/ · ui/         2 个字体；ui/ 共 27 张（5 个 PLACEHOLDER + 21 张 §20.5 界面切图 + cursor_hand.png）
 │  └─ PROVENANCE.md        出处/许可/尺寸/fit/sha256（含 M1 20 张表）
@@ -111,8 +111,8 @@ bash tools/render.sh --take output/mov/take_20261105_153012.take.json --out outp
 - `REFERENCE_ONLY`（0 条）与 `TODO`（5 条音频）恒阻断；`PLACEHOLDER` 仅在 `--allow-placeholders` 且经 `AssetGuard` 放行时加载并写日志。
 - 棋盘上的障碍 / 选中括角 / 完成态仍程序化绘制；chip 在主题给了 `chip_icons` 时画真实图标（fit=scale 居中，等级胶囊在上），没给时保持程序化圆角块。
 - 出片时 `output/render_manifest.json` 记录实际使用的资源（字体 + 主题 `chip_refs()` 的全部 chip id + 画面用到的 `icons.ui` id）与 `blocked` 列表；git 只跟踪代码与数据，`output/` 是产物。
-- **本地登记表** `data/assets_local.json`：快照没登记、但画面要用的素材在此登记为 `PRODUCTION`，`AssetGuard` 载入时与快照合并，**快照记录永远优先**（本地同名记录会被拒并计数，`t_local_assets` 断言）。共 **10 条**：§20.5 布局 9 条（`ui_bg_top`、`char_part1/part2`、`ui_items_bar`、`ui_board_frame` 等）+ `ui_cursor_hand`（CC0 光标，2026-11-05 已同步登记进 00_design manifest v8，待 M2 重建快照后可删本地记录）。前 9 条仍在「待补登 00_design manifest」清单（见 §5.2）。
-- 载荷文件共 **49** 个：20 张 chip 图标 + 2 字体 + 5 个 PLACEHOLDER + 21 张 §20.5 界面切图 + 1 张 CC0 光标。
+- **本地登记表** `data/assets_local.json`：快照没登记、但画面要用的素材在此登记为 `PRODUCTION`，`AssetGuard` 载入时与快照合并，**快照记录永远优先**（本地同名记录会被拒并计数，`t_local_assets` 断言）。共 **10 条**：§20.5 布局 9 条（`ui_bg_top`、`char_part1/part2`、`ui_items_bar`、`ui_board_frame` 等）+ `ui_cursor_hand`（项目自有光标，2026-11-05 已同步登记进 00_design manifest v8，待 M2 重建快照后可删本地记录）。前 9 条仍在「待补登 00_design manifest」清单（见 §5.2）。
+- 载荷文件共 **49** 个：20 张 chip 图标 + 2 字体 + 5 个 PLACEHOLDER + 21 张 §20.5 界面切图 + 1 张光标（256×256，源图 2074×2048 处理后）。
 
 ## 4. 数据 / 事件模型 v2 要点
 

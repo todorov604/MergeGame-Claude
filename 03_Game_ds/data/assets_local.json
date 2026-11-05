@@ -114,16 +114,16 @@
     },
     "ui_cursor_hand": {
       "usage": "PRODUCTION",
-      "license": "CC0 1.0（Kenney Cursor Pack）",
+      "license": "公司自有（北京Icon 资产汇总）",
       "category": "界面",
-      "use": "鼠标指针（自由模式试玩窗口 + 成片光标 overlay）",
+      "use": "鼠标指针（自由模式试玩窗口 + 成片光标 overlay）；纹理 256×256，运行时按 96×96 绘制",
       "file_name": "cursor_hand.png",
-      "source": "01_icon/HotelManor_icon/剩余图标/cursor_hand.png",
-      "target_size": "64×64",
-      "actual_size": "64×64",
+      "source": "北京Icon/常用资产汇总/棋盘界面拆解/手指.png",
+      "target_size": "256×256",
+      "actual_size": "256×256",
       "fit": "exact",
       "pending_manifest": true,
-      "manifest_note": "已登记 00_design/resource_manifest.json v8（2026-11-05，id 同名，CC0）；本工程快照仍是 v7/180 条，M2 重建快照后本行可删"
+      "manifest_note": "已登记 00_design/resource_manifest.json v8（2026-11-05，id 同名）；源图 2074×2048 白底手部渲染，PIL 去边裁切后缩放为 256×256 透明 PNG 入库；本工程快照仍是 v7/180 条，M2 重建快照后本行可删"
     }
   }
 }

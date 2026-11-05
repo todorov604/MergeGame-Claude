@@ -38,12 +38,13 @@ const FONT_ZH := "res://assets/fonts/font_zh.otf"
 const FONT_EN := "res://assets/fonts/font_en.ttf"
 const FRAME_ID := "board_frame"
 const FRAME_TEXTURE := "res://assets/ui/board_frame.png"
-## Free-mode cursor overlay: same 64x64 CC0 hand the live window uses, same hotspot.
-## The film only draws it when the take carries a cursor track (`--take=<file>`).
+## Free-mode cursor overlay: the same white 3D glove the live window draws
+## (ui_cursor_hand, 256x256 source). The hotspot is a ratio of the square texture, so
+## the hand's fingertip lands exactly on the recorded click point.
 const CURSOR_ID := "ui_cursor_hand"
 const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
-const CURSOR_HOTSPOT := Vector2(10.0, 8.0)
-const CURSOR_SIZE := 64.0
+const CURSOR_HOTSPOT_RATIO := Vector2(0.135, 0.004)
+const CURSOR_SIZE := 96.0
 
 ## §20.5 棋盘.psd structure (1080x1920 canvas). Every number below is the PSD's own
 ## geometry, not a tuned guess: the two background layers, the 983x1263 board
@@ -381,7 +382,7 @@ func _draw_cursor() -> void:
 	if not TakeIo.click_at(_take, _t).is_empty():
 		press = TakeIo.PRESS_SCALE
 	var size := Vector2(CURSOR_SIZE, CURSOR_SIZE) * press
-	var origin := Vector2(float(pos["x"]), float(pos["y"])) - CURSOR_HOTSPOT * press
+	var origin := Vector2(float(pos["x"]), float(pos["y"])) - CURSOR_HOTSPOT_RATIO * size
 	draw_texture_rect(_cursor_tex, Rect2(origin, size), false)
 
 

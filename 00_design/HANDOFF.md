@@ -72,13 +72,19 @@ cf8db56 → 2be09d3 → 989d5a3 → 2845b85 → 4a9f20f → d73eaa3 → 44e067e 
 - `00_design/resource_manifest.json` 现为 **180 条**：`01_icon` 公司自研素材全部登记为 `PRODUCTION`（`REFERENCE_ONLY` 0 条），棋子icon 120 张全部登记为可用；另有 `PLACEHOLDER` 20 条（Twemoji/PIL 占位）与 `TODO` 5 条（音频）保留。CSV 与 Excel 视图已同步重生成。
 - 两 lane 的 `data/manifest_index.json` 仍是 **74 条 M0 快照**（`REFERENCE_ONLY` 47 / `PLACEHOLDER` 20 / `PRODUCTION` 2 / `TODO` 5）。M1 主题接入时按新 manifest 重建；期间主题仍只能引用快照中已有的 `PLACEHOLDER` / `PRODUCTION`，不得引用新 icon。
 
-## 7. M1 计划（已裁决）
+## 7. M1 计划（已裁决，2026-11-05 修订）
 
-1. **双 lane 并行、同题 PK**：02_Game 与 03_Game_ds 各做一版，不合并代码、不互相改目录。
-2. **首个功能：批量变体 / 出片生产化**（project × theme × 文案多 variant、队列、命名、manifest、失败重试）。
-3. **统一验收口径**：tests / validate / simulate / render 确定性 + 可搬移 + 证据，两 lane 用同一套判据。
-4. 各出一版后择优；**败者归档不删**。
-5. 分歧语义（规格 v0.21 §10 所列 `track`/`order`、`audio`、`deliver`/`order_claim`/`energy_tick` 等）以胜者实现写入 **v0.22**。
+**目标**：资产/主题配置化出片——配置一套资产（不同 icon 等）→ 出一条片；批量为后续可选项（P2），本轮不做。
+
+1. **真实 icon 接入（最优先）**：两 lane 的 `data/manifest_index.json` 按新 manifest 重建（74→180，更新测试断言）；`chip_clean_ca`/`chip_clean_cb` 补齐到 10 级并映射真实图标；`theme.json` 的 `chip_icons` 接入；出一条带真实图标的样片/截图看效果。
+2. **资产/主题配置流程**：验证「换一套图标/主题 → 出一条片」全路径，不改代码、≤10 分钟；主题差异出片 framemd5 必须不同。
+3. **README + 验收**：使用/配置说明、真实图标样片、双跑确定性抽查、checks 更新。
+
+**验收**：真实图标样片/截图（chip 非占位）；换主题不改代码；单条 30s 出片 ≤5 分钟；双跑 framemd5 一致；不同主题出片 framemd5 不同。
+
+**不做（当前目标）**：批量调度器、变体契约、重试/日志、第二主题变体、`batch_accept.sh`、断点续跑、并行 worker、队列 UI、全量双跑；音频、序列帧、主题编辑器 UI、经济/商店。批量能力留作后续 P2。
+
+**执行方式**：双 lane 并行、同题 PK——02_Game 与 03_Game_ds 各做一版，不合并代码、不互相改目录；两 lane 用同一套判据（tests / validate / simulate / render 确定性 + 可搬移 + 证据）；择优后**败者归档不删**；分歧语义（规格 v0.21 §10 所列 `track`/`order`、`audio`、`deliver`/`order_claim`/`energy_tick` 等）以胜者实现写入 **v0.22**。
 
 ## 8. 环境与红线
 
@@ -91,7 +97,7 @@ cf8db56 → 2be09d3 → 989d5a3 → 2845b85 → 4a9f20f → d73eaa3 → 44e067e 
 
 ```text
 先读 00_design/HANDOFF.md、00_design/START-HERE.md、00_design/M0-冻结规格.md（v0.21）、00_design/resource_manifest.json。
-按 HANDOFF.md §7 的 M1 计划执行：两 lane 并行、同题 PK，首个功能=批量变体/出片生产化；不要用 00_design/archive/、旧 v2–v6 或主文档 §9 v1。
+按 HANDOFF.md §7 的 M1 计划执行：两 lane 并行、同题 PK，目标=资产/主题配置化出片（真实 icon 接入 → 配一套资产出一条片）；不要用 00_design/archive/、旧 v2–v6 或主文档 §9 v1。
 ```
 
 ## 10. 不要做

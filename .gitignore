@@ -3,3 +3,6 @@
 
 # Claude Code 工作区数据（worktree / 会话，仅本机使用）
 .claude/
+
+# superpowers 工具运行时目录（仅本机使用）
+.superpowers/

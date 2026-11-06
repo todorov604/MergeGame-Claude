@@ -223,3 +223,4 @@ ui_confirm,界面,订单完成确认图标,166×97,PNG,自研,可用,P0,ui/confi
 ui_energy_bar,界面,体力条,243×90,PNG,自研,可用,P0,ui/energy_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0014_体力条.png,,PRODUCTION,公司自有（北京Icon）,243×90,exact,n/a,static
 ui_coin_bar,界面,金币条,255×82,PNG,自研,可用,P0,ui/coin_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0013_金币条.png,,PRODUCTION,公司自有（北京Icon）,255×82,exact,n/a,static
 ui_gem_bar,界面,钻石条,246×67,PNG,自研,可用,P0,ui/gem_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0012_钻石条.png,,PRODUCTION,公司自有（北京Icon）,246×67,exact,n/a,static
+ui_coin_big,界面,奖励金币飞行图标,81×82,PNG,自研,可用,P1,ui/coin_big.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\最大金币.png,,PRODUCTION,公司自有（北京Icon）,81×82,exact,n/a,static

@@ -53,6 +53,7 @@ const LOCAL_IDS := [
 	"ui_char_waitress",
 	"ui_char_worker",
 	"ui_coin_bar",
+	"ui_coin_big",
 	"ui_coin_reward",
 	"ui_common_line",
 	"ui_confirm",
@@ -87,6 +88,7 @@ const LOCAL_FILES := {
 	"ui_board_plate": "board_plate.png",
 	"ui_cell_light": "cell_light.png",
 	"ui_coin_bar": "coin_bar.png",
+	"ui_coin_big": "coin_big.png",
 	"ui_energy_bar": "energy_bar.png",
 	"ui_gem_bar": "gem_bar.png",
 	"ui_confirm": "confirm.png",
@@ -135,6 +137,7 @@ const UI_KEYS := {
 	"task_reward": "ui_task_reward",
 	"confirm": "ui_confirm",
 	"coin_bar": "ui_coin_bar",
+	"coin_big": "ui_coin_big",
 	"energy_bar": "ui_energy_bar",
 	"gem_bar": "ui_gem_bar",
 	"char_blonde": "ui_char_blonde",
@@ -202,6 +205,7 @@ const EXPECTED_SIZE := {
 	"ui_board_plate": Vector2i(167, 167),
 	"ui_cell_light": Vector2i(256, 256),
 	"ui_coin_bar": Vector2i(255, 82),
+	"ui_coin_big": Vector2i(81, 82),
 	"ui_energy_bar": Vector2i(243, 90),
 	"ui_gem_bar": Vector2i(246, 67),
 	"ui_confirm": Vector2i(166, 97),
@@ -278,7 +282,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 222, "index = 180 snapshot records + 42 local records")
+	t.eq(guard.index.size(), 223, "index = 180 snapshot records + 43 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -479,7 +483,7 @@ func _test_default_theme_ui_block(t) -> void:
 	if ui.has("common_line") and not ui.has("line"):
 		ui["line"] = ui["common_line"]
 		ui.erase("common_line")
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 50 layout keys")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 51 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

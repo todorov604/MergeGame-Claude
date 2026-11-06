@@ -173,9 +173,34 @@ class Chrome extends Control:
 		# longer jumps to the right slot.
 		return PORTRAIT_CENTER_LEFT
 
+	var _char_gone_at: float = -1.0
+
+	## 角色跟着任务走：本关还有未完成的订单就站着，全部交付后缩小消失。
+	func _character_scale() -> float:
+		var alive := false
+		if host.orders != null:
+			for card in host.orders.cards:
+				if not bool((card as Dictionary).get("done", false)):
+					alive = true
+					break
+		if alive:
+			_char_gone_at = -1.0
+			return 1.0
+		if _char_gone_at < 0.0:
+			_char_gone_at = float(host._clock)
+		var t := (float(host._clock) - _char_gone_at) / 0.35
+		return clampf(1.0 - t, 0.0, 1.0)
+
 	func _portrait_for(character: String) -> Texture2D:
-		var key := "char_glasses" if character == "char_02" else "char_blonde"
-		return host._ui(key)
+		return host._ui(_portrait_key(character))
+
+	func _portrait_key(character: String) -> String:
+		# 旧数据里的 char_01/char_02 仍然映射到金发/眼镜两张图
+		if character == "char_01":
+			return "char_blonde"
+		if character == "char_02":
+			return "char_glasses"
+		return "char_" + character.replace("char_", "")
 	const PART2_CHAR_RECT := FilmLayout.PART2_CHAR_RECT
 	const LAYOUT_LEVEL_BADGE_BG := FilmLayout.LAYOUT_LEVEL_BADGE_BG
 	const LAYOUT_LEVEL_BADGE := FilmLayout.LAYOUT_LEVEL_BADGE
@@ -200,16 +225,10 @@ class Chrome extends Control:
 			for raw in orders_raw:
 				if typeof(raw) == TYPE_DICTIONARY:
 					used[String((raw as Dictionary).get("character", ""))] = true
-		if used.is_empty() or used.has("char_01"):
-			# 2026-11-05: level 1 uses the standalone blonde customer art (05_blonde),
-			# so the baked part1 sheet (which carries the +100 badges) is only a fallback.
-			var blonde: Texture2D = host._ui("char_blonde")
-			if blonde != null:
-				draw_ui_fit("char_blonde", _portrait_rect(blonde, PORTRAIT_CENTER_LEFT))
-			else:
-				draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
-		# 2026-11-06: only one character is drawn per level now; it always stands on the
-		# left anchor (char_02 keeps its glasses art in the queue cards).
+		# 2026-11-06: every visible queue card carries its own character. No orders ->
+		# nobody on screen (the baked part1 granny is never used as a fallback again).
+		# 2026-11-06: portraits are drawn by the order panel now (they must shrink with
+		# their card), so the chrome no longer paints them.
 		_sync_card_anchors(used)
 		_draw_topbar(snap)
 		_draw_bottom_bar(snap)
@@ -276,6 +295,31 @@ class Chrome extends Control:
 		var gem := Rect2(coin.end.x + BAR_GAP, top, gem_w, h)
 		return {"energy": energy, "coin": coin, "gem": gem}
 
+	## One portrait above each of the first three queue cards, bottom-anchored to its card.
+	func _draw_queue_portraits() -> void:
+		if host.orders == null:
+			return
+		var shown := 0
+		for card in host.orders.cards:
+			if bool((card as Dictionary).get("done", false)):
+				continue
+			if shown >= 3:
+				break
+			shown += 1
+			var cid := String((card as Dictionary).get("id", ""))
+			var who := String((card as Dictionary).get("character", ""))
+			var key := _portrait_key(who)
+			var texture: Texture2D = host._ui(key)
+			if texture == null:
+				continue
+			var local: Rect2 = host.orders.card_rect(cid)
+			var page := Rect2(local.position + host.orders.position, local.size)
+			var h := 210.0
+			var w := h * (texture.get_width() / maxf(texture.get_height(), 1.0))
+			var rect := Rect2(page.get_center().x - w * 0.5, page.position.y + 26.0 - h, w, h)
+			draw_ui_fit(key, rect)
+
+
 	func _draw_topbar(snap: Dictionary) -> void:
 		var values: Dictionary = host._hud_values(snap)
 		# The HUD (hud_view.gd) keeps its own pill rects; the chrome paints the §20.5
@@ -318,7 +362,19 @@ class Chrome extends Control:
 		text_center_font(level_font, clock_rect, clock, 22, Color(1.0, 1.0, 1.0))
 		for key3 in ["coin", "gem"]:
 			var counter_rect: Rect2 = bar_rects[key3]
-			text_center_font(level_font, counter_rect, str(int(values.get(key3, 0))), 40, num_color)
+			var shown := int(round(float(host._coin_display))) if key3 == "coin" and float(host._coin_display) >= 0.0 else int(values.get(key3, 0))
+			var pop := 1.0
+			if key3 == "coin":
+				var since: float = float(host._clock) - float(host._coin_pop_at)
+				if since >= 0.0 and since < 0.35:
+					pop = 1.0 + 0.38 * sin(PI * since / 0.35)
+			if pop > 1.001:
+				draw_set_transform(counter_rect.get_center(), 0.0, Vector2(pop, pop))
+				text_center_font(level_font, Rect2(-counter_rect.size * 0.5, counter_rect.size),
+						str(shown), 40, num_color)
+				draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			else:
+				text_center_font(level_font, counter_rect, str(shown), 40, num_color)
 		if not draw_ui_fit("shop", LAYOUT_SHOP):
 			rounded(LAYOUT_SHOP, 30, Color("#5B8DEF"))
 			draw_rect(Rect2(LAYOUT_SHOP.position + Vector2(26.0, 34.0),
@@ -589,9 +645,22 @@ var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
 var _last_click_at: float = -1000.0
+## Coin-bar number pop after a reward lands.
+var _coin_pop_at: float = -1000.0
+## 顶栏金币显示值：交付时按飞出的金币数量分批上涨，而不是一次跳到目标。
+var _coin_display: float = -1.0
+var _coin_ticks: Array = []
 ## Double-click bookkeeping on a green (completed) cell: second tap claims the order.
 const DOUBLE_CLICK := 0.35
 var _last_cell := Vector2i(-1, -1)
+## Order-queue drag: the whole row slides with the pointer, then springs back.
+const ROW_DRAG_THRESHOLD := 12.0
+const ROW_RUBBER := 0.55
+const ROW_SPRING := 12.0
+var _row_pressing := false
+var _row_dragging := false
+var _row_press_x: float = 0.0
+var _row_dx: float = 0.0
 var _last_cell_at: float = -1000.0
 ## 2026-11-05: a finished level holds for 0.5 s (so the confirm badge is readable)
 ## before the next level is applied. -1 means "not scheduled".
@@ -1128,6 +1197,18 @@ func _refresh_anchors() -> void:
 	fly.set_anchors(table)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	_tick_coin_pending()
+	_tick_coin_display()
+	if orders != null and orders.has_method("set_clock"):
+		orders.set_clock(_clock)
+	if orders != null and orders.has_method("is_animating") and orders.is_animating():
+		# keep both layers painting while a card (and its character) shrinks away
+		if chrome != null:
+			chrome.queue_redraw()
+	if not _row_dragging and absf(_row_dx) > 0.5 and orders != null:
+		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
+		_row_dx = lerpf(_row_dx, 0.0, 0.22)
+		orders.set_row_offset(_row_dx)
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:
@@ -1163,6 +1244,130 @@ func _on_event(ev: Dictionary) -> void:
 			board.apply_state({"selected": _to_array(_selected),
 					"completed": _completed_cells(evaluator.sim.snapshot())})
 	fly.play_event(_with_hue(ev))
+
+
+## Claim timeline: chip flies (0.55 s) -> coins spiral -> 1 s later the card and its
+## character shrink away. Everything is scheduled, nothing pops at once.
+const CLAIM_CHIP_SECONDS := 0.55
+const CLAIM_COIN_DELAY := 1.0
+var _coin_pending: Array = []
+
+
+## Only the visual hold: the card must not flip to done before the chip lands.
+func _arm_claim_hold(order_id: String) -> void:
+	if orders != null:
+		orders.hold_done(order_id, CLAIM_CHIP_SECONDS + CLAIM_COIN_DELAY)
+
+
+## Coins fly only after a accepted claim.
+func _schedule_coin(order_id: String) -> void:
+	_coin_pending.append({"id": order_id, "at": _clock + CLAIM_CHIP_SECONDS})
+	var amount := _order_coin_amount(order_id)
+	if amount > 0:
+		_queue_coin_ticks(amount, clampi(amount / 5, 3, 8))
+
+
+func _order_coin_amount(order_id: String) -> int:
+	if orders == null:
+		return 0
+	for card in orders.cards:
+		if String((card as Dictionary).get("id", "")) == order_id:
+			return int((card as Dictionary).get("coin", 0))
+	return 0
+
+
+## Split a reward into one tick per flying coin: 5 coins -> +1 each, 10 coins -> +2 each.
+func _queue_coin_ticks(amount: int, count: int) -> void:
+	if amount <= 0:
+		return
+	var n: int = maxi(count, 1)
+	var start := _clock + CLAIM_CHIP_SECONDS
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		var step: int = base + (1 if i < rest else 0)
+		_coin_ticks.append({"at": start + gap * float(i), "amount": step})
+
+
+func _tick_coin_pending() -> void:
+	if _coin_pending.is_empty():
+		return
+	var keep: Array = []
+	for row in _coin_pending:
+		if _clock >= float((row as Dictionary).get("at", 0.0)):
+			_play_coin_reward(String((row as Dictionary).get("id", "")))
+		else:
+			keep.append(row)
+	_coin_pending = keep
+
+
+## The sim reports which obstacles a merge broke; the board animates them away.
+func _play_unlocks() -> void:
+	if evaluator == null or evaluator.sim == null or board == null:
+		return
+	for row in evaluator.sim.last_unlocks:
+		if typeof(row) != TYPE_DICTIONARY:
+			continue
+		var cell_ref = (row as Dictionary).get("cell", [])
+		if typeof(cell_ref) != TYPE_ARRAY or (cell_ref as Array).size() < 2:
+			continue
+		board.unlock(Vector2i(int((cell_ref as Array)[0]), int((cell_ref as Array)[1])),
+				String((row as Dictionary).get("kind", "")), _clock)
+
+
+## Advance the displayed coin number by one tick at a time; snap when ticks run dry.
+func _tick_coin_display() -> void:
+	var hud_coin := int(evaluator.sim.hud.get("coin", 0)) if evaluator != null else 0
+	if _coin_display < 0.0:
+		_coin_display = float(hud_coin)
+		return
+	if not _coin_ticks.is_empty():
+		var keep: Array = []
+		for row in _coin_ticks:
+			if _clock >= float((row as Dictionary).get("at", 0.0)):
+				_coin_display = minf(_coin_display + float((row as Dictionary).get("amount", 0)),
+						float(hud_coin))
+				_coin_pop_at = _clock
+			else:
+				keep.append(row)
+		_coin_ticks = keep
+		if chrome != null:
+			chrome.queue_redraw()
+	elif _coin_pending.is_empty() and absf(_coin_display - float(hud_coin)) > 0.01:
+		# safety net: anything the ticks did not cover catches up smoothly
+		_coin_display = lerpf(_coin_display, float(hud_coin), 0.25)
+		if absf(_coin_display - float(hud_coin)) < 1.0:
+			_coin_display = float(hud_coin)
+		if chrome != null:
+			chrome.queue_redraw()
+
+
+## Reward coins: spiral from the card up to the coin bar, then pop the number.
+func _play_coin_reward(order_id: String) -> void:
+	if fly == null or orders == null:
+		return
+	var amount := 0
+	for card in orders.cards:
+		if String((card as Dictionary).get("id", "")) == order_id:
+			amount = int((card as Dictionary).get("coin", 0))
+			break
+	if amount <= 0:
+		return
+	var local: Rect2 = orders.card_rect(order_id)
+	var centre := Vector2(local.position + orders.position) + local.size * 0.5
+	var count := clampi(amount / 5, 3, 8)
+	fly.play_event({
+		"type": "coin_spiral",
+		"at": _clock,
+		"payload": {
+			"from_point": [centre.x, centre.y],
+			"amount": amount,
+			"count": count,
+			"texture": _ui("coin_big"),
+		},
+	})
+	_coin_pop_at = _clock + 0.55
 
 
 ## The claimed chip arcs from its board cell to the order card, growing to 2.5x and
@@ -1238,6 +1443,18 @@ func _process(delta: float) -> void:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	_tick_coin_pending()
+	_tick_coin_display()
+	if orders != null and orders.has_method("set_clock"):
+		orders.set_clock(_clock)
+	if orders != null and orders.has_method("is_animating") and orders.is_animating():
+		# keep both layers painting while a card (and its character) shrinks away
+		if chrome != null:
+			chrome.queue_redraw()
+	if not _row_dragging and absf(_row_dx) > 0.5 and orders != null:
+		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
+		_row_dx = lerpf(_row_dx, 0.0, 0.22)
+		orders.set_row_offset(_row_dx)
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:
@@ -1333,6 +1550,14 @@ func _input(event: InputEvent) -> void:
 	# than a per-frame sample; TakeIo stores time-ordered points, the film interpolates.
 	if event is InputEventMouseMotion and _recording:
 		_sample_cursor()
+	if event is InputEventMouseMotion and _row_pressing:
+		var motion := event as InputEventMouseMotion
+		var dx := motion.position.x - _row_press_x
+		if not _row_dragging and absf(dx) >= ROW_DRAG_THRESHOLD:
+			_row_dragging = true
+		if _row_dragging and orders != null:
+			_row_dx = dx * ROW_RUBBER
+			orders.set_row_offset(_row_dx)
 	if not _free_mode or _freeze:
 		return
 	if event is InputEventMouseButton:
@@ -1347,8 +1572,13 @@ func _input(event: InputEvent) -> void:
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if mouse.pressed:
+			if ORDER_RECT.has_point(mouse.position):
+				_row_pressing = true
+				_row_press_x = mouse.position.x
 			_begin_press(mouse.position)
 		else:
+			_row_pressing = false
+			_row_dragging = false
 			_end_press(mouse.position)
 	elif event is InputEventMouseMotion and _pressing:
 		_maybe_start_drag(event.position)
@@ -1394,11 +1624,17 @@ func _maybe_start_drag(point: Vector2) -> void:
 	_selected = Vector2i(-1, -1)
 	_sync_from_sim()
 	board.set_drag_state({"from": _drag_from, "pos": centre})
-	board.drag_chip_visible = false
+	var drag_tex: Texture2D = board.chip_texture(
+			String(_board_item(_drag_from).get("entity", "")),
+			int(_board_item(_drag_from).get("level", 1)))
+	# 2026-11-06: generators have no chip art — the ghost layer would draw nothing and
+	# the generator vanished mid-drag. Only hand the art to the ghost when it exists.
+	board.drag_chip_visible = drag_tex == null
 	if ghost != null:
-		ghost.set_state(_drag_from, centre, board.chip_texture(
-				String(_board_item(_drag_from).get("entity", "")),
-				int(_board_item(_drag_from).get("level", 1))), _clock)
+		if drag_tex != null:
+			ghost.set_state(_drag_from, centre, drag_tex, _clock)
+		else:
+			ghost.clear()
 
 
 func _update_drag(point: Vector2) -> void:
@@ -1407,15 +1643,26 @@ func _update_drag(point: Vector2) -> void:
 	var at := point + _drag_grab
 	board.set_drag_state({"from": _drag_from, "pos": at})
 	if ghost != null:
-		ghost.set_state(_drag_from, at, board.chip_texture(
+		var tex: Texture2D = board.chip_texture(
 				String(_board_item(_drag_from).get("entity", "")),
-				int(_board_item(_drag_from).get("level", 1))), _clock)
+				int(_board_item(_drag_from).get("level", 1)))
+		if tex != null:
+			ghost.set_state(_drag_from, at, tex, _clock)
+		else:
+			ghost.clear()
 
 
 ## Release: a drag either merges (same entity+level) or cancels; a press without
 ## movement stays the old click semantics (select / tap / claim / next).
 func _end_press(release_point: Vector2) -> void:
 	if not _pressing:
+		return
+	# 2026-11-06: a row drag must never be read as a click on a card — otherwise
+	# dragging level 1's only card claims it and the spring-back is never seen.
+	if _row_dragging:
+		_pressing = false
+		_row_dragging = false
+		_row_pressing = false
 		return
 	if _press_tapped:
 		_press_tapped = false
@@ -1456,6 +1703,8 @@ func _end_press(release_point: Vector2) -> void:
 				# merge pops (0.4 s up/down), a move/swap lands with a short shrink
 				if kind != FreeMode.ACTION_MOVE:
 					board.pulse(to, "merge" if kind == FreeMode.ACTION_MERGE else "settle", _clock)
+				if kind == FreeMode.ACTION_MERGE:
+					_play_unlocks()
 			print("[game] drag %s %s -> %s ok=%s" % [event_type, str(from), str(to),
 					str(result.get("ok", false))])
 			_record_click(point, {"kind": event_type, "ok": bool(result.get("ok", false)),
@@ -1490,10 +1739,14 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 	if order_id.is_empty():
 		return false
 	var item: Dictionary = evaluator.sim.board.item(cell)
+	_arm_claim_hold(order_id)
 	var result: Dictionary = _apply_free("order_claim",
 			{"order": order_id, "src": [cell.x, cell.y]})
 	if not bool(result.get("ok", false)):
+		if orders != null:
+			orders.release_hold(order_id)
 		return false
+	_schedule_coin(order_id)
 	_play_claim_flight(order_id, cell, item)
 	return true
 
@@ -1544,6 +1797,7 @@ func _free_click_at(point: Vector2) -> Dictionary:
 			out["ok"] = bool(_apply_free("merge", action.get("payload", {})).get("ok", false))
 			if out["ok"]:
 				board.pulse(cell, "merge", _clock)
+				_play_unlocks()
 		elif kind == FreeMode.ACTION_SELECT or kind == FreeMode.ACTION_CLEAR:
 			_sync_from_sim()
 			out["ok"] = true
@@ -1565,8 +1819,13 @@ func _free_click_at(point: Vector2) -> Dictionary:
 				src_cell = done_cell
 				src_item = evaluator.sim.board.item(done_cell)
 				break
+		_arm_claim_hold(order_id)
 		out["ok"] = bool(_apply_free("order_claim",
 				{"order": order_id, "src": [src_cell.x, src_cell.y]}).get("ok", false))
+		if bool(out["ok"]):
+			_schedule_coin(order_id)
+		elif orders != null:
+			orders.release_hold(order_id)
 		if bool(out["ok"]) and src_cell.x >= 0:
 			_play_claim_flight(order_id, src_cell, src_item)
 		_record_click(point, out)
@@ -1757,6 +2016,18 @@ func _reset_run() -> void:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	_tick_coin_pending()
+	_tick_coin_display()
+	if orders != null and orders.has_method("set_clock"):
+		orders.set_clock(_clock)
+	if orders != null and orders.has_method("is_animating") and orders.is_animating():
+		# keep both layers painting while a card (and its character) shrinks away
+		if chrome != null:
+			chrome.queue_redraw()
+	if not _row_dragging and absf(_row_dx) > 0.5 and orders != null:
+		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
+		_row_dx = lerpf(_row_dx, 0.0, 0.22)
+		orders.set_row_offset(_row_dx)
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:

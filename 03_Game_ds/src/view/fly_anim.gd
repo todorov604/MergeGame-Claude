@@ -12,7 +12,7 @@ extends Control
 
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const HANDLED := [
-	"deliver", "order_claim", "deliver_chip", "star_fly", "coin_popup",
+	"deliver", "order_claim", "deliver_chip", "star_fly", "coin_popup", "coin_spiral",
 	"character_leave", "character_next", "levelup", "transition",
 ]
 const PAGE := Vector2(1080.0, 1920.0)
@@ -110,6 +110,21 @@ func play_event(ev: Dictionary) -> bool:
 				"to": order_at,
 				"text": "",
 				"hue": hue,
+			})
+		"coin_spiral":
+			var spiral_from := _cell_anchor(payload.get("from", null))
+			var fp = payload.get("from_point", null)
+			if typeof(fp) == TYPE_ARRAY and (fp as Array).size() >= 2:
+				spiral_from = Vector2(float((fp as Array)[0]), float((fp as Array)[1]))
+			motions.append({
+				"kind": "coin_spiral",
+				"start": at,
+				"dur": dur if dur > 0.0 else 0.85,
+				"from": spiral_from,
+				"to": _hud_anchor("coin"),
+				"count": int(payload.get("count", 5)),
+				"amount": int(payload.get("amount", 0)),
+				"texture": payload.get("texture", null),
 			})
 		"deliver_chip":
 			var target := order_at
@@ -292,6 +307,8 @@ func _draw_motion(m: Dictionary) -> void:
 			_draw_item(m, p, ease)
 		"deliver_chip":
 			_draw_deliver_chip(m, p, ease)
+		"coin_spiral":
+			_draw_coin_spiral(m, p)
 		"stars":
 			_draw_stars(m, p)
 		"coins":
@@ -306,6 +323,48 @@ func _draw_motion(m: Dictionary) -> void:
 			_draw_banner(m, p, ease)
 		"veil":
 			_draw_veil(m, p)
+
+
+## Reward coins: each coin rides an Archimedean spiral from the card to the coin bar,
+## with two ghost copies behind it for the trail.
+func _draw_coin_spiral(m: Dictionary, p: float) -> void:
+	var from: Vector2 = m.get("from", Vector2.ZERO)
+	var to: Vector2 = m.get("to", Vector2.ZERO)
+	var count: int = maxi(int(m.get("count", 5)), 1)
+	for i in count:
+		var local := clampf((p - float(i) * 0.07) / 0.68, 0.0, 1.0)
+		if local <= 0.0 or local >= 1.0:
+			continue
+		for ghost in 3:
+			var gt := clampf(local - float(ghost) * 0.07, 0.0, 1.0)
+			var pos := _spiral_point(from, to, gt)
+			var alpha := (1.0 if ghost == 0 else 0.34 / float(ghost))
+			var side := 44.0 if ghost == 0 else 38.0 - 6.0 * float(ghost)
+			var texture = m.get("texture", null)
+			if texture is Texture2D:
+				draw_texture_rect(texture, Rect2(pos - Vector2(side, side) * 0.5,
+						Vector2(side, side)), false, Color(1, 1, 1, alpha))
+			else:
+				_coin_dot(pos, side * 0.36, alpha)
+		# the head coin carries the "+N/count" hint
+		if i == 0:
+			var head := _spiral_point(from, to, local)
+			_text(head + Vector2(18.0, -18.0), "+%d" % int(m.get("amount", 0)),
+					26, Color(1.0, 0.95, 0.7, 1.0 - local))
+
+
+func _spiral_point(from: Vector2, to: Vector2, t: float) -> Vector2:
+	# Archimedean spiral around the straight line: radius shrinks as the coin travels
+	var base := from.lerp(to, t)
+	var angle := t * TAU * 1.6
+	var radius := (1.0 - t) * 110.0
+	return base + Vector2(cos(angle), sin(angle)) * radius
+
+
+func _coin_dot(c: Vector2, r: float, alpha: float) -> void:
+	var gold: Color = _c("coin", Color("#F6C445"))
+	draw_circle(c, r, Color(gold.r, gold.g, gold.b, alpha), true, -1.0, true)
+	draw_circle(c, r * 0.62, Color(1, 1, 1, alpha * 0.5), true, -1.0, true)
 
 
 ## Order claim: the delivered chip flies from its board cell to the card on an arc,

@@ -3591,6 +3591,22 @@
       "nine_slice": "n/a",
       "animation": "static",
       "notes": "2026-11-05 新增：顶栏钻石条；sha256 86b6265e738fc13d…"
+    },
+    {
+      "id": "ui_coin_big",
+      "category": "界面",
+      "use": "奖励金币飞行图标（大金币）",
+      "priority": "P1",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "file": "E:\\北京Icon\\常用资产汇总\\棋盘界面拆解\\最大金币.png",
+      "target_size": "81×82",
+      "actual_size": "81×82",
+      "fit": "exact",
+      "nine_slice": "n/a",
+      "animation": "static",
+      "notes": "2026-11-06 新增：任务奖励金币螺旋飞行动画；sha256 f4b34ebe3324723e…"
     }
   ]
 }

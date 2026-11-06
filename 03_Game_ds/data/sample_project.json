@@ -83,6 +83,69 @@
     "hue": "#E76F51",
     "label": "C2"
    }
+  },
+  "char_waitress": {
+   "kind": "character",
+   "visual": {
+    "label": "WA",
+    "hue": "#F2A65A"
+   }
+  },
+  "char_technician": {
+   "kind": "character",
+   "visual": {
+    "label": "TE",
+    "hue": "#5B8DEF"
+   }
+  },
+  "char_customer": {
+   "kind": "character",
+   "visual": {
+    "label": "CU",
+    "hue": "#E76F51"
+   }
+  },
+  "char_police": {
+   "kind": "character",
+   "visual": {
+    "label": "PO",
+    "hue": "#4C6EF5"
+   }
+  },
+  "char_blonde": {
+   "kind": "character",
+   "visual": {
+    "label": "BL",
+    "hue": "#E9C46A"
+   }
+  },
+  "char_racer": {
+   "kind": "character",
+   "visual": {
+    "label": "RA",
+    "hue": "#2A9D8F"
+   }
+  },
+  "char_manager": {
+   "kind": "character",
+   "visual": {
+    "label": "MA",
+    "hue": "#9B5DE5"
+   }
+  },
+  "char_glasses": {
+   "kind": "character",
+   "visual": {
+    "label": "GL",
+    "hue": "#D64550"
+   }
+  },
+  "char_worker": {
+   "kind": "character",
+   "visual": {
+    "label": "WO",
+    "hue": "#7FB069"
+   }
   }
  },
  "generators": {
@@ -115,6 +178,33 @@
   },
   "char_02": {
    "display": "小花"
+  },
+  "char_waitress": {
+   "display": "Waitress"
+  },
+  "char_technician": {
+   "display": "Technician"
+  },
+  "char_customer": {
+   "display": "Customer"
+  },
+  "char_police": {
+   "display": "Police"
+  },
+  "char_blonde": {
+   "display": "Blonde"
+  },
+  "char_racer": {
+   "display": "Racer"
+  },
+  "char_manager": {
+   "display": "Manager"
+  },
+  "char_glasses": {
+   "display": "Glasses"
+  },
+  "char_worker": {
+   "display": "Worker"
   }
  },
  "levels": [
@@ -462,7 +552,7 @@
    "orders": [
     {
      "id": "order_1",
-     "character": "char_01",
+     "character": "char_blonde",
      "mission": [
       {
        "entity": "CleanSet_Ca",
@@ -547,18 +637,70 @@
    "orders": [
     {
      "id": "order_2",
-     "character": "char_02",
+     "character": "char_waitress",
      "mission": [
       {
        "entity": "CleanSet_Ca",
-       "level": 3
-      },
+       "level": 2
+      }
+     ],
+     "coin": 25
+    },
+    {
+     "id": "order_3",
+     "character": "char_blonde",
+     "mission": [
       {
        "entity": "CleanSet_Cb",
        "level": 2
       }
      ],
-     "coin": 8
+     "coin": 22
+    },
+    {
+     "id": "order_4",
+     "character": "char_customer",
+     "mission": [
+      {
+       "entity": "CleanSet_Ca",
+       "level": 1
+      },
+      {
+       "entity": "CleanSet_Cb",
+       "level": 1
+      }
+     ],
+     "coin": 26
+    },
+    {
+     "id": "order_5",
+     "character": "char_racer",
+     "mission": [
+      {
+       "entity": "CleanSet_Ca",
+       "level": 2
+      },
+      {
+       "entity": "CleanSet_Cb",
+       "level": 1
+      }
+     ],
+     "coin": 30
+    },
+    {
+     "id": "order_6",
+     "character": "char_worker",
+     "mission": [
+      {
+       "entity": "CleanSet_Cb",
+       "level": 2
+      },
+      {
+       "entity": "CleanSet_Ca",
+       "level": 1
+      }
+     ],
+     "coin": 20
     }
    ],
    "safes": [

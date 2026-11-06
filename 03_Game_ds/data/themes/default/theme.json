@@ -38,6 +38,7 @@
       "safe_unknown": "ui_safe_unknown",
       "task_reward": "ui_task_reward",
       "confirm": "ui_confirm",
+      "coin_big": "ui_coin_big",
       "energy_bar": "ui_energy_bar",
       "coin_bar": "ui_coin_bar",
       "gem_bar": "ui_gem_bar",

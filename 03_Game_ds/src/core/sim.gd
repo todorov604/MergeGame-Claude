@@ -11,6 +11,7 @@ extends RefCounted
 
 const BoardState = preload("res://src/core/board_state.gd")
 const Safeboxes := preload("res://src/core/safeboxes.gd")
+const IceCell := preload("res://src/core/ice_cell.gd")
 const ProjectModel = preload("res://src/core/project_model.gd")
 const Rng = preload("res://src/core/rng.gd")
 const StateDigest = preload("res://src/core/state_digest.gd")
@@ -27,6 +28,8 @@ var time: float = 0.0
 ## Last accepted generator drop: {"from", "to", "entity", "level"}. The views use it
 ## to fly the chip in; empty on a rejected tap.
 var last_spawn: Dictionary = {}
+## Obstacles cleared by the last merge: [{"cell": [x, y], "kind": "ice"}].
+var last_unlocks: Array = []
 ## Multi-cell safeboxes for the current level (empty when the level declares none).
 var safeboxes: Array = []
 var hud: Dictionary = {}
@@ -420,7 +423,58 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 		return _err("SIM_MAX_LEVEL", "lv" + str(next_level) + " exceeds cap " + str(cap))
 	board.put(to, se, next_level)
 	board.take(from)
+	# 2026-11-06: a merge breaks the obstacles around it (ice/web lock a chip, the
+	# box and the "?" pay out a fresh chip from the generator pool).
+	last_unlocks = _unlock_neighbours(to)
 	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
+
+
+func _unlock_neighbours(centre: Vector2i) -> Array:
+	var out: Array = []
+	for step in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var cell: Vector2i = centre + step
+		if not board.in_bounds(cell):
+			continue
+		var kinds: Array = board.obstacle_types(cell)
+		if kinds.is_empty():
+			continue
+		for kind in kinds:
+			var k := String(kind)
+			# 2026-11-06: the box (lock) stays put for now — only ice, web and the "?"
+			# bag are cleared by a neighbouring merge.
+			if k == "safe" or k == "lock":
+				continue
+			if board.remove_obstacle(cell, k):
+				if k == "ice" or k == "web":
+					var frozen := IceCell.chip(model.project, cell)
+					if not frozen.is_empty() and not board.has_item(cell):
+						board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
+								int(frozen.get("level", 1)))
+				elif not board.has_item(cell):
+					var picked := _sample_generator_output()
+					if not picked.is_empty():
+						board.put(cell, String(picked["entity"]), int(picked["level"]))
+				out.append({"cell": [cell.x, cell.y], "kind": k})
+	return out
+
+
+## A deterministic chip from any generator's pool (the box payout).
+func _sample_generator_output() -> Dictionary:
+	var gen_ids := []
+	for eid in model.entity_ids():
+		if String(model.entity(eid).get("kind", "")) == "generator":
+			gen_ids.append(String(eid))
+	gen_ids.sort()
+	for gid in gen_ids:
+		var pool: Array = tap_pool(gid)
+		if pool.is_empty():
+			continue
+		var idx: int = rng.pick_weighted(pool)
+		if idx >= 0 and idx < pool.size():
+			var picked: Dictionary = pool[idx]
+			return {"entity": String(picked["entity"]),
+					"level": clampi(int(picked["level"]), 1, _level_cap(String(picked["entity"])))}
+	return {}
 
 
 ## Drag-and-drop swap (2026-11-05): a chip trades places with another chip on an

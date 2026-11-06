@@ -16,7 +16,7 @@ const COLOR_DONE := Color("#8FD46B")
 const UiFonts := preload("res://src/core/ui_fonts.gd")
 const WIDTH := 1080.0
 const HEIGHT := 250.0
-const MAX_CARDS := 2
+const MAX_CARDS := 6
 const MARGIN := 18.0
 const MAX_CARD_W := 250.0
 const CARD_GAP_X := 18.0
@@ -55,6 +55,12 @@ var _font_bold: Font = null
 var _anchors: Array = []
 ## Horizontal offset of the whole queue while the player drags it (rubber band).
 var _row_offset: float = 0.0
+## Claimed cards shrink away before the queue closes the gap.
+const DONE_SHRINK := 0.35
+var _clock_now: float = 0.0
+var _done_at: Dictionary = {}
+## Claimed orders stay visible until their chip lands: id -> time the done state shows.
+var _hold: Dictionary = {}
 
 
 func set_asset_theme(loader, project: Dictionary) -> void:
@@ -78,6 +84,14 @@ func _ui_texture(key: String) -> Texture2D:
 		return null
 	var loaded = _loader.texture_for(id)
 	return loaded if loaded is Texture2D else null
+
+
+## Portrait for a card's character (the same art the chrome used to draw).
+func _portrait_texture(character: String) -> Texture2D:
+	if character.is_empty():
+		return null
+	var key := "char_" + character.replace("char_", "")
+	return _ui_texture(key)
 
 
 func _chip_texture(entity_id: String, level: int) -> Texture2D:
@@ -108,6 +122,49 @@ func _draw_nine(texture: Texture2D, r: Rect2, corner: float) -> void:
 	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y + c, c, inner_h), Rect2(src.x - c, c, c, sh))
 	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y + c, inner_w, inner_h),
 			Rect2(c, c, sw, sh))
+
+
+## Keep a claimed card (and its character) on screen until the delivery flight lands.
+func hold_done(order_id: String, seconds: float) -> void:
+	_hold[order_id] = _clock_now + maxf(seconds, 0.0)
+
+
+func release_hold(order_id: String) -> void:
+	_hold.erase(order_id)
+
+
+func is_holding(order_id: String) -> bool:
+	return _hold.has(order_id) and _clock_now < float(_hold[order_id])
+
+
+func set_clock(t: float) -> void:
+	_clock_now = t
+	# a held claim lands now: flip the card to done so the shrink starts
+	for cid in _hold.keys():
+		if t < float(_hold[cid]):
+			continue
+		var held := _card(String(cid))
+		if not held.is_empty() and bool(held.get("claim_pending", false)):
+			held["done"] = true
+			held["claim_pending"] = false
+			if not _done_at.has(String(cid)):
+				_done_at[String(cid)] = t
+		_hold.erase(cid)
+	var retiring := false
+	for cid in _done_at.keys():
+		if t - float(_done_at[cid]) < DONE_SHRINK:
+			retiring = true
+			break
+	if retiring or not _done_at.is_empty():
+		queue_redraw()
+
+
+## True while a claimed card is still shrinking (the chrome redraws each frame then).
+func is_animating() -> bool:
+	for cid in _done_at.keys():
+		if _clock_now - float(_done_at[cid]) < DONE_SHRINK + 0.05:
+			return true
+	return false
 
 
 func set_row_offset(dx: float) -> void:
@@ -166,7 +223,14 @@ func sync_orders(rows: Array) -> void:
 		var card := _card(String(row.get("id", "")))
 		if card.is_empty():
 			continue
-		card["done"] = bool(row.get("done", false))
+		var was_done := bool(card.get("done", false))
+		var claim := bool(row.get("done", false))
+		if claim and is_holding(String(row.get("id", ""))):
+			claim = false  # the flight is still in the air
+			card["claim_pending"] = true
+		card["done"] = claim
+		if card["done"] and not was_done and not _done_at.has(String(card.get("id", ""))):
+			_done_at[String(card.get("id", ""))] = _clock_now
 		var mission_rows = row.get("mission", [])
 		var items: Array = card["mission"]
 		var done := bool(card["done"])
@@ -187,6 +251,10 @@ func sync_orders(rows: Array) -> void:
 
 
 func set_order_done(order_id: String, done: bool) -> bool:
+	# 2026-11-06: a direct done flip (tests, probes, single-card levels) must start the
+	# same shrink animation the snapshot path uses.
+	if done and not _done_at.has(order_id):
+		_done_at[order_id] = _clock_now
 	var card := _card(order_id)
 	if card.is_empty():
 		return false
@@ -290,21 +358,25 @@ func _layout() -> void:
 	if n > 1:
 		# 2026-11-06: queue layout — equal gaps in one row, only the first three cards
 		# are on screen; the row itself slides with _row_offset.
-		var row_w2 := MAX_CARD_W * float(n) + CARD_GAP_X * float(n - 1)
-		var origin := (total_w - row_w2) * 0.5 + _row_offset
+		# 2026-11-06: the queue starts at the left margin, so the first three cards read
+		# left-to-right instead of being centred (which pushed #1 off screen).
+		var origin := 24.0 + _row_offset
 		for i in n:
 			_rects[String(cards[i]["id"])] = Rect2(
 					origin + float(i) * (MAX_CARD_W + CARD_GAP_X), start_y, MAX_CARD_W, card_h)
 		return
 	for i in n:
-		var rect := Rect2(start_x + float(i) * (card_w + gap), start_y, card_w, card_h)
+		var rect := Rect2(start_x + float(i) * (card_w + gap) + _row_offset,
+				start_y, card_w, card_h)
 		if _anchors.size() == n:
 			# WYSIWYG anchor: the card is as wide as its character and bottom-aligned.
 			var a: Dictionary = _anchors[i]
 			var w := maxf(float(a.get("width", card_w)), 200.0)
 			var bottom := float(a.get("bottom", start_y + card_h))
 			var cx := float(a.get("center", rect.get_center().x))
-			rect = Rect2(cx - w * 0.5, bottom - card_h, w, card_h)
+			# 2026-11-06: the anchored (single card) path must follow the row drag too —
+			# it used to overwrite the offset and killed the rubber band on level 1.
+			rect = Rect2(cx - w * 0.5 + _row_offset, bottom - card_h, w, card_h)
 		_rects[String(cards[i]["id"])] = rect
 
 
@@ -318,18 +390,46 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, Vector2(maxf(size.x, WIDTH), maxf(size.y, HEIGHT))),
 			_c("page", Color("#E6EDF6")), true)
 	var shown := 0
+	var keep: Array = []
 	for card in cards:
-		if shown >= VISIBLE_CARDS:
-			break
-		if bool(card.get("done", false)):
+		var cid := String(card.get("id", ""))
+		var retiring := bool(card.get("done", false))
+		if retiring:
+			var started := float(_done_at.get(cid, _clock_now))
+			var t := (_clock_now - started) / DONE_SHRINK
+			if t >= 1.0:
+				continue  # gone: the queue closes the gap on the next layout pass
+			var r := card_rect(cid)
+			var scale: float = clampf(1.0 - t, 0.0, 1.0)
+			draw_set_transform(r.get_center(), 0.0, Vector2(scale, scale))
+			_draw_card(card, Rect2(-r.size * 0.5, r.size))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			keep.append(card)
 			continue
-		_draw_card(card, card_rect(String(card.get("id", ""))))
+		keep.append(card)
+		if shown >= VISIBLE_CARDS:
+			continue
+		_draw_card(card, card_rect(cid))
 		shown += 1
+	if keep.size() != cards.size():
+		cards = keep
+		_layout()
+
+
+const PORTRAIT_H := 210.0
 
 
 func _draw_card(card: Dictionary, r: Rect2) -> void:
 	if r.size.x <= 0.0:
 		return
+	# 2026-11-06: the portrait belongs to the card now, so a retiring card takes its
+	# character with it instead of the art blinking out first.
+	var portrait := _portrait_texture(String(card.get("character", "")))
+	if portrait != null:
+		var source := portrait.get_size()
+		var w: float = PORTRAIT_H * (source.x / maxf(source.y, 1.0))
+		draw_texture_rect(portrait, Rect2(Vector2(r.get_center().x - w * 0.5,
+				r.position.y + 26.0 - PORTRAIT_H), Vector2(w, PORTRAIT_H)), false)
 	var radius := int(round(float(metrics.get("card_radius", 22.0))))
 	var card_bg: Color = _c("card", Color.WHITE)
 	var card_edge: Color = _c("card_edge", Color("#BACCE0"))

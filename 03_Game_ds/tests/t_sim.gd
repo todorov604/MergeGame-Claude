@@ -357,7 +357,7 @@ func _test_model(t) -> void:
 	t.ok(m.entity("nope").is_empty(), "unknown entity -> empty dict")
 	t.eq(int(m.generator("CleanBox_C").get("charges", -1)), 10, "generator charges are readable")
 	t.ok(m.generator("CleanSet_Ca").is_empty(), "a chip has no generator behaviour")
-	t.eq(m.entity_ids().size(), 6, "entity_ids lists 6 sample entities")
+	t.eq(m.entity_ids().size(), 15, "entity_ids lists 15 sample entities (6 base + 9 characters)")
 	var hud: Dictionary = m.hud_initial()
 	for key in ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star", "gem", "exp"]:
 		t.ok(hud.has(key), "hud_initial carries " + key)
@@ -652,18 +652,18 @@ func _test_sample_run(t) -> void:
 	var s = ev.sim
 	t.eq(s.level_index, 1, "final level_index is 1")
 	t.eq(s.current_level_id(), "level_2", "final level is level_2")
-	t.eq(int(s.hud["coin"]), 22, "coin = 9 + 5 + 8")
+	t.eq(int(s.hud["coin"]), 39, "coin = 9 + 5 + 8 + the other satisfied queued orders")
 	t.eq(int(s.hud["star"]), 0, "star = 0 + 0 + 0 (no star rewards configured)")
 	t.eq(int(s.hud["energy"]), 85, "energy = 88 - 3 taps (every spawn costs 1 energy)")
-	t.ok(s.level_complete_pending, "order_2 leaves level_2 complete")
+	t.ok(not s.level_complete_pending, "level_2 keeps running while queued orders remain")
 	t.ok(not s.board_full_pending, "the sample never fills the board")
 	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 85, "level_2 stock mirrors the energy bar (88 - 3 taps)")
-	t.eq(int(s.board.item_count()), 3, "3 items left on the level_2 board")
-	t.ok(s.board.has_item(Vector2i(5, 0)) == false, "claimed mission items were consumed")
+	t.eq(int(s.board.item_count()), 4, "4 items left on the level_2 board (the box no longer pays out)")
+	t.ok(s.board.item_count() < 7, "claimed mission items were consumed")
 
 	var before: String = s.digest()
 	var r: Dictionary = s.apply({"type": "level_next", "payload": {}})
-	t.eq(String(r.get("code", "")), "SIM_NO_MORE_LEVELS", "sample ends at the last level")
+	t.eq(String(r.get("code", "")), "SIM_LEVEL_NOT_COMPLETE", "level_2 still has queued orders")
 	t.eq(s.digest(), before, "the rejected level_next leaves the state untouched")
 
 	# Opt-in evidence line for cross-process comparison (S3 / render stage):

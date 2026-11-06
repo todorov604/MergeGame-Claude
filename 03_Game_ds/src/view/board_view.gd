@@ -186,6 +186,8 @@ var _pulse: Dictionary = {}
 ## When false the drag draws only the white frame; the screen's ghost layer paints the
 ## chip itself so it can sit above the order cards.
 var drag_chip_visible: bool = true
+## Obstacles cleared by a merge: [{"cell": Vector2i, "kind": String, "started": float}].
+var _unlocks: Array = []
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
@@ -549,6 +551,7 @@ func _draw() -> void:
 				_draw_obstacle(cell, String(_obstacles[cell]))
 
 	_draw_safeboxes()
+	_draw_unlocks()
 
 	# 2026-11-05: a mission-satisfied chip reads as green cell + finish badge.
 	# While the chip is being dragged its cell is skipped here — the green must not be
@@ -720,6 +723,41 @@ func _inner_cell_rect(r: Rect2) -> Rect2:
 
 
 ## Item draw with the running merge/settle pulse, if this is the pulsing cell.
+## A neighbour obstacle just broke: draw it growing and fading, then drop it.
+func unlock(cell: Vector2i, kind: String, started_at: float = -1.0) -> void:
+	if cell.x < 0 or kind == "safe":
+		return
+	_unlocks.append({"cell": cell, "kind": kind,
+			"started": _clock if started_at < 0.0 else started_at})
+	set_process(true)
+	queue_redraw()
+
+
+func _draw_unlocks() -> void:
+	var alive: Array = []
+	for row in _unlocks:
+		var started := float((row as Dictionary).get("started", 0.0))
+		var t := (_clock - started) / 0.35
+		if t >= 1.0:
+			continue
+		alive.append(row)
+		var cell: Vector2i = (row as Dictionary).get("cell", Vector2i(-1, -1))
+		var kind := String((row as Dictionary).get("kind", ""))
+		var base := cell_rect(cell.x, cell.y).grow(-float(CELL_GAP) * 0.5)
+		var scale: float = 1.0 + 0.6 * t
+		var alpha: float = clampf(1.0 - t, 0.0, 1.0)
+		var tex := _ui_texture(UI_LOCK if kind == "lock" else
+				(UI_WEB if kind == "web" else (UI_ICE if kind == "ice" else UI_SAFE_UNKNOWN)))
+		draw_set_transform(base.get_center(), 0.0, Vector2(scale, scale))
+		var local := Rect2(-base.size * 0.5, base.size)
+		if tex != null:
+			draw_texture_rect(tex, local, false, Color(1, 1, 1, alpha))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_unlocks = alive
+	if _unlocks.is_empty():
+		set_process(_flys.size() > 0)
+
+
 func _draw_item_pulsed(key: Vector2i, item: Dictionary) -> void:
 	if _pulse.is_empty() or Vector2i(_pulse.get("cell", Vector2i(-1, -1))) != key:
 		_draw_item(key, item)

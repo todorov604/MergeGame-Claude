@@ -42,7 +42,7 @@ func _cards(t) -> void:
 
 	var card: Dictionary = panel.cards[0]
 	t.eq(String(card.get("id", "")), "order_1", "card uses the order id")
-	t.eq(String(card.get("character", "")), "char_01", "card points at char_01")
+	t.eq(String(card.get("character", "")), "char_blonde", "card points at the blonde character")
 	var mission: Array = card.get("mission", [])
 	t.eq(mission.size(), 1, "mission has one entry")
 	var item: Dictionary = mission[0]
@@ -64,8 +64,8 @@ func _cards(t) -> void:
 
 	var level2 := _level(1)
 	var built2: Dictionary = panel.build_from_level(level2)
-	t.eq(int(built2.get("cards", 0)), 1, "level_2 builds one card")
-	t.eq(int(built2.get("missions", 0)), 2, "level_2 order needs two items")
+	t.eq(int(built2.get("cards", 0)), 5, "level_2 builds a five-card queue")
+	t.eq(int(built2.get("missions", 0)), 8, "level_2 queue totals eight mission rows")
 	var summary2: String = panel.debug_summary()
 	t.ok(summary2.contains("CleanSet_Cb@2 0/1"), "level_2 mission list is complete", summary2)
 
@@ -81,8 +81,8 @@ func _cards(t) -> void:
 	]
 	panel.set_project(_project())
 	var built3: Dictionary = panel.build_from_level(two)
-	t.eq(int(built3.get("cards", 0)), 2, "a level with three orders shows at most two cards")
-	t.eq(int(built3.get("missions", 0)), 2, "both mission rows are counted")
+	t.eq(int(built3.get("cards", 0)), 3, "a level with three orders builds three queue cards")
+	t.eq(int(built3.get("missions", 0)), 3, "every mission row of the three cards is counted")
 	var rect_a: Rect2 = panel.card_rect("order_a")
 	var rect_b: Rect2 = panel.card_rect("order_b")
 	t.ok(rect_b.position.x > rect_a.position.x + rect_a.size.x - 1.0,
@@ -90,7 +90,7 @@ func _cards(t) -> void:
 	t.ok(rect_a.size.x > 200.0, "each card keeps a usable width", str(rect_a.size.x))
 	t.ok(panel.portrait_center("order_b").x > panel.portrait_center("order_a").x,
 			"portraits follow their cards")
-	t.eq(panel.debug_summary().split("|").size(), 2, "summary lists every card")
+	t.eq(panel.debug_summary().split("|").size(), 3, "summary lists every card")
 
 	panel.free()
 
@@ -106,7 +106,7 @@ func _done_state(t) -> void:
 	t.ok(panel.set_order_done("order_1", true), "set_order_done accepts a known order")
 	var summary: String = panel.debug_summary()
 	t.ok(summary.contains("done=1"), "summary carries the done mark", summary)
-	t.ok(summary.contains("order_1:char_01:CleanSet_Ca@2"), "summary keeps the mission row",
+	t.ok(summary.contains("order_1:char_blonde:CleanSet_Ca@2"), "summary keeps the mission row",
 			summary)
 	t.ok(panel.set_mission_have("order_1", 0, 1), "set_mission_have accepts a known slot")
 	t.ok(panel.debug_summary().contains("1/1"), "mission progress is readable",

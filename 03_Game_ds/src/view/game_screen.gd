@@ -687,6 +687,9 @@ var _cursor_layer = null
 var _last_click_at: float = -1000.0
 ## Coin-bar number pop after a reward lands.
 var _coin_pop_at: float = -1000.0
+## 启动参数 --preview=<scale>：工程里的 window_*_override 会盖掉 --resolution，
+## 所以 100% 预览必须由代码在启动后自己改窗口尺寸。
+var _preview_pending: float = 0.0
 ## 顶栏金币显示值：交付时按飞出的金币数量分批上涨，而不是一次跳到目标。
 var _coin_display: float = -1.0
 var _coin_ticks: Array = []
@@ -727,6 +730,10 @@ var _auto_render: bool = true
 
 
 func _ready() -> void:
+	for raw in OS.get_cmdline_user_args():
+		var arg := String(raw)
+		if arg.begins_with("--preview="):
+			_preview_pending = float(arg.substr(10))
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if size.x <= 0.0 or size.y <= 0.0:
 		size = PAGE
@@ -1252,6 +1259,9 @@ func _refresh_anchors() -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+	if _preview_pending > 0.0 and _window_fix_frames < 176:
+		_cycle_preview(_preview_pending)
+		_preview_pending = 0.0
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:
@@ -1536,6 +1546,9 @@ func _process(delta: float) -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+	if _preview_pending > 0.0 and _window_fix_frames < 176:
+		_cycle_preview(_preview_pending)
+		_preview_pending = 0.0
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:
@@ -1611,6 +1624,19 @@ func _locale_text(key: String) -> String:
 	return String(value)
 
 
+## F9 = 50% (540x960), F11 = 100% (1080x1920). Both keep the 1080x1920 design
+## resolution, so layout, hit-testing and rendering stay identical.
+func _cycle_preview(scale: float) -> void:
+	var target := Vector2i(int(round(1080.0 * scale)), int(round(1920.0 * scale)))
+	if DisplayServer.get_name() == "headless":
+		return
+	get_window().size = target
+	var screen := DisplayServer.screen_get_size()
+	get_window().position = Vector2i(
+			maxi((screen.x - target.x) / 2, 0), maxi((screen.y - target.y) / 2, 0))
+	print("[game] preview window=", target.x, "x", target.y, " scale=", scale)
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -1618,6 +1644,12 @@ func _input(event: InputEvent) -> void:
 			return
 		if key_event.keycode == KEY_ESCAPE:
 			get_tree().quit(0)
+			return
+		if key_event.keycode == KEY_F9:
+			_cycle_preview(0.5)
+			return
+		if key_event.keycode == KEY_F11:
+			_cycle_preview(1.0)
 			return
 		if key_event.keycode == KEY_R and _free_mode and not _freeze:
 			# R = record: first press restarts the level clean and starts a take,
@@ -2113,6 +2145,9 @@ func _reset_run() -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+	if _preview_pending > 0.0 and _window_fix_frames < 176:
+		_cycle_preview(_preview_pending)
+		_preview_pending = 0.0
 	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
 		_window_fix_frames -= 1
 		if _window_fix_frames == 179:

@@ -32,6 +32,8 @@ var last_spawn: Dictionary = {}
 var last_unlocks: Array = []
 ## 左侧库存剩余次数（-1 表示尚未从关卡配置里读取）。
 var stockpile_count: int = -1
+## 库存面板固定产出哪一种棋子：进关时定一次，之后交付/合成都不变。
+var stockpile_chip: Dictionary = {}
 ## Multi-cell safeboxes for the current level (empty when the level declares none).
 var safeboxes: Array = []
 var hud: Dictionary = {}
@@ -54,6 +56,7 @@ func setup(model_in, seed_value_in: int) -> void:
 	orders = []
 	generator_state = {}
 	stockpile_count = -1
+	stockpile_chip = {}
 	level_complete_pending = false
 	board_full_pending = false
 	log_events = []
@@ -97,6 +100,7 @@ func _load_level(index: int) -> void:
 
 	generator_state = {}
 	stockpile_count = -1
+	stockpile_chip = {}
 	var gen_table := {}
 	if model != null and typeof(model.project) == TYPE_DICTIONARY:
 		var table = model.project.get("generators", {})
@@ -356,11 +360,15 @@ func stockpile_remaining() -> int:
 
 ## 面板上默认显示的那枚棋子：配置优先，否则取第一个未完成订单的低一级。
 func stockpile_preview() -> Dictionary:
+	# 2026-11-06: 进关时定死一种产物，交付后不换（它就是个固定生成器）。
+	if not stockpile_chip.is_empty():
+		return stockpile_chip
 	var cfg := stockpile_config()
 	var want := String(cfg.get("entity", ""))
 	var lvl := int(cfg.get("level", 0))
 	if not want.is_empty() and lvl > 0:
-		return {"entity": want, "level": lvl}
+		stockpile_chip = {"entity": want, "level": lvl}
+		return stockpile_chip
 	for order in orders:
 		if bool(order.get("done", false)):
 			continue
@@ -368,7 +376,9 @@ func stockpile_preview() -> Dictionary:
 			var entity := String((m as Dictionary).get("entity", ""))
 			if entity.is_empty():
 				continue
-			return {"entity": entity, "level": maxi(int((m as Dictionary).get("level", 1)) - 1, 1)}
+			stockpile_chip = {"entity": entity,
+					"level": maxi(int((m as Dictionary).get("level", 1)) - 1, 1)}
+			return stockpile_chip
 	return {}
 
 
@@ -394,7 +404,7 @@ func _do_stockpile_tap(_payload: Dictionary) -> Dictionary:
 		board_full_pending = true
 		return _err("SIM_BOARD_FULL", "board is full; stockpile kept")
 	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
-	var pick := _stockpile_output(cfg)
+	var pick := stockpile_preview()
 	if pick.is_empty():
 		return _err("SIM_NO_STOCKPILE", "stockpile has no configured chip")
 	var spawn_entity := String(pick["entity"])

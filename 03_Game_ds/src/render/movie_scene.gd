@@ -906,25 +906,27 @@ func _draw_background() -> void:
 ## each slice is painted (the slices bake in their own order card + counters), scaled
 ## to end exactly where the order cards start, and painted behind those cards.
 func _draw_characters() -> void:
-	var used := {}
-	var snap_orders = _snap.get("orders", []) if _snap is Dictionary else []
-	if typeof(snap_orders) == TYPE_ARRAY:
-		for raw in snap_orders:
-			if typeof(raw) == TYPE_DICTIONARY:
-				used[String((raw as Dictionary).get("character", ""))] = true
-	if used.is_empty() or used.has("char_01"):
-		if not _draw_ui_fit("char_blonde", Rect2(250.0, 18.0, 286.0, 394.0)):
-			_draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
-	if used.is_empty() or used.has("char_02"):
-		if not _draw_ui_fit("char_glasses", Rect2(657.0, 18.0, 286.0, 394.0)):
-			_draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+	# 2026-11-06: 每张卡上方各画自己的立绘，几何与实机 OrderPanel 一致，
+	# 队列里没有未完成的订单就不画人（part1/part2 兜底彻底下线）。
+	var cards := _order_cards(_snap)
+	var orders: Array = _snap.get("orders", [])
+	var i := 0
+	for raw in orders:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		if bool((raw as Dictionary).get("done", false)):
+			continue
+		if i >= cards.size():
+			break
+		var who := String((raw as Dictionary).get("character", ""))
+		var card: Rect2 = cards[i]
+		var w := _portrait_width(who)
+		var rect := Rect2(card.get_center().x - w * 0.5,
+				card.position.y + PORTRAIT_SINK - PORTRAIT_HEIGHT, w, PORTRAIT_HEIGHT)
+		_draw_ui_fit(_portrait_key(who), rect)
+		i += 1
 
 
-## §20.5/§20.6 top money bar, in the band above the characters: level badge over
-## main_bar_level_bg, the energy pill with the 52x52 countdown icon and mm:ss, the
-## coin / star / gem pills, and the shop button in the top-right corner. Every
-## value comes from the current sim snapshot, and every panel keeps its procedural
-## fallback when the theme has no art for it.
 func _draw_topbar(snap: Dictionary) -> void:
 	var hud: Dictionary = snap.get("hud", {})
 
@@ -1011,40 +1013,53 @@ func _plus_slot(r: Rect2) -> void:
 ## centred in the band, mission icons 96px in the middle, reward pill above the card
 ## right-aligned with a "+N" label. The film must show exactly what the live screen shows.
 const CARD_H := 140.0
-const CARD_GAP := 14.0
+const CARD_GAP := 18.0
+## 2026-11-06: 队列几何与实机 OrderPanel 对齐（左起点 250 / 卡宽 250 / 间距 18）。
+const QUEUE_ORIGIN_X := 250.0
+const QUEUE_CARD_W := 250.0
 const PORTRAIT_TOP := 18.0
-const PORTRAIT_HEIGHT := 394.0
+const PORTRAIT_HEIGHT := 210.0
+## 立绘底边压卡片上沿的距离（实机 ORDER_PANEL 的 26px）。
+const PORTRAIT_SINK := 26.0
 const PORTRAIT_CENTER_LEFT := 393.0
 const PORTRAIT_CENTER_RIGHT := 800.0
 const MISSION_ICON := 125.0
 const REWARD_ICON := Vector2(132.0, 49.0)
 
 
+func _portrait_key(character: String) -> String:
+	if character == "char_01":
+		return "char_blonde"
+	if character == "char_02":
+		return "char_glasses"
+	return "char_" + character.replace("char_", "")
+
+
 func _portrait_width(character: String) -> float:
-	var texture := _ui("char_glasses") if character == "char_02" else _ui("char_blonde")
+	var texture := _ui(_portrait_key(character))
 	if texture == null:
-		return 286.0
+		return QUEUE_CARD_W
 	return PORTRAIT_HEIGHT * (texture.get_width() / maxf(texture.get_height(), 1.0))
 
 
 func _portrait_center(character: String) -> float:
-	return PORTRAIT_CENTER_RIGHT if character == "char_02" else PORTRAIT_CENTER_LEFT
+	return PORTRAIT_CENTER_LEFT
 
 
 ## Card = as wide as its character, centred under it, bottom-aligned with the portrait.
 func _order_cards(snap: Dictionary) -> Array:
 	var orders: Array = snap.get("orders", [])
 	var out: Array = []
+	var index := 0
 	for raw in orders:
 		if typeof(raw) != TYPE_DICTIONARY:
 			continue
-		if out.size() >= 2:
-			break
-		var who := String((raw as Dictionary).get("character", ""))
-		var width := _portrait_width(who)
-		var center := _portrait_center(who)
+		if bool((raw as Dictionary).get("done", false)):
+			continue
 		var bottom := PORTRAIT_TOP + PORTRAIT_HEIGHT
-		out.append(Rect2(center - width * 0.5, bottom - CARD_H, width, CARD_H))
+		out.append(Rect2(QUEUE_ORIGIN_X + float(index) * (QUEUE_CARD_W + CARD_GAP),
+				bottom - PORTRAIT_SINK - CARD_H, QUEUE_CARD_W, CARD_H))
+		index += 1
 	return out
 
 

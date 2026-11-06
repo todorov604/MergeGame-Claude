@@ -219,6 +219,8 @@ var _frame := 0
 var _flys: Array = []
 ## Merge pop on the result cell: {"cell", "started"}.
 var _pulse: Dictionary = {}
+## Order-claim flights: [{"from": Vector2, "to": Vector2, "texture", "started"}].
+var _claim_flys: Array = []
 var _t := 0.0
 var _total_frames := 0
 var _end_time := 0.0
@@ -777,6 +779,20 @@ func _advance_to(t: float) -> void:
 			if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
 				_pulse = {"cell": Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])),
 						"started": float(r.get("at", t))}
+		if channel == "sim" and bool(r.get("ok", false)) \
+				and String(r.get("type", "")) == "order_claim":
+			var claim_payload = (r.get("payload", {}) as Dictionary)
+			var src_raw = claim_payload.get("src", [])
+			var ord := String(claim_payload.get("order", ""))
+			if typeof(src_raw) == TYPE_ARRAY and (src_raw as Array).size() >= 2:
+				var src_cell := Vector2i(int((src_raw as Array)[0]), int((src_raw as Array)[1]))
+				var ord_rect := _claim_card_rect(ord)
+				_claim_flys.append({
+					"from": _slot_rect(src_cell.x, src_cell.y).get_center(),
+					"to": ord_rect.get_center(),
+					"texture": _claim_texture(ord),
+					"started": float(r.get("at", t)),
+				})
 		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
 			var spawn: Dictionary = _evaluator.sim.last_spawn
 			if not spawn.is_empty():
@@ -1032,6 +1048,63 @@ func _order_cards(snap: Dictionary) -> Array:
 	return out
 
 
+## Card rect for one order (fallback: the anchor point as a zero rect).
+func _claim_card_rect(order_id: String) -> Rect2:
+	var cards := _order_cards(_snap)
+	var orders: Array = _snap.get("orders", [])
+	for i in range(mini(cards.size(), orders.size())):
+		if typeof(orders[i]) == TYPE_DICTIONARY \
+				and String((orders[i] as Dictionary).get("id", "")) == order_id:
+			return cards[i]
+	return Rect2(Vector2(540.0, 300.0), Vector2.ZERO)
+
+
+## The order's first mission chip art, used by the claim flight.
+func _claim_texture(order_id: String) -> Texture2D:
+	for raw in _snap.get("orders", []) if _snap is Dictionary else []:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var o: Dictionary = raw
+		if String(o.get("id", "")) != order_id:
+			continue
+		var mission: Array = o.get("mission", [])
+		if mission.is_empty() or typeof(mission[0]) != TYPE_ARRAY:
+			return null
+		var row: Array = mission[0]
+		return _chip_texture(String(row[0]), int(row[1]))
+	return null
+
+
+func _draw_claim_flys() -> void:
+	var now := float(_frame) / float(FPS)
+	var alive: Array = []
+	for fly in _claim_flys:
+		var started := float(fly.get("started", 0.0))
+		var dur := 0.55
+		var t := (now - started) / dur
+		if t >= 1.0:
+			continue
+		alive.append(fly)
+		if t < 0.0:
+			continue
+		var ease := t * t * (3.0 - 2.0 * t)
+		var from: Vector2 = fly.get("from", Vector2.ZERO)
+		var to: Vector2 = fly.get("to", Vector2.ZERO)
+		var ctrl := (from + to) * 0.5 + Vector2(0.0, -150.0)
+		var pos := from.lerp(ctrl, ease).lerp(ctrl.lerp(to, ease), ease)
+		var texture = fly.get("texture", null)
+		if not (texture is Texture2D):
+			continue
+		var size: Vector2 = texture.get_size()
+		var side: float = lerpf(120.0, 2.5 * 132.0, ease)
+		var alpha := 1.0 if t < 0.78 else clampf((1.0 - t) / 0.22, 0.0, 1.0)
+		var scale := side / maxf(size.x, 1.0)
+		draw_set_transform(pos, 0.0, Vector2(scale, scale))
+		draw_texture_rect(texture, Rect2(-size * 0.5, size), false, Color(1, 1, 1, alpha))
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	_claim_flys = alive
+
+
 func _draw_orders(snap: Dictionary) -> void:
 	var orders: Array = snap.get("orders", [])
 	var cards := _order_cards(snap)
@@ -1182,6 +1255,7 @@ func _draw_board(snap: Dictionary) -> void:
 
 	for fly in _flys:
 		_draw_fly(fly)
+	_draw_claim_flys()
 
 	for cell in completed:
 		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:

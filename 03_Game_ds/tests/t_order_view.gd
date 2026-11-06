@@ -87,7 +87,7 @@ func _cards(t) -> void:
 	var rect_b: Rect2 = panel.card_rect("order_b")
 	t.ok(rect_b.position.x > rect_a.position.x + rect_a.size.x - 1.0,
 			"the two cards do not overlap", str(rect_a) + " " + str(rect_b))
-	t.ok(rect_a.size.x > 260.0, "each card keeps a usable width", str(rect_a.size.x))
+	t.ok(rect_a.size.x > 200.0, "each card keeps a usable width", str(rect_a.size.x))
 	t.ok(panel.portrait_center("order_b").x > panel.portrait_center("order_a").x,
 			"portraits follow their cards")
 	t.eq(panel.debug_summary().split("|").size(), 2, "summary lists every card")

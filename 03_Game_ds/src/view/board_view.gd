@@ -183,6 +183,9 @@ var safeboxes: Array = []
 ## merge (0.4 s) or a drop (0.2 s shrink).
 var _drag_started: float = 0.0
 var _pulse: Dictionary = {}
+## When false the drag draws only the white frame; the screen's ghost layer paints the
+## chip itself so it can sit above the order cards.
+var drag_chip_visible: bool = true
 var _font: Font = null
 var _frame_texture: Texture2D = null
 var _box_cache: Dictionary = {}
@@ -804,6 +807,11 @@ func _ellipse(centre: Vector2, radii: Vector2, color: Color) -> void:
 
 ## The loader owns the disk read and the per-"entity@level" cache; the view only
 ## maps one item onto that lookup. Null keeps the procedural chip.
+## Public accessor so other layers (the order claim flight) can draw the same art.
+func chip_texture(entity_id: String, level: int) -> Texture2D:
+	return _chip_texture({"entity": entity_id, "level": level})
+
+
 func _chip_texture(item: Dictionary) -> Texture2D:
 	if _asset_loader == null or not _asset_loader.has_method("chip_texture"):
 		return null
@@ -1214,6 +1222,20 @@ func _draw_selection_at(center: Vector2, offset: Vector2, frame_scale: float = 1
 
 ## Chip currently under the pointer: scaled like a selected chip, framed by the same
 ## white brackets. The source cell is skipped in the item pass (see _draw).
+## The white selection frame's texture, so the screen's ghost layer can draw it above
+## the order cards.
+func drag_frame_texture() -> Texture2D:
+	var texture := _ui_texture(UI_SELECT)
+	if texture == null:
+		texture = _ui_texture("select")
+	return texture
+
+
+## Current drag pulse scale, so an external ghost layer can match the board.
+func drag_scale_now() -> float:
+	return Pulse.drag_scale(_drag_started, _clock)
+
+
 func _draw_drag() -> void:
 	var from := Vector2i(_drag.get("from", Vector2i(-1, -1)))
 	if not _items.has(from):
@@ -1223,15 +1245,17 @@ func _draw_drag() -> void:
 	var base := cell.grow(-float(CELL_GAP) * 0.5)
 	var half := base.size * 0.5
 	var drag_scale := Pulse.drag_scale(_drag_started, _clock)
-	draw_set_transform(pos, 0.0, Vector2(drag_scale, drag_scale))
-	_draw_item_rect(Rect2(-half, base.size), _items[from])
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if drag_chip_visible:
+		draw_set_transform(pos, 0.0, Vector2(drag_scale, drag_scale))
+		_draw_item_rect(Rect2(-half, base.size), _items[from])
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if _completed.has(from):
 		_draw_complete_mark_at(pos, drag_scale)
-	_draw_selection_at(pos, Vector2.ZERO, DRAG_FRAME_GROW)
+	if drag_chip_visible:
+		_draw_selection_at(pos, Vector2.ZERO, DRAG_FRAME_GROW)
 	# 2026-11-05: the stamina badge is the top-most layer of a dragged generator, so it
 	# is painted after the white frame instead of underneath it.
-	if String((_items[from] as Dictionary).get("kind", "chip")) == "generator":
+	if drag_chip_visible and String((_items[from] as Dictionary).get("kind", "chip")) == "generator":
 		draw_set_transform(pos, 0.0, Vector2(drag_scale, drag_scale))
 		_draw_stamina_badge(Rect2(-half, base.size))
 		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

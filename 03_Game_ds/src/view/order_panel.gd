@@ -18,7 +18,9 @@ const WIDTH := 1080.0
 const HEIGHT := 250.0
 const MAX_CARDS := 2
 const MARGIN := 18.0
-const MAX_CARD_W := 286.0
+const MAX_CARD_W := 250.0
+const CARD_GAP_X := 18.0
+const VISIBLE_CARDS := 3
 
 var cards: Array = []
 var palette: Dictionary = {}
@@ -51,6 +53,8 @@ var _font_bold: Font = null
 ## in panel-local coordinates, so a card sits centred under its character and shares
 ## that character's drawn width.
 var _anchors: Array = []
+## Horizontal offset of the whole queue while the player drags it (rubber band).
+var _row_offset: float = 0.0
 
 
 func set_asset_theme(loader, project: Dictionary) -> void:
@@ -104,6 +108,16 @@ func _draw_nine(texture: Texture2D, r: Rect2, corner: float) -> void:
 	draw_texture_rect_region(texture, Rect2(r.end.x - c, r.position.y + c, c, inner_h), Rect2(src.x - c, c, c, sh))
 	draw_texture_rect_region(texture, Rect2(r.position.x + c, r.position.y + c, inner_w, inner_h),
 			Rect2(c, c, sw, sh))
+
+
+func set_row_offset(dx: float) -> void:
+	_row_offset = dx
+	_layout()
+	queue_redraw()
+
+
+func row_offset() -> float:
+	return _row_offset
 
 
 func set_card_anchors(rows: Array) -> void:
@@ -167,6 +181,7 @@ func sync_orders(rows: Array) -> void:
 			var m = (mission_rows as Array)[i]
 			if typeof(m) == TYPE_ARRAY and (m as Array).size() >= 3:
 				items[i]["have"] = int((m as Array)[2])
+				items[i]["ready"] = bool((m as Array)[3]) if (m as Array).size() >= 4 else false
 	if is_inside_tree():
 		queue_redraw()
 
@@ -238,7 +253,7 @@ func debug_summary() -> String:
 	var missions := 0
 	var parts: Array = []
 	for card in cards:
-		if bool(card.get("done", false)):
+		if bool(card.get("done", false)) or _card_ready(card):
 			done += 1
 		var items: Array = card.get("mission", [])
 		missions += items.size()
@@ -272,6 +287,15 @@ func _layout() -> void:
 	# 2026-11-05: compact card — content only (mission + rewards), centred in the band.
 	var card_h := minf(total_h - 8.0, 140.0)
 	var start_y := maxf((total_h - card_h) * 0.5, 4.0)
+	if n > 1:
+		# 2026-11-06: queue layout — equal gaps in one row, only the first three cards
+		# are on screen; the row itself slides with _row_offset.
+		var row_w2 := MAX_CARD_W * float(n) + CARD_GAP_X * float(n - 1)
+		var origin := (total_w - row_w2) * 0.5 + _row_offset
+		for i in n:
+			_rects[String(cards[i]["id"])] = Rect2(
+					origin + float(i) * (MAX_CARD_W + CARD_GAP_X), start_y, MAX_CARD_W, card_h)
+		return
 	for i in n:
 		var rect := Rect2(start_x + float(i) * (card_w + gap), start_y, card_w, card_h)
 		if _anchors.size() == n:
@@ -293,8 +317,14 @@ func _draw() -> void:
 	# the sim owns the playfield below it, so the panel paints its own background.
 	draw_rect(Rect2(Vector2.ZERO, Vector2(maxf(size.x, WIDTH), maxf(size.y, HEIGHT))),
 			_c("page", Color("#E6EDF6")), true)
+	var shown := 0
 	for card in cards:
+		if shown >= VISIBLE_CARDS:
+			break
+		if bool(card.get("done", false)):
+			continue
 		_draw_card(card, card_rect(String(card.get("id", ""))))
+		shown += 1
 
 
 func _draw_card(card: Dictionary, r: Rect2) -> void:
@@ -342,7 +372,7 @@ func _draw_card(card: Dictionary, r: Rect2) -> void:
 	if int(card.get("star", 0)) > 0:
 		_draw_star_row(r, int(card.get("star", 0)))
 
-	if bool(card.get("done", false)):
+	if bool(card.get("done", false)) or _card_ready(card):
 		# 2026-11-05: no green rim, no small check — one confirm badge centred on the card.
 		var confirm := _ui_texture("confirm")
 		var size := Vector2(126.0, 74.0)
@@ -351,6 +381,21 @@ func _draw_card(card: Dictionary, r: Rect2) -> void:
 			draw_texture_rect(confirm, at, false)
 		else:
 			_rounded(at, 20, _c("done", COLOR_DONE))
+
+
+## Ready = the board already holds a chip that satisfies this card (or it was claimed).
+func _card_ready(card: Dictionary) -> bool:
+	for item in _as_mission(card):
+		if bool(item.get("ready", false)):
+			return true
+		if int(item.get("have", 0)) >= int(item.get("need", 1)):
+			return true
+	return false
+
+
+func _as_mission(card: Dictionary) -> Array:
+	var items = card.get("mission", [])
+	return items if typeof(items) == TYPE_ARRAY else []
 
 
 ## Coin reward above the card: task_reward icon + "+N", right-aligned with the card.

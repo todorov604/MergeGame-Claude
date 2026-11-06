@@ -155,7 +155,10 @@ func _test_case_a_generator_off_this_board(t) -> void:
 	var p := _project()
 	var kept: Array = []
 	for s in _slots(p, 0):
-		if String((s as Dictionary).get("entity", "")) != "CleanBox_C":
+		# the ring fill also drops Cb chips: without a generator nothing can be produced,
+		# and merging the Cb chips already on the board would still reach Cb lv2.
+		var ent := String((s as Dictionary).get("entity", ""))
+		if ent != "CleanBox_C" and ent != "CleanSet_Cb":
 			kept.append(s)
 	_set_slots(p, 0, kept)
 	_set_mission(p, 0, 0, [{"entity": "CleanSet_Cb", "level": 2}])

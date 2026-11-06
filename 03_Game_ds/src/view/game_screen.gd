@@ -99,6 +99,48 @@ const TOAST_SECONDS := 1.5
 ## board_view paints an opaque page over the whole canvas. The drawing has to run on
 ## *this* CanvasItem (draw_* is node-scoped), so the whole chrome painter lives here
 ## and reads its data/textures from the screen it belongs to.
+## Top-most layer: the chip in hand. The board hides its own copy while this is active,
+## so a chip dragged onto an order card is never painted under the card plate.
+class DragGhost extends Control:
+	var host = null
+	var _cell := Vector2i(-1, -1)
+	var _pos := Vector2.ZERO
+	var _texture: Texture2D = null
+	var _frame: Texture2D = null
+	var _started := 0.0
+
+	func set_state(cell: Vector2i, at: Vector2, texture: Texture2D, started: float) -> void:
+		_cell = cell
+		_pos = at
+		_texture = texture
+		if host != null and host.board != null:
+			_frame = host.board.drag_frame_texture()
+		if _cell.x >= 0 and started != _started:
+			_started = started
+		visible = texture != null
+		queue_redraw()
+
+	func clear() -> void:
+		_texture = null
+		_cell = Vector2i(-1, -1)
+		visible = false
+		queue_redraw()
+
+	func _draw() -> void:
+		if _texture == null or host == null:
+			return
+		var scale: float = host.board.drag_scale_now() if host.board != null else 1.0
+		var size: Vector2 = _texture.get_size()
+		var side: float = 132.0 * scale
+		draw_set_transform(_pos, 0.0, Vector2(side / maxf(size.x, 1.0), side / maxf(size.x, 1.0)))
+		draw_texture_rect(_texture, Rect2(-size * 0.5, size), false)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		# 2026-11-06: the white frame is part of the ghost so it covers the order card.
+		if _frame != null:
+			var fsize: Vector2 = _frame.get_size() * 1.14
+			draw_texture_rect(_frame, Rect2(_pos - fsize * 0.5, fsize), false)
+
+
 class Chrome extends Control:
 	## One source of truth for the §20.5 numbers: the film's own layout table. The
 	## inner class cannot read the enclosing script's constants, so it preloads the
@@ -127,7 +169,9 @@ class Chrome extends Control:
 		return Rect2(center_x - w * 0.5, PORTRAIT_TOP, w, PORTRAIT_HEIGHT)
 
 	func _portrait_center_for(character: String) -> float:
-		return PORTRAIT_CENTER_RIGHT if character == "char_02" else PORTRAIT_CENTER_LEFT
+		# 2026-11-06: every level places its character on the left anchor, so level 2 no
+		# longer jumps to the right slot.
+		return PORTRAIT_CENTER_LEFT
 
 	func _portrait_for(character: String) -> Texture2D:
 		var key := "char_glasses" if character == "char_02" else "char_blonde"
@@ -164,13 +208,8 @@ class Chrome extends Control:
 				draw_ui_fit("char_blonde", _portrait_rect(blonde, PORTRAIT_CENTER_LEFT))
 			else:
 				draw_ui_region("part1", PART1_CHAR_SRC, PART1_CHAR_RECT)
-		if used.is_empty() or used.has("char_02"):
-			# 2026-11-05: level 2 uses 08_glasses (char_glasses) instead of the baked part2.
-			var glasses: Texture2D = host._ui("char_glasses")
-			if glasses != null:
-				draw_ui_fit("char_glasses", _portrait_rect(glasses, PORTRAIT_CENTER_RIGHT))
-			else:
-				draw_ui_region("part2", PART2_CHAR_SRC, PART2_CHAR_RECT)
+		# 2026-11-06: only one character is drawn per level now; it always stands on the
+		# left anchor (char_02 keeps its glasses art in the queue cards).
 		_sync_card_anchors(used)
 		_draw_topbar(snap)
 		_draw_bottom_bar(snap)
@@ -199,15 +238,55 @@ class Chrome extends Control:
 				})
 		host.orders.set_card_anchors(rows)
 
+	## Three bars on one row: widths follow each art's aspect at a fixed height, the
+	## coin bar is centred on the page, and the two gaps are identical.
+	const BAR_HEIGHT := 76.0
+	const BAR_GAP := 30.0
+	## Paw badge ends near x=115 and the shop starts near x=935, so the row may use 760.
+	const BAR_ROW_MAX_W := 760.0
+	## Hard edges: the paw badge ends near 118, the shop button starts near 928.
+	const BAR_LEFT_LIMIT := 120.0
+	const BAR_RIGHT_LIMIT := 926.0
+	## Aspect-true widths (art size / art height), so every bar fills its rect exactly and
+	## the visible gaps really are the same on both sides of the coin bar.
+	const BAR_ASPECTS := {"energy": 243.0 / 90.0, "coin": 255.0 / 82.0, "gem": 246.0 / 67.0}
+	const BAR_CENTER_X := 540.0
+	const BAR_CENTER_Y := 58.0
+
+	func _bar_rects() -> Dictionary:
+		# Equal slot widths: the art keeps its own aspect inside (draw_ui_fit letterboxes),
+		# so the three bars read as one evenly spaced row.
+		# Fit the whole row into the free span between the paw badge and the shop button,
+		# keeping the aspect ratios and the two gaps identical.
+		var h := BAR_HEIGHT
+		var wide: float = h * (float(BAR_ASPECTS["energy"]) + float(BAR_ASPECTS["coin"])
+				+ float(BAR_ASPECTS["gem"])) + BAR_GAP * 2.0
+		if wide > BAR_ROW_MAX_W:
+			h *= BAR_ROW_MAX_W / wide
+		var top := BAR_CENTER_Y - h * 0.5
+		var coin_w: float = h * float(BAR_ASPECTS["coin"])
+		var energy_w: float = h * float(BAR_ASPECTS["energy"])
+		var gem_w: float = h * float(BAR_ASPECTS["gem"])
+		var coin := Rect2(BAR_CENTER_X - coin_w * 0.5, top, coin_w, h)
+		# The two side bars may not run into the paw badge or the shop button; when the
+		# natural width would, the side bar is narrowed (its art keeps its aspect).
+		energy_w = minf(energy_w, coin.position.x - BAR_GAP - BAR_LEFT_LIMIT)
+		gem_w = minf(gem_w, BAR_RIGHT_LIMIT - coin.end.x - BAR_GAP)
+		var energy := Rect2(coin.position.x - BAR_GAP - energy_w, top, energy_w, h)
+		var gem := Rect2(coin.end.x + BAR_GAP, top, gem_w, h)
+		return {"energy": energy, "coin": coin, "gem": gem}
+
 	func _draw_topbar(snap: Dictionary) -> void:
 		var values: Dictionary = host._hud_values(snap)
 		# The HUD (hud_view.gd) keeps its own pill rects; the chrome paints the §20.5
 		# plates underneath them instead of moving its numbers around, and the
 		# transparent pill palette in the screen leaves the fills to this layer.
 		# 2026-11-05: the pills are real bar art now; the star counter is gone.
+		# 2026-11-06: coin sits dead centre with equal gaps to energy and gem.
+		var bar_rects := _bar_rects()
 		var bars := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
 		for key in bars.keys():
-			var bar_rect: Rect2 = host._hud_pill_page(String(key))
+			var bar_rect: Rect2 = bar_rects[key]
 			if not draw_ui_fit(String(bars[key]), bar_rect):
 				rounded(bar_rect, 22, Color(1, 1, 1, 0.82))
 		var level_rect: Rect2 = host._hud_pill_page("level")
@@ -228,7 +307,7 @@ class Chrome extends Control:
 		# 2026-11-05: numbers sit centred and bold inside each bar; the energy bar also
 		# carries a 30-minute countdown pressed onto its top edge.
 		var num_color := Color("#3B5C8F")
-		var energy_rect: Rect2 = host._hud_pill_page("energy")
+		var energy_rect: Rect2 = bar_rects["energy"]
 		text_center_font(level_font, energy_rect, str(int(values.get("energy", 0))), 40, num_color)
 		var clock: String = host._mmss(host._energy_countdown())
 		var clock_rect := Rect2(energy_rect.position.x, energy_rect.position.y - 8.0,
@@ -238,7 +317,7 @@ class Chrome extends Control:
 					clock, 22, Color(0.12, 0.22, 0.40, 0.85))
 		text_center_font(level_font, clock_rect, clock, 22, Color(1.0, 1.0, 1.0))
 		for key3 in ["coin", "gem"]:
-			var counter_rect: Rect2 = host._hud_pill_page(key3)
+			var counter_rect: Rect2 = bar_rects[key3]
 			text_center_font(level_font, counter_rect, str(int(values.get(key3, 0))), 40, num_color)
 		if not draw_ui_fit("shop", LAYOUT_SHOP):
 			rounded(LAYOUT_SHOP, 30, Color("#5B8DEF"))
@@ -451,6 +530,14 @@ var board
 var hud
 var orders
 var fly
+func _board_item(cell: Vector2i) -> Dictionary:
+	if evaluator == null or evaluator.sim == null or not evaluator.sim.board.has_item(cell):
+		return {}
+	return evaluator.sim.board.item(cell)
+
+
+## Dragged chip drawn above the order cards (the board's copy is hidden meanwhile).
+var ghost
 var chrome
 var model
 var evaluator
@@ -487,6 +574,8 @@ var _event_count: int = 0
 var _last_code: String = ""
 var _preview_window: Vector2i = PREVIEW_WINDOW
 var _preview_window_enabled: bool = true
+## Frames left to keep forcing the preview size (see _fit_preview_window).
+var _window_fix_frames: int = 0
 ## F5 default is free mode (the player clicks); `-- --demo` replays the sample
 ## timeline instead. `_autoplay` keeps its old meaning: drain evaluator events.
 var _free_mode: bool = true
@@ -500,6 +589,10 @@ var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
 var _last_click_at: float = -1000.0
+## Double-click bookkeeping on a green (completed) cell: second tap claims the order.
+const DOUBLE_CLICK := 0.35
+var _last_cell := Vector2i(-1, -1)
+var _last_cell_at: float = -1000.0
 ## 2026-11-05: a finished level holds for 0.5 s (so the confirm badge is readable)
 ## before the next level is applied. -1 means "not scheduled".
 const LEVEL_NEXT_DELAY := 1.0
@@ -612,6 +705,13 @@ func _ready() -> void:
 	fly.set_metrics(_flight_metrics(metrics))
 	add_child(fly)
 
+	ghost = DragGhost.new()
+	ghost.host = self
+	ghost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ghost.position = Vector2.ZERO
+	ghost.size = PAGE
+	add_child(ghost)
+
 	# Topmost layer: the hand has to paint over every panel and card.
 	_cursor_layer = Cursor.new()
 	_cursor_layer.host = self
@@ -702,9 +802,16 @@ func _fit_preview_window() -> void:
 	if not _preview_window_enabled:
 		print("[game] preview window=native (engine default)")
 		return
+	# A maximised / fullscreen window ignores set_size, so force windowed first.
+	if DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED:
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	DisplayServer.window_set_size(_preview_window)
 	var usable := DisplayServer.screen_get_usable_rect()
 	DisplayServer.window_set_position(usable.position + (usable.size - _preview_window) / 2)
+	# 2026-11-06: the editor (or the OS) can restore a saved window size right after the
+	# first frame, which made the preview open at 100% after a reboot. Keep re-applying
+	# for a few frames until the window really is PREVIEW_WINDOW.
+	_window_fix_frames = 180
 	print("[game] preview window=%dx%d design=%dx%d scale=%.2f screen=%dx%d" % [
 		_preview_window.x, _preview_window.y, int(PAGE.x), int(PAGE.y),
 		float(_preview_window.x) / PAGE.x, usable.size.x, usable.size.y,
@@ -904,13 +1011,39 @@ func _sync_from_sim() -> void:
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
-	orders.sync_orders(_as_array(snap.get("orders", [])))
+	orders.sync_orders(_order_rows_with_ready(_as_array(snap.get("orders", [])), snap))
 	# 2026-11-05: the chrome draws the character portraits from the order list, so it
 	# must repaint whenever the snapshot changes — otherwise the old level's character
 	# stays on screen after a level switch.
 	if chrome != null:
 		chrome.queue_redraw()
 	_refresh_anchors()
+
+
+## Mission rows carry "is a matching chip on the board right now": the card then shows
+## the green check before the player claims anything.
+func _order_rows_with_ready(rows: Array, snap: Dictionary) -> Array:
+	var on_board := {}
+	for raw_cell in _completed_cells(snap):
+		var cell := _to_cell(raw_cell)
+		if not evaluator.sim.board.in_bounds(cell) or not evaluator.sim.board.has_item(cell):
+			continue
+		var item: Dictionary = evaluator.sim.board.item(cell)
+		on_board["%s@%d" % [String(item.get("entity", "")), int(item.get("level", 1))]] = true
+	var out: Array = []
+	for raw in rows:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var row: Dictionary = (raw as Dictionary).duplicate(true)
+		var mission: Array = []
+		for m in _as_array(row.get("mission", [])):
+			if typeof(m) != TYPE_ARRAY or (m as Array).size() < 3:
+				continue
+			var key := "%s@%d" % [String((m as Array)[0]), int((m as Array)[1])]
+			mission.append([(m as Array)[0], (m as Array)[1], (m as Array)[2], on_board.has(key)])
+		row["mission"] = mission
+		out.append(row)
+	return out
 
 
 func _level_from_snapshot(snap: Dictionary) -> Dictionary:
@@ -995,6 +1128,16 @@ func _refresh_anchors() -> void:
 	fly.set_anchors(table)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
+		_window_fix_frames -= 1
+		if _window_fix_frames == 179:
+			print("[game] window now=%s target=%s mode=%d" % [str(DisplayServer.window_get_size()),
+					str(_preview_window), DisplayServer.window_get_mode()])
+		if DisplayServer.window_get_size() != _preview_window and _preview_window_enabled:
+			DisplayServer.window_set_size(_preview_window)
+			var usable := DisplayServer.screen_get_usable_rect()
+			DisplayServer.window_set_position(
+					usable.position + (usable.size - _preview_window) / 2)
 	# The chrome draws the energy countdown, so it has to repaint when the second
 	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
 	var second := int(floor(_clock))
@@ -1020,6 +1163,31 @@ func _on_event(ev: Dictionary) -> void:
 			board.apply_state({"selected": _to_array(_selected),
 					"completed": _completed_cells(evaluator.sim.snapshot())})
 	fly.play_event(_with_hue(ev))
+
+
+## The claimed chip arcs from its board cell to the order card, growing to 2.5x and
+## vanishing on arrival (fly_anim's "deliver_chip" motion owns the curve).
+func _play_claim_flight(order_id: String, cell: Vector2i, item: Dictionary) -> void:
+	if fly == null:
+		return
+	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
+			int(item.get("level", 1)))
+	if texture == null:
+		return
+	var card: Rect2 = orders.card_rect(order_id)
+	var target: Vector2 = orders.position + card.get_center()
+	# FlyAnim takes the source as a board cell and the target as the order anchor, so a
+	# synthetic "deliver_chip" event carries the texture and the drop point.
+	fly.play_event({
+		"type": "deliver_chip",
+		"at": _clock,
+		"payload": {
+			"from": [cell.x, cell.y],
+			"order": order_id,
+			"to_point": [target.x, target.y],
+			"texture": texture,
+		},
+	})
 
 
 ## Item flights borrow the mission item's hue, so the thing flying to the card
@@ -1070,6 +1238,16 @@ func _process(delta: float) -> void:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
+		_window_fix_frames -= 1
+		if _window_fix_frames == 179:
+			print("[game] window now=%s target=%s mode=%d" % [str(DisplayServer.window_get_size()),
+					str(_preview_window), DisplayServer.window_get_mode()])
+		if DisplayServer.window_get_size() != _preview_window and _preview_window_enabled:
+			DisplayServer.window_set_size(_preview_window)
+			var usable := DisplayServer.screen_get_usable_rect()
+			DisplayServer.window_set_position(
+					usable.position + (usable.size - _preview_window) / 2)
 	# The chrome draws the energy countdown, so it has to repaint when the second
 	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
 	var second := int(floor(_clock))
@@ -1159,6 +1337,13 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventMouseButton:
 		var mouse := event as InputEventMouseButton
+		if mouse.button_index == MOUSE_BUTTON_RIGHT:
+			# 2026-11-06: right-click on a green chip delivers it too.
+			if mouse.pressed:
+				var rcell := _cell_at(mouse.position)
+				if rcell.x >= 0 and _claim_from_cell(rcell):
+					_last_click_at = _clock
+			return
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if mouse.pressed:
@@ -1209,12 +1394,22 @@ func _maybe_start_drag(point: Vector2) -> void:
 	_selected = Vector2i(-1, -1)
 	_sync_from_sim()
 	board.set_drag_state({"from": _drag_from, "pos": centre})
+	board.drag_chip_visible = false
+	if ghost != null:
+		ghost.set_state(_drag_from, centre, board.chip_texture(
+				String(_board_item(_drag_from).get("entity", "")),
+				int(_board_item(_drag_from).get("level", 1))), _clock)
 
 
 func _update_drag(point: Vector2) -> void:
 	if not _dragging:
 		return
-	board.set_drag_state({"from": _drag_from, "pos": point + _drag_grab})
+	var at := point + _drag_grab
+	board.set_drag_state({"from": _drag_from, "pos": at})
+	if ghost != null:
+		ghost.set_state(_drag_from, at, board.chip_texture(
+				String(_board_item(_drag_from).get("entity", "")),
+				int(_board_item(_drag_from).get("level", 1))), _clock)
 
 
 ## Release: a drag either merges (same entity+level) or cancels; a press without
@@ -1229,9 +1424,23 @@ func _end_press(release_point: Vector2) -> void:
 	var point := release_point
 	if _dragging:
 		var to := _cell_at(point)
+		# Dropping a chip onto the order band delivers it instead of a board action.
+		if not _order_card_at(point).is_empty() and _claim_from_cell(_drag_from):
+			board.set_drag_state({})
+			if ghost != null:
+				ghost.clear()
+			_dragging = false
+			_drag_from = Vector2i(-1, -1)
+			_pressing = false
+			board.drag_chip_visible = true
+			_last_click_at = _clock
+			_record_click(point, {"kind": "order_claim", "ok": true})
+			return
 		var action: Dictionary = FreeMode.drag_action(_drag_from, to, evaluator.sim, model,
 				Vector2i(-1, -1))
 		board.set_drag_state({})
+		if ghost != null:
+			ghost.clear()
 		_dragging = false
 		var from := _drag_from
 		_drag_from = Vector2i(-1, -1)
@@ -1257,6 +1466,38 @@ func _end_press(release_point: Vector2) -> void:
 		_free_click_at(_press_point)
 	_pressing = false
 
+## The order whose mission this cell satisfies (empty when none).
+func _order_id_for_cell(cell: Vector2i) -> String:
+	if evaluator == null or evaluator.sim == null or not evaluator.sim.board.has_item(cell):
+		return ""
+	var item: Dictionary = evaluator.sim.board.item(cell)
+	var entity := String(item.get("entity", ""))
+	for card in orders.cards:
+		if bool(card.get("done", false)):
+			continue
+		for m in _as_array(card.get("mission", [])):
+			if String((m as Dictionary).get("entity", "")) != entity:
+				continue
+			if int((m as Dictionary).get("level", 1)) != int(item.get("level", 1)):
+				continue
+			return String(card.get("id", ""))
+	return ""
+
+
+## Deliver from a board cell: used by the double-click and the drag-onto-card paths.
+func _claim_from_cell(cell: Vector2i) -> bool:
+	var order_id := _order_id_for_cell(cell)
+	if order_id.is_empty():
+		return false
+	var item: Dictionary = evaluator.sim.board.item(cell)
+	var result: Dictionary = _apply_free("order_claim",
+			{"order": order_id, "src": [cell.x, cell.y]})
+	if not bool(result.get("ok", false)):
+		return false
+	_play_claim_flight(order_id, cell, item)
+	return true
+
+
 ## One click: board first (tap a generator / select+merge a chip), then an order
 ## card (claim it), then "level complete → click to continue". Anything else drops
 ## the selection. Every click is logged for the take (so the film shows the hand
@@ -1278,6 +1519,18 @@ func _free_click_at(point: Vector2) -> Dictionary:
 	var out := {"kind": "none", "ok": false, "cell": null}
 	var cell := _cell_at(point)
 	if cell.x >= 0:
+		# 2026-11-06: the second tap on the same green chip delivers it. This has to run
+		# before the board rule below, or the tap is consumed by "select" and the
+		# double-click never fires.
+		var doubled := cell == _last_cell and _clock - _last_cell_at <= DOUBLE_CLICK
+		_last_cell = cell
+		_last_cell_at = _clock
+		if doubled and _claim_from_cell(cell):
+			out["cell"] = [cell.x, cell.y]
+			out["kind"] = "order_claim"
+			out["ok"] = true
+			_record_click(point, out)
+			return out
 		out["cell"] = [cell.x, cell.y]
 		var action: Dictionary = FreeMode.board_click(cell, evaluator.sim, model, _selected)
 		var kind := String(action.get("kind", ""))
@@ -1299,7 +1552,23 @@ func _free_click_at(point: Vector2) -> Dictionary:
 	var order_id := _order_card_at(point)
 	if not order_id.is_empty():
 		out["kind"] = "order_claim"
-		out["ok"] = bool(_apply_free("order_claim", {"order": order_id}).get("ok", false))
+		# Capture the delivered chip BEFORE the claim consumes it: the flight needs its
+		# cell and its art.
+		var src_cell := Vector2i(-1, -1)
+		var src_item: Dictionary = {}
+		for raw_cell in _completed_cells(evaluator.sim.snapshot()):
+			# _completed_cells yields [x, y] arrays, the board wants Vector2i.
+			var done_cell := _to_cell(raw_cell)
+			if not evaluator.sim.board.in_bounds(done_cell):
+				continue
+			if evaluator.sim.board.has_item(done_cell):
+				src_cell = done_cell
+				src_item = evaluator.sim.board.item(done_cell)
+				break
+		out["ok"] = bool(_apply_free("order_claim",
+				{"order": order_id, "src": [src_cell.x, src_cell.y]}).get("ok", false))
+		if bool(out["ok"]) and src_cell.x >= 0:
+			_play_claim_flight(order_id, src_cell, src_item)
 		_record_click(point, out)
 		return out
 	if bool(evaluator.sim.level_complete_pending):
@@ -1488,6 +1757,16 @@ func _reset_run() -> void:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	fly.set_clock(_clock)
 	_tick_level_next()
+	if _window_fix_frames > 0 and DisplayServer.get_name() != "headless":
+		_window_fix_frames -= 1
+		if _window_fix_frames == 179:
+			print("[game] window now=%s target=%s mode=%d" % [str(DisplayServer.window_get_size()),
+					str(_preview_window), DisplayServer.window_get_mode()])
+		if DisplayServer.window_get_size() != _preview_window and _preview_window_enabled:
+			DisplayServer.window_set_size(_preview_window)
+			var usable := DisplayServer.screen_get_usable_rect()
+			DisplayServer.window_set_position(
+					usable.position + (usable.size - _preview_window) / 2)
 	# The chrome draws the energy countdown, so it has to repaint when the second
 	# changes — otherwise the number only moves when a click triggers _sync_from_sim.
 	var second := int(floor(_clock))

@@ -57,7 +57,7 @@ func _sim():
 func _take() -> Dictionary:
 	var cursor := [[0.0, 100, 200], [0.5, 140, 220], [1.0, 180, 240]]
 	var clicks := [{"t": 0.5, "x": 140, "y": 220, "type": "tap", "cell": [0, 0], "ok": true}]
-	var timeline := [{"id": "free_000", "at": 0.5, "type": "tap", "payload": {"target": {"slot": [0, 0]}}}]
+	var timeline := [{"id": "free_000", "at": 0.5, "type": "tap", "payload": {"target": {"slot": [3, 4]}}}]
 	return TakeIo.build(SEED, 60, 1.0, cursor, clicks, timeline, SAMPLE)
 
 
@@ -143,7 +143,7 @@ func _test_normalize_timeline(t) -> void:
 			"an unknown type keeps an empty channel so the film can refuse it")
 	t.eq((raw[0] as Dictionary).get("channel", null), null,
 			"normalising does not mutate the take in memory")
-	var events := [{"id": "a", "at": 1.0, "type": "tap", "payload": {"target": {"slot": [0, 0]}}}]
+	var events := [{"id": "a", "at": 1.0, "type": "tap", "payload": {"target": {"slot": [3, 4]}}}]
 	var no_channel := TakeIo.build(SEED, 60, 2.0, [[0.0, 1, 1], [1.0, 2, 2]], [], events, SAMPLE)
 	t.eq(String(((no_channel["timeline"] as Array)[0] as Dictionary).get("channel", "")), "",
 			"the builder stores exactly what the recorder gave it")
@@ -180,13 +180,13 @@ func _test_board_click_rules(t) -> void:
 		return
 	var sim = env["sim"]
 	var model = env["model"]
-	var gen := Vector2i(0, 0)
+	var gen := Vector2i(3, 4)
 	var chip_a := Vector2i(2, 3)
 	var chip_b := Vector2i(3, 3)
 
 	var tap: Dictionary = FreeMode.board_click(gen, sim, model, Vector2i(-1, -1))
 	t.eq(String(tap.get("kind", "")), FreeMode.ACTION_TAP, "a generator click becomes a tap")
-	t.eq(tap.get("payload", {}), {"target": {"slot": [0, 0]}},
+	t.eq(tap.get("payload", {}), {"target": {"slot": [3, 4]}},
 			"the tap payload carries the slot the sim expects")
 
 	var first: Dictionary = FreeMode.board_click(chip_a, sim, model, Vector2i(-1, -1))
@@ -405,7 +405,7 @@ func _test_swap_command(t) -> void:
 			"payload": {"from": [empty_cell.x, empty_cell.y], "to": [blocked.x, blocked.y]}})
 	t.eq(String(on_obstacle.get("code", "")), "SIM_BLOCKED", "an obstacle cell refuses a swap")
 
-	var generator := Vector2i(0, 0)
+	var generator := Vector2i(3, 4)
 	var non_chip: Dictionary = SimHandlers.apply(sim, {"type": "swap",
 			"payload": {"from": [generator.x, generator.y], "to": [empty_cell.x, empty_cell.y]}})
 	t.eq(String(non_chip.get("code", "")), "SIM_NOT_SWAPPABLE", "a generator cannot be swapped")
@@ -413,7 +413,7 @@ func _test_swap_command(t) -> void:
 	# 所见即所得: the green cell + finish badge are derived from the snapshot, so the
 	# completed marker travels with the chip after a swap.
 	var done_before: Array = CompletedCells.from_snapshot(sim.snapshot())
-	t.ok(done_before.size() >= 1, "the sample level still has a mission-matching chip")
+	t.eq(done_before.size(), 0, "level 1 starts with no completed cell (its mission needs a merge)")
 	if done_before.size() >= 1:
 		var done_cell := Vector2i(int(done_before[0][0]), int(done_before[0][1]))
 		var free2 := Vector2i(-1, -1)
@@ -456,7 +456,7 @@ func _test_click_applies_to_sim(t) -> void:
 		return
 	var sim = env["sim"]
 	var model = env["model"]
-	var tap: Dictionary = FreeMode.board_click(Vector2i(0, 0), sim, model, Vector2i(-1, -1))
+	var tap: Dictionary = FreeMode.board_click(Vector2i(3, 4), sim, model, Vector2i(-1, -1))
 	var before := int(sim.board.item_count())
 	var tap_result: Dictionary = sim.apply({"id": "free_000", "type": "tap", "at": 0.5,
 			"payload": tap.get("payload", {})})

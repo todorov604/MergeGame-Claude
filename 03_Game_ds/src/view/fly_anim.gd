@@ -12,7 +12,7 @@ extends Control
 
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const HANDLED := [
-	"deliver", "order_claim", "star_fly", "coin_popup",
+	"deliver", "order_claim", "deliver_chip", "star_fly", "coin_popup",
 	"character_leave", "character_next", "levelup", "transition",
 ]
 const PAGE := Vector2(1080.0, 1920.0)
@@ -110,6 +110,19 @@ func play_event(ev: Dictionary) -> bool:
 				"to": order_at,
 				"text": "",
 				"hue": hue,
+			})
+		"deliver_chip":
+			var target := order_at
+			var to_point = payload.get("to_point", null)
+			if typeof(to_point) == TYPE_ARRAY and (to_point as Array).size() >= 2:
+				target = Vector2(float((to_point as Array)[0]), float((to_point as Array)[1]))
+			motions.append({
+				"kind": "deliver_chip",
+				"start": at,
+				"dur": dur if dur > 0.0 else 0.55,
+				"from": _cell_anchor(payload.get("from", null)),
+				"to": target,
+				"texture": payload.get("texture", null),
 			})
 		"order_claim":
 			motions.append({
@@ -277,6 +290,8 @@ func _draw_motion(m: Dictionary) -> void:
 	match String(m.get("kind", "")):
 		"item":
 			_draw_item(m, p, ease)
+		"deliver_chip":
+			_draw_deliver_chip(m, p, ease)
 		"stars":
 			_draw_stars(m, p)
 		"coins":
@@ -291,6 +306,25 @@ func _draw_motion(m: Dictionary) -> void:
 			_draw_banner(m, p, ease)
 		"veil":
 			_draw_veil(m, p)
+
+
+## Order claim: the delivered chip flies from its board cell to the card on an arc,
+## grows to 2.5x and disappears exactly when it lands.
+func _draw_deliver_chip(m: Dictionary, p: float, ease: float) -> void:
+	var from: Vector2 = m.get("from", Vector2.ZERO)
+	var to: Vector2 = m.get("to", Vector2.ZERO)
+	var ctrl := (from + to) * 0.5 + Vector2(0.0, -150.0)
+	var pos := _bezier(from, ctrl, to, ease)
+	var texture = m.get("texture", null)
+	if not (texture is Texture2D):
+		return
+	var size: Vector2 = texture.get_size()
+	var side: float = lerpf(120.0, 2.5 * 132.0, ease)
+	var alpha := 1.0 if p < 0.78 else clampf((1.0 - p) / 0.22, 0.0, 1.0)
+	var scale := side / maxf(size.x, 1.0)
+	draw_set_transform(pos, 0.0, Vector2(scale, scale))
+	draw_texture_rect(texture, Rect2(-size * 0.5, size), false, Color(1, 1, 1, alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_item(m: Dictionary, p: float, ease: float) -> void:

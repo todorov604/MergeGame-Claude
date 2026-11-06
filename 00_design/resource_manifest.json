@@ -3607,6 +3607,54 @@
       "nine_slice": "n/a",
       "animation": "static",
       "notes": "2026-11-06 新增：任务奖励金币螺旋飞行动画；sha256 f4b34ebe3324723e…"
+    },
+    {
+      "id": "ui_stockpile_frame",
+      "category": "界面",
+      "use": "库存/补给面板底板",
+      "priority": "P1",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "file": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\界面切图\\main_frame_stockpile.png",
+      "target_size": "156×156",
+      "actual_size": "156×156",
+      "fit": "exact",
+      "nine_slice": "n/a",
+      "animation": "static",
+      "notes": "2026-11-06 新增：任务带左侧库存补给；sha256 bdf0f1cc5f937429…"
+    },
+    {
+      "id": "ui_stockpile_arrows",
+      "category": "界面",
+      "use": "库存面板右下角绿色箭头",
+      "priority": "P1",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "file": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\界面切图\\common_icon_arroes.png",
+      "target_size": "42×48",
+      "actual_size": "42×48",
+      "fit": "exact",
+      "nine_slice": "n/a",
+      "animation": "static",
+      "notes": "2026-11-06 新增：任务带左侧库存补给；sha256 954ffe0e476b3354…"
+    },
+    {
+      "id": "ui_red_dot",
+      "category": "界面",
+      "use": "红点计数底图（库存剩余次数）",
+      "priority": "P1",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "file": "E:\\北京Icon\\常用资产汇总\\棋盘界面拆解\\红点纯背景.png",
+      "target_size": "50×51",
+      "actual_size": "50×51",
+      "fit": "exact",
+      "nine_slice": "n/a",
+      "animation": "static",
+      "notes": "2026-11-06 新增：任务带左侧库存补给；sha256 f1792c49b2740cdc…"
     }
   ]
 }

@@ -30,6 +30,8 @@ var time: float = 0.0
 var last_spawn: Dictionary = {}
 ## Obstacles cleared by the last merge: [{"cell": [x, y], "kind": "ice"}].
 var last_unlocks: Array = []
+## 左侧库存剩余次数（-1 表示尚未从关卡配置里读取）。
+var stockpile_count: int = -1
 ## Multi-cell safeboxes for the current level (empty when the level declares none).
 var safeboxes: Array = []
 var hud: Dictionary = {}
@@ -51,6 +53,7 @@ func setup(model_in, seed_value_in: int) -> void:
 	hud = model.hud_initial() if model != null else {}
 	orders = []
 	generator_state = {}
+	stockpile_count = -1
 	level_complete_pending = false
 	board_full_pending = false
 	log_events = []
@@ -93,6 +96,7 @@ func _load_level(index: int) -> void:
 				orders.append(_make_order(o))
 
 	generator_state = {}
+	stockpile_count = -1
 	var gen_table := {}
 	if model != null and typeof(model.project) == TYPE_DICTIONARY:
 		var table = model.project.get("generators", {})
@@ -331,6 +335,96 @@ func _free_cells() -> Array:
 				continue
 			out.append(pos)
 	return out
+
+
+func stockpile_config() -> Dictionary:
+	if model == null:
+		return {}
+	var lvl: Dictionary = model.level(level_index)
+	var raw = lvl.get("stockpile", {})
+	return raw if typeof(raw) == TYPE_DICTIONARY else {}
+
+
+func stockpile_remaining() -> int:
+	var cfg := stockpile_config()
+	if cfg.is_empty() or not bool(cfg.get("enabled", false)):
+		return 0
+	if stockpile_count < 0:
+		stockpile_count = int(cfg.get("count", 0))
+	return stockpile_count
+
+
+## 面板上默认显示的那枚棋子：配置优先，否则取第一个未完成订单的低一级。
+func stockpile_preview() -> Dictionary:
+	var cfg := stockpile_config()
+	var want := String(cfg.get("entity", ""))
+	var lvl := int(cfg.get("level", 0))
+	if not want.is_empty() and lvl > 0:
+		return {"entity": want, "level": lvl}
+	for order in orders:
+		if bool(order.get("done", false)):
+			continue
+		for m in order.get("mission", []):
+			var entity := String((m as Dictionary).get("entity", ""))
+			if entity.is_empty():
+				continue
+			return {"entity": entity, "level": maxi(int((m as Dictionary).get("level", 1)) - 1, 1)}
+	return {}
+
+
+## 左侧库存：点一下少一次，棋子从面板飞到棋盘随机空位（跟生成器同一套飞行数据）。
+func _do_stockpile_tap(_payload: Dictionary) -> Dictionary:
+	last_spawn = {}
+	var cfg: Dictionary = {}
+	if model != null:
+		var lvl: Dictionary = model.level(level_index)
+		var raw = lvl.get("stockpile", {})
+		if typeof(raw) == TYPE_DICTIONARY:
+			cfg = raw
+	if stockpile_count < 0 and not cfg.is_empty():
+		stockpile_count = int(cfg.get("count", 0))
+	cfg = cfg.duplicate(true)
+	cfg["count"] = stockpile_count
+	if cfg.is_empty() or not bool(cfg.get("enabled", false)):
+		return _err("SIM_NO_STOCKPILE", "this level has no stockpile")
+	if int(cfg.get("count", 0)) <= 0:
+		return _err("SIM_STOCKPILE_EMPTY", "stockpile is empty")
+	var free_cells := _free_cells()
+	if free_cells.is_empty():
+		board_full_pending = true
+		return _err("SIM_BOARD_FULL", "board is full; stockpile kept")
+	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
+	var pick := _stockpile_output(cfg)
+	if pick.is_empty():
+		return _err("SIM_NO_STOCKPILE", "stockpile has no configured chip")
+	var spawn_entity := String(pick["entity"])
+	var spawn_level: int = clampi(int(pick["level"]), 1, _level_cap(spawn_entity))
+	board.put(free, spawn_entity, spawn_level)
+	last_spawn = {"from": [-1, -1], "to": [free.x, free.y],
+			"entity": spawn_entity, "level": spawn_level}
+	stockpile_count = int(cfg.get("count", 0)) - 1
+	return _ok("stockpile spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
+
+
+## 配置优先；否则取「当前订单需求的低一级」，多订单时按 RNG 抽一个。
+func _stockpile_output(cfg: Dictionary) -> Dictionary:
+	var want := String(cfg.get("entity", ""))
+	var lvl := int(cfg.get("level", 0))
+	if not want.is_empty() and lvl > 0:
+		return {"entity": want, "level": lvl}
+	var candidates: Array = []
+	for order in orders:
+		if bool(order.get("done", false)):
+			continue
+		for m in order.get("mission", []):
+			var entity := String((m as Dictionary).get("entity", ""))
+			var need := int((m as Dictionary).get("level", 1))
+			if entity.is_empty():
+				continue
+			candidates.append({"entity": entity, "level": maxi(need - 1, 1)})
+	if candidates.is_empty():
+		return {}
+	return candidates[rng.next_int(candidates.size())]
 
 
 func _do_tap(payload: Dictionary) -> Dictionary:

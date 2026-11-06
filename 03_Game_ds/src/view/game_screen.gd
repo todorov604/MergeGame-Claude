@@ -76,6 +76,8 @@ const LAYOUT_GEM := FilmLayout.LAYOUT_GEM
 ## The order band sits between the money bar and the board: 210..460, i.e. above the
 ## 466 container top and below the y≈0..120 money bar.
 const ORDER_RECT := Rect2(0.0, 210.0, 1080.0, 250.0)
+## 任务带左侧的库存面板（红框那块）：底板 156、只吃自己的点击。
+const STOCKPILE_RECT := Rect2(40.0, 248.0, 156.0, 156.0)
 ## hud_view.gd draws a 1080x185 layout with hardcoded local pill rects. Scaling the
 ## control 0.8 keeps that view untouched while making the bar 864x148, which leaves
 ## the top-right corner free for the §20.5 shop button at x=930.
@@ -88,6 +90,7 @@ const UI_KEYS := [
 	"money_bg", "part1", "part2", "items", "bar_board", "reminder", "coin_reward", "line",
 	"exit", "bag", "shop", "energy_bar", "coin_bar", "gem_bar",
 	"char_waitress", "char_technician", "char_customer", "char_police", "char_blonde", "char_racer", "char_manager", "char_glasses", "char_worker",
+	"stockpile_frame", "stockpile_arrows", "red_dot",
 ]
 const DEFAULT_SEED := 7
 ## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
@@ -230,6 +233,7 @@ class Chrome extends Control:
 		# 2026-11-06: portraits are drawn by the order panel now (they must shrink with
 		# their card), so the chrome no longer paints them.
 		_sync_card_anchors(used)
+		_draw_stockpile()
 		_draw_topbar(snap)
 		_draw_bottom_bar(snap)
 
@@ -318,6 +322,42 @@ class Chrome extends Control:
 			var w := h * (texture.get_width() / maxf(texture.get_height(), 1.0))
 			var rect := Rect2(page.get_center().x - w * 0.5, page.position.y + 26.0 - h, w, h)
 			draw_ui_fit(key, rect)
+
+
+	## 任务带左侧的库存面板：底板 + 内部棋子 + 红点次数 + 右下箭头。
+	func _draw_stockpile() -> void:
+		if host.evaluator == null or host.evaluator.sim == null:
+			return
+		# 2026-11-06: 次数归零也挂在原位，只有关卡没启用库存时才不画。
+		var cfg: Dictionary = host.evaluator.sim.stockpile_config()
+		if cfg.is_empty() or not bool(cfg.get("enabled", false)):
+			return
+		var left: int = int(host.evaluator.sim.stockpile_remaining())
+		var rect: Rect2 = host.STOCKPILE_RECT
+		if host._ui("stockpile_frame") != null:
+			draw_ui_fit("stockpile_frame", rect)
+		else:
+			draw_rect(rect, Color("#DCE6F2"), true)
+		var preview: Dictionary = host.evaluator.sim.stockpile_preview()
+		if not preview.is_empty() and host.board != null:
+			var chip: Texture2D = host.board.chip_texture(String(preview.get("entity", "")),
+					int(preview.get("level", 1)))
+			if chip != null:
+				draw_texture_rect(chip, rect.grow(-10.0), false)
+		# 2026-11-06: 参照设计图放大绿箭头（46×56）和红点（62×62），并把红点往内收
+		var arrows: Texture2D = host._ui("stockpile_arrows")
+		if arrows != null:
+			draw_texture_rect(arrows, Rect2(
+					rect.position + Vector2(rect.size.x - 54.0, rect.size.y - 48.0),
+					Vector2(46.0, 56.0)), false)
+		var dot: Texture2D = host._ui("red_dot")
+		var drect := Rect2(rect.position + Vector2(rect.size.x - 54.0, -8.0), Vector2(62.0, 62.0))
+		if dot != null:
+			draw_texture_rect(dot, drect, false)
+		var num_font: Font = host._font_display_bold
+		if num_font == null:
+			num_font = host._font
+		text_center_font(num_font, drect.grow(-4.0), str(left), 36, Color.WHITE)
 
 
 	func _draw_topbar(snap: Dictionary) -> void:
@@ -654,7 +694,9 @@ var _coin_ticks: Array = []
 const DOUBLE_CLICK := 0.35
 var _last_cell := Vector2i(-1, -1)
 ## Order-queue drag: the whole row slides with the pointer, then springs back.
-const ROW_DRAG_THRESHOLD := 12.0
+const ROW_DRAG_THRESHOLD := 24.0
+## 拖动整排的生效区域：整条订单带 + 立绘所在的顶部区域（红框范围）。
+const ROW_DRAG_AREA := Rect2(0.0, 60.0, 1080.0, 400.0)
 const ROW_RUBBER := 0.55
 const ROW_SPRING := 12.0
 var _row_pressing := false
@@ -1198,6 +1240,7 @@ func _refresh_anchors() -> void:
 	fly.set_clock(_clock)
 	_tick_level_next()
 	_tick_coin_pending()
+	_refresh_order_ready()
 	_tick_coin_display()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)
@@ -1260,6 +1303,32 @@ func _arm_claim_hold(order_id: String) -> void:
 
 
 ## Coins fly only after a accepted claim.
+## 点库存：sim 扣次数并在随机空位落一枚，棋子在页面层从面板飞过去。
+func _stockpile_tap() -> bool:
+	if evaluator == null or evaluator.sim == null:
+		return false
+	if evaluator.sim.stockpile_remaining() <= 0:
+		return false
+	var preview: Dictionary = evaluator.sim.stockpile_preview()
+	var result: Dictionary = _apply_free("stockpile_tap", {})
+	if not bool(result.get("ok", false)):
+		return false
+	var spawn: Dictionary = evaluator.sim.last_spawn
+	if spawn.is_empty():
+		return false
+	var to_ref = spawn.get("to", [])
+	if typeof(to_ref) != TYPE_ARRAY or (to_ref as Array).size() < 2:
+		return false
+	var cell := Vector2i(int((to_ref as Array)[0]), int((to_ref as Array)[1]))
+	var page := Rect2(board.position + board.cell_rect(cell.x, cell.y).position,
+			board.cell_rect(cell.x, cell.y).size)
+	# 2026-11-06: 当成固定生成器 —— 走棋盘自己的飞行，落地之前不显示落点棋子。
+	var spawn2: Dictionary = spawn.duplicate(true)
+	spawn2["from_page"] = [STOCKPILE_RECT.get_center().x, STOCKPILE_RECT.get_center().y]
+	board.start_fly(spawn2, _clock)
+	return true
+
+
 func _schedule_coin(order_id: String) -> void:
 	_coin_pending.append({"id": order_id, "at": _clock + CLAIM_CHIP_SECONDS})
 	var amount := _order_coin_amount(order_id)
@@ -1314,6 +1383,17 @@ func _play_unlocks() -> void:
 			continue
 		board.unlock(Vector2i(int((cell_ref as Array)[0]), int((cell_ref as Array)[1])),
 				String((row as Dictionary).get("kind", "")), _clock)
+
+
+## The ready badge must follow the board, not a stale snapshot: after a claim eats the
+## shared chip, the other cards have to lose their green check immediately.
+func _refresh_order_ready() -> void:
+	if orders == null or evaluator == null or evaluator.sim == null:
+		return
+	if not orders.has_method("sync_orders"):
+		return
+	orders.sync_orders(_order_rows_with_ready(
+			_as_array(evaluator.sim.snapshot().get("orders", [])), evaluator.sim.snapshot()))
 
 
 ## Advance the displayed coin number by one tick at a time; snap when ticks run dry.
@@ -1444,6 +1524,7 @@ func _process(delta: float) -> void:
 	fly.set_clock(_clock)
 	_tick_level_next()
 	_tick_coin_pending()
+	_refresh_order_ready()
 	_tick_coin_display()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)
@@ -1572,13 +1653,14 @@ func _input(event: InputEvent) -> void:
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
 		if mouse.pressed:
-			if ORDER_RECT.has_point(mouse.position):
+			if ROW_DRAG_AREA.has_point(mouse.position):
 				_row_pressing = true
 				_row_press_x = mouse.position.x
 			_begin_press(mouse.position)
 		else:
+			# 2026-11-06: keep _row_dragging until _end_press sees it, otherwise a row
+			# drag is read as a click on whatever card sits under the pointer.
 			_row_pressing = false
-			_row_dragging = false
 			_end_press(mouse.position)
 	elif event is InputEventMouseMotion and _pressing:
 		_maybe_start_drag(event.position)
@@ -1766,6 +1848,8 @@ func _free_click() -> void:
 ## exercise the real click path (the window mouse position is not available there).
 ## Returns {"kind", "ok", "cell"} — the entry written to the take's click log.
 func _free_click_at(point: Vector2) -> Dictionary:
+	if STOCKPILE_RECT.has_point(point) and _stockpile_tap():
+		return {"ok": true, "type": "stockpile"}
 	if evaluator == null or evaluator.sim == null:
 		return {"kind": "none", "ok": false, "cell": null}
 	_last_click_at = _clock
@@ -2017,6 +2101,7 @@ func _reset_run() -> void:
 	fly.set_clock(_clock)
 	_tick_level_next()
 	_tick_coin_pending()
+	_refresh_order_ready()
 	_tick_coin_display()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)

@@ -10,6 +10,7 @@ extends RefCounted
 
 const TYPES := [
 	"tap",
+	"stockpile_tap",
 	"drag",
 	"swap",
 	"move",
@@ -41,6 +42,8 @@ static func apply(sim, event: Dictionary) -> Dictionary:
 	if typeof(payload) != TYPE_DICTIONARY:
 		payload = {}
 	match type:
+		"stockpile_tap":
+			return sim._do_stockpile_tap(payload)
 		"tap":
 			return sim._do_tap(payload)
 		"swap":

@@ -566,7 +566,13 @@
     "2x3"
    ],
    "level_number": 8,
-   "notes": "2026-11-06: 外两圈盒子、生成器(3,4)、骨头/冰块靠中、开局无 Lv2 骨头（任务需合成）"
+   "notes": "2026-11-06: 外两圈盒子、生成器(3,4)、骨头/冰块靠中、开局无 Lv2 骨头（任务需合成）",
+   "stockpile": {
+    "enabled": true,
+    "count": 9,
+    "entity": "",
+    "level": 0
+   }
   },
   {
    "id": "level_2",
@@ -706,7 +712,13 @@
    "safes": [
     "1x7"
    ],
-   "level_number": 9
+   "level_number": 9,
+   "stockpile": {
+    "enabled": true,
+    "count": 9,
+    "entity": "",
+    "level": 0
+   }
   }
  ],
  "timeline": [

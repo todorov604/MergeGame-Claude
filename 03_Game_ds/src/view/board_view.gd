@@ -560,6 +560,10 @@ func _draw() -> void:
 	for cell in _completed.keys():
 		if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
 			continue
+		# 2026-11-06: the chip is already in the data while its flight is still in the
+		# air — hold the green until it lands, otherwise the cell lights up early.
+		if _is_fly_target(cell):
+			continue
 		_rounded(cell_rect(cell.x, cell.y).grow(-float(CELL_GAP)), 18, COLOR_COMPLETE)
 
 	for y in board_height:
@@ -574,6 +578,8 @@ func _draw() -> void:
 
 	for cell in _completed.keys():
 		if not _drag.is_empty() and cell == Vector2i(_drag["from"]):
+			continue
+		if _is_fly_target(cell):
 			continue
 		_draw_complete_mark(cell)
 
@@ -698,6 +704,10 @@ func _draw_fly(fly: Dictionary) -> void:
 	var a := Vector2i(int((from as Array)[0]), int((from as Array)[1]))
 	var b := Vector2i(int((to as Array)[0]), int((to as Array)[1]))
 	var start: Vector2 = cell_rect(a.x, a.y).get_center()
+	# 2026-11-06: 面板里的库存从页面坐标起飞（棋盘本地坐标 = 页面 - position）
+	var from_page = spawn.get("from_page", null)
+	if typeof(from_page) == TYPE_ARRAY and (from_page as Array).size() >= 2:
+		start = Vector2(float((from_page as Array)[0]), float((from_page as Array)[1])) - position
 	var end: Vector2 = cell_rect(b.x, b.y).get_center()
 	var at := FlyPath.point(start, end, t)
 	var base := cell_rect(b.x, b.y).grow(-float(CELL_GAP) * 0.5)

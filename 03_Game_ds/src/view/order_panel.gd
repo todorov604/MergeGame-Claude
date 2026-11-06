@@ -21,6 +21,9 @@ const MARGIN := 18.0
 const MAX_CARD_W := 250.0
 const CARD_GAP_X := 18.0
 const VISIBLE_CARDS := 3
+## The queue starts where level 1's single card does (portrait centre 393 - card/2), so
+## the left side of the band stays free for other UI.
+const QUEUE_ORIGIN_X := 250.0
 
 var cards: Array = []
 var palette: Dictionary = {}
@@ -55,6 +58,9 @@ var _font_bold: Font = null
 var _anchors: Array = []
 ## Horizontal offset of the whole queue while the player drags it (rubber band).
 var _row_offset: float = 0.0
+## 队列重排：每张卡的目标 x 和当前 x（换位时用 0.25s 缓动滑过去）。
+var _target_x: Dictionary = {}
+var _x_now: Dictionary = {}
 ## Claimed cards shrink away before the queue closes the gap.
 const DONE_SHRINK := 0.35
 var _clock_now: float = 0.0
@@ -139,6 +145,20 @@ func is_holding(order_id: String) -> bool:
 
 func set_clock(t: float) -> void:
 	_clock_now = t
+	_reorder_cards()
+	var moving := false
+	for cid in _target_x.keys():
+		var target := float(_target_x[cid])
+		var now := float(_x_now.get(cid, target))
+		if absf(now - target) <= 0.5:
+			_x_now[cid] = target
+			continue
+		# 0.25 s ease at 60 fps — the same hand as the row rubber band
+		_x_now[cid] = lerpf(now, target, 0.22)
+		moving = true
+	if moving:
+		_layout()
+		queue_redraw()
 	# a held claim lands now: flip the card to done so the shrink starts
 	for cid in _hold.keys():
 		if t < float(_hold[cid]):
@@ -277,6 +297,41 @@ func set_mission_have(order_id: String, index: int, have: int) -> bool:
 	return true
 
 
+## 每帧按“能交的排前面”做稳定分区：不插队、不改变各自相对顺序；
+## 正在缩小消失的卡（done）钉在原位，等缩完再补位。
+func _reorder_cards() -> void:
+	# 2026-11-06: no reshuffling while a claimed card is still shrinking — the queue
+	# waits for it to be gone, then the survivors slide forward in one go.
+	if is_animating():
+		return
+	if cards.size() < 2:
+		return
+	var slots: Array = []
+	for i in cards.size():
+		if not bool((cards[i] as Dictionary).get("done", false)):
+			slots.append(i)
+	if slots.size() < 2:
+		return
+	var ready_cards: Array = []
+	var rest: Array = []
+	for i in slots:
+		if _card_ready(cards[i]):
+			ready_cards.append(cards[i])
+		else:
+			rest.append(cards[i])
+	var ordered: Array = ready_cards + rest
+	var changed := false
+	for k in slots.size():
+		if cards[int(slots[k])] != ordered[k]:
+			changed = true
+			break
+	if not changed:
+		return
+	for k in slots.size():
+		cards[int(slots[k])] = ordered[k]
+	_layout()
+
+
 func card_rect(order_id: String) -> Rect2:
 	if _rects.is_empty():
 		_layout()
@@ -321,7 +376,7 @@ func debug_summary() -> String:
 	var missions := 0
 	var parts: Array = []
 	for card in cards:
-		if bool(card.get("done", false)) or _card_ready(card):
+		if bool(card.get("done", false)):
 			done += 1
 		var items: Array = card.get("mission", [])
 		missions += items.size()
@@ -351,7 +406,8 @@ func _layout() -> void:
 	var gap := float(metrics.get("card_gap", 14.0))
 	var card_w := minf((total_w - MARGIN * 2.0 - gap * float(n - 1)) / float(n), MAX_CARD_W)
 	var row_w := card_w * float(n) + gap * float(n - 1)
-	var start_x := (total_w - row_w) * 0.5
+	# 2026-11-06: 一直左对齐 —— 只剩一张卡时也停在队列起点，不再居中
+	var start_x := QUEUE_ORIGIN_X
 	# 2026-11-05: compact card — content only (mission + rewards), centred in the band.
 	var card_h := minf(total_h - 8.0, 140.0)
 	var start_y := maxf((total_h - card_h) * 0.5, 4.0)
@@ -360,13 +416,21 @@ func _layout() -> void:
 		# are on screen; the row itself slides with _row_offset.
 		# 2026-11-06: the queue starts at the left margin, so the first three cards read
 		# left-to-right instead of being centred (which pushed #1 off screen).
-		var origin := 24.0 + _row_offset
+		var origin := QUEUE_ORIGIN_X + _row_offset
 		for i in n:
-			_rects[String(cards[i]["id"])] = Rect2(
-					origin + float(i) * (MAX_CARD_W + CARD_GAP_X), start_y, MAX_CARD_W, card_h)
+			var cid := String(cards[i]["id"])
+			var target := QUEUE_ORIGIN_X + float(i) * (MAX_CARD_W + CARD_GAP_X)
+			_target_x[cid] = target
+			if not _x_now.has(cid):
+				_x_now[cid] = target
+			_rects[cid] = Rect2(float(_x_now[cid]) + _row_offset, start_y, MAX_CARD_W, card_h)
 		return
 	for i in n:
-		var rect := Rect2(start_x + float(i) * (card_w + gap) + _row_offset,
+		var cid1 := String(cards[i]["id"])
+		_target_x[cid1] = start_x + float(i) * (card_w + gap)
+		if not _x_now.has(cid1):
+			_x_now[cid1] = float(_target_x[cid1])
+		var rect := Rect2(float(_x_now[cid1]) + _row_offset,
 				start_y, card_w, card_h)
 		if _anchors.size() == n:
 			# WYSIWYG anchor: the card is as wide as its character and bottom-aligned.
@@ -376,7 +440,7 @@ func _layout() -> void:
 			var cx := float(a.get("center", rect.get_center().x))
 			# 2026-11-06: the anchored (single card) path must follow the row drag too —
 			# it used to overwrite the offset and killed the rubber band on level 1.
-			rect = Rect2(cx - w * 0.5 + _row_offset, bottom - card_h, w, card_h)
+			rect = Rect2(QUEUE_ORIGIN_X + _row_offset, bottom - card_h, w, card_h)
 		_rects[String(cards[i]["id"])] = rect
 
 
@@ -402,13 +466,13 @@ func _draw() -> void:
 			var r := card_rect(cid)
 			var scale: float = clampf(1.0 - t, 0.0, 1.0)
 			draw_set_transform(r.get_center(), 0.0, Vector2(scale, scale))
-			_draw_card(card, Rect2(-r.size * 0.5, r.size))
+			_draw_card(card, Rect2(-r.size * 0.5, r.size), true)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			keep.append(card)
 			continue
 		keep.append(card)
-		if shown >= VISIBLE_CARDS:
-			continue
+		# 2026-11-06: draw every card — the ones past the third sit outside the page
+		# until the row is dragged left, which is how #4 and #5 come into view.
 		_draw_card(card, card_rect(cid))
 		shown += 1
 	if keep.size() != cards.size():
@@ -419,7 +483,7 @@ func _draw() -> void:
 const PORTRAIT_H := 210.0
 
 
-func _draw_card(card: Dictionary, r: Rect2) -> void:
+func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	if r.size.x <= 0.0:
 		return
 	# 2026-11-06: the portrait belongs to the card now, so a retiring card takes its
@@ -472,7 +536,9 @@ func _draw_card(card: Dictionary, r: Rect2) -> void:
 	if int(card.get("star", 0)) > 0:
 		_draw_star_row(r, int(card.get("star", 0)))
 
-	if bool(card.get("done", false)) or _card_ready(card):
+	# 2026-11-06: the badge stays put once shown — it rides the shrink instead of
+	# blinking out on click and popping back during the animation.
+	if bool(card.get("done", false)) or bool(card.get("claim_pending", false)) or _card_ready(card):
 		# 2026-11-05: no green rim, no small check — one confirm badge centred on the card.
 		var confirm := _ui_texture("confirm")
 		var size := Vector2(126.0, 74.0)
@@ -484,13 +550,22 @@ func _draw_card(card: Dictionary, r: Rect2) -> void:
 
 
 ## Ready = the board already holds a chip that satisfies this card (or it was claimed).
+## 2026-11-06: a card is only ready when EVERY mission row can be paid right now.
+## Returning true on the first satisfiable row lit up cards whose other row was still
+## missing (the "last card is green but cannot be claimed" bug).
 func _card_ready(card: Dictionary) -> bool:
-	for item in _as_mission(card):
-		if bool(item.get("ready", false)):
-			return true
-		if int(item.get("have", 0)) >= int(item.get("need", 1)):
-			return true
-	return false
+	var items := _as_mission(card)
+	if items.is_empty():
+		return false
+	for item in items:
+		var have := int((item as Dictionary).get("have", 0))
+		var need := maxi(int((item as Dictionary).get("need", 1)), 1)
+		if have >= need:
+			continue
+		if bool((item as Dictionary).get("ready", false)):
+			continue
+		return false
+	return true
 
 
 func _as_mission(card: Dictionary) -> Array:

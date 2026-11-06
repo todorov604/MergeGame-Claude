@@ -127,6 +127,10 @@ func play_event(ev: Dictionary) -> bool:
 				"texture": payload.get("texture", null),
 			})
 		"deliver_chip":
+			var chip_from := _cell_anchor(payload.get("from", null))
+			var fp2 = payload.get("from_point", null)
+			if typeof(fp2) == TYPE_ARRAY and (fp2 as Array).size() >= 2:
+				chip_from = Vector2(float((fp2 as Array)[0]), float((fp2 as Array)[1]))
 			var target := order_at
 			var to_point = payload.get("to_point", null)
 			if typeof(to_point) == TYPE_ARRAY and (to_point as Array).size() >= 2:
@@ -135,7 +139,7 @@ func play_event(ev: Dictionary) -> bool:
 				"kind": "deliver_chip",
 				"start": at,
 				"dur": dur if dur > 0.0 else 0.55,
-				"from": _cell_anchor(payload.get("from", null)),
+				"from": chip_from,
 				"to": target,
 				"texture": payload.get("texture", null),
 			})

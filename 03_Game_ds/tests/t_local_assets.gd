@@ -66,6 +66,7 @@ const LOCAL_IDS := [
 	"ui_items_bar",
 	"ui_level_badge_bg",
 	"ui_level_paw",
+	"ui_red_dot",
 	"ui_reminder",
 	"ui_safe_1x7",
 	"ui_safe_2x2",
@@ -75,6 +76,8 @@ const LOCAL_IDS := [
 	"ui_safe_lock",
 	"ui_safe_unknown",
 	"ui_stamina",
+	"ui_stockpile_arrows",
+	"ui_stockpile_frame",
 	"ui_task_reward",
 ]
 
@@ -110,6 +113,9 @@ const LOCAL_FILES := {
 	"ui_exit_button": "exit_button.png",
 	"ui_generator_icon": "generator_icon.png",
 	"ui_icon_finish": "main_icon_finish.png",
+	"ui_red_dot": "red_dot_bg.png",
+	"ui_stockpile_arrows": "stockpile_arrows.png",
+	"ui_stockpile_frame": "stockpile_frame.png",
 	"ui_reminder": "reminder.png",
 	"ui_safe_1x7": "safe_1x7.png",
 	"ui_safe_2x2": "safe_2x2.png",
@@ -161,6 +167,9 @@ const UI_KEYS := {
 	"bag": "ui_button_secondary",
 	"items": "ui_items_bar",
 	"bar_board": "ui_bar_board",
+	"red_dot": "ui_red_dot",
+	"stockpile_arrows": "ui_stockpile_arrows",
+	"stockpile_frame": "ui_stockpile_frame",
 	"reminder": "ui_reminder",
 	"coin_reward": "ui_coin_reward",
 	"generator": "ui_generator_icon",
@@ -282,7 +291,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 223, "index = 180 snapshot records + 43 local records")
+	t.eq(guard.index.size(), 226, "index = 180 snapshot records + 46 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:

@@ -553,6 +553,45 @@
       "fit": "exact",
       "pending_manifest": true,
       "manifest_note": "2026-11-06 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_stockpile_frame": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "category": "界面",
+      "use": "库存/补给面板底板",
+      "file_name": "stockpile_frame.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/stockpile_frame.png",
+      "target_size": "156×156",
+      "actual_size": "156×156",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-06 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_stockpile_arrows": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "category": "界面",
+      "use": "库存面板右下角绿色箭头",
+      "file_name": "stockpile_arrows.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/stockpile_arrows.png",
+      "target_size": "42×48",
+      "actual_size": "42×48",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-06 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_red_dot": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon / HotelManor）",
+      "category": "界面",
+      "use": "红点计数底图（库存剩余次数）",
+      "file_name": "red_dot_bg.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/red_dot_bg.png",
+      "target_size": "50×51",
+      "actual_size": "50×51",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-06 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
     }
   }
 }

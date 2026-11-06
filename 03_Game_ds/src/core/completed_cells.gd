@@ -28,6 +28,16 @@ static func from_snapshot(snap: Dictionary) -> Array:
 					continue
 				wanted["%s@%d" % [String(slot[0]), int(slot[1])]] = true
 
+	# 2026-11-06: a chip that sits under an obstacle is not deliverable — the web / ice /
+	# box hides it until a neighbouring merge breaks the obstacle, so it must not turn a
+	# mission row (or its cell) green.
+	var blocked := {}
+	var raw_obs = (snap.get("board", {}) as Dictionary).get("obstacles", []) if typeof(snap.get("board", {})) == TYPE_DICTIONARY else []
+	if typeof(raw_obs) == TYPE_ARRAY:
+		for row in raw_obs:
+			if typeof(row) == TYPE_ARRAY and (row as Array).size() >= 2:
+				blocked["%d@%d" % [int((row as Array)[0]), int((row as Array)[1])]] = true
+
 	var out: Array = []
 	var board = snap.get("board", {})
 	if typeof(board) != TYPE_DICTIONARY:
@@ -39,6 +49,8 @@ static func from_snapshot(snap: Dictionary) -> Array:
 		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 4:
 			continue
 		var row: Array = raw
+		if blocked.has("%d@%d" % [int(row[0]), int(row[1])]):
+			continue
 		if wanted.has("%s@%d" % [String(row[2]), int(row[3])]):
 			out.append([int(row[0]), int(row[1])])
 	return out

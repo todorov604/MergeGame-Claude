@@ -224,3 +224,6 @@ ui_energy_bar,界面,体力条,243×90,PNG,自研,可用,P0,ui/energy_bar.png,,E
 ui_coin_bar,界面,金币条,255×82,PNG,自研,可用,P0,ui/coin_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0013_金币条.png,,PRODUCTION,公司自有（北京Icon）,255×82,exact,n/a,static
 ui_gem_bar,界面,钻石条,246×67,PNG,自研,可用,P0,ui/gem_bar.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0012_钻石条.png,,PRODUCTION,公司自有（北京Icon）,246×67,exact,n/a,static
 ui_coin_big,界面,奖励金币飞行图标,81×82,PNG,自研,可用,P1,ui/coin_big.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\最大金币.png,,PRODUCTION,公司自有（北京Icon）,81×82,exact,n/a,static
+ui_stockpile_frame,界面,库存/补给面板底板,156×156,PNG,自研,可用,P1,ui/stockpile_frame.png,,E:\MergeGame-Claude\01_icon\HotelManor_icon\界面切图\main_frame_stockpile.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,156×156,exact,n/a,static
+ui_stockpile_arrows,界面,库存面板右下角绿色箭头,42×48,PNG,自研,可用,P1,ui/stockpile_arrows.png,,E:\MergeGame-Claude\01_icon\HotelManor_icon\界面切图\common_icon_arroes.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,42×48,exact,n/a,static
+ui_red_dot,界面,红点计数底图（库存剩余次数）,50×51,PNG,自研,可用,P1,ui/red_dot_bg.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\红点纯背景.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,50×51,exact,n/a,static

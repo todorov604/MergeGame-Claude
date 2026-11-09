@@ -654,7 +654,7 @@ manifest（253 条 / 256 行）、assets_local（71 条）、PROVENANCE、主题
 
 ### 7.1 当前锚点
 
-- 分支 `main` @ `a4a20d1`（tag `录屏内容基本完成` 仍在 4943b0e）：§6.10 金币落点 / §6.11 交付枚数 / §6.12 卡面装饰（a50ff3c）、§6.13 / §6.14 新底图 + 钻石 + 体力奖励（2465f32）、**§6.15 / §6.16 4 个任务图标 + 两个新系列 + 立绘放大（a4a20d1）** 均已提交；之后的改动按 §7.3-6 等操作者说「提」再提
+- 分支 `main` @ `0df30ea`（tag `录屏内容基本完成` 仍在 4943b0e）：§6.10 金币落点 / §6.11 交付枚数 / §6.12 卡面装饰（a50ff3c）、§6.13 / §6.14 新底图 + 钻石 + 体力奖励（2465f32）、§6.15 / §6.16 4 个任务图标 + 两个新系列 + 立绘放大（a4a20d1）、**§6.17 / §6.18 / §6.19 角标三态 + 完成叹号 + 第 2 关棋盘重排（0df30ea）** 均已提交；之后的改动按 §7.3-6 等操作者说「提」再提
 - 测试 **3189 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）

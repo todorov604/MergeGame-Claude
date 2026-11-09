@@ -260,3 +260,44 @@ Get-CimInstance Win32_Process -Filter "Name LIKE '%Godot%'" |
 
 **配套规则（同一天踩的坑）**：交付飞行的数量 = `sim` 返回的 `taken` 数量，
 不再由视图层按任务行数猜；2 行任务的订单就是 2 枚、各自从自己的格子起飞（实机与成片同一份数据）。
+
+## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
+
+**状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
+
+### 7.1 当前锚点
+
+- 分支 `main` @ `4943b0e`，标签 `录屏内容基本完成`
+- 测试 **2515 checks / 0 failures**（`t_sim.gd` 216）；`check_portability.ps1` blocking = none
+- 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
+- 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
+
+### 7.2 今天踩过的坑（每条都真金白银）
+
+| # | 坑 | 后果 | 正解 |
+|---|---|---|---|
+| 1 | `evaluator.step()` 结果里没有 `payload` | `order_claim` 分支整段没执行：金币不动、hold 不存在、飞行不出 | 读事件本体 `ev.get("payload")` |
+| 2 | `_snap` 在事件循环里是上一帧 | 跨关查订单拿错关卡（第 2 关用了第 1 关的表） | 用 `_evaluator.sim.level_index` |
+| 3 | 交付只取"行优先第一枚匹配格" | 玩家点的格子不动（交了但没消失、绿框不退） | payload `src` 优先，回退循环加 `if found.x < 0` |
+| 4 | 视图层自己按任务行数循环飞芯片 | 凭空多飞一枚、棋盘留一个 | 一切以 sim 返回的 `taken` 为准 |
+| 5 | FlyAnim 没喂 `cell:x,y` 锚点 | 芯片从棋盘中心飞出来（看着像从 2×2/2×3 飞） | 每帧 `_refresh_flight_anchors()` 喂 63 个格心 + 订单卡中心 |
+| 6 | 交付飞行画在父层 `_draw()` | 被订单带盖住（"一个在上面一个在下面"） | 飞行层 add_child 在订单带之后；成片自绘那份删掉 |
+| 7 | 成片自绘 + 实机 FlyAnim 同时画 | 同一次交付两个芯片 | 只留一份（FlyAnim） |
+| 8 | `canvas_items` + 内嵌窗口被钳到 1080×1061 | 成片发虚、AVI 只有 540 宽 | `stretch=viewport`，窗口尺寸靠 override |
+| 9 | Godot 4 没有 `window/size/window_width` | 540 从来没生效 | 用 `window_width_override` |
+| 10 | 内嵌窗口无视 `get_window().size` | 运行时改窗口无效 | 同上，靠 override |
+| 11 | 自绘光标用 `get_local_mouse_position()` | 指针飘走 / 看不见 | 统一 `_mouse_canvas_point()`（窗口→画布换算） |
+| 12 | 成片手型光标画在父层 | 被棋盘盖住，渲染里没手 | `FilmOverlay` 用自己的 canvas item 画 |
+| 13 | `render.sh` 短跑没给 `--out` | 把成品 film.mp4 覆盖成 120 帧 | 短跑必须 `--out output/render/...` |
+| 14 | `frames/` 里残留半截 PNG | ffmpeg 抽帧退 -22 | 抽帧前先清空 `frames/` |
+| 15 | 大幅文件用正则盲改 | `Chrome._draw()` 被换成光标代码、编译报重名 | >500 行文件只用 read + 精确上下文 edit；脚本改要打印命中行 |
+| 16 | 拿过期截图当证据 | 同一个 48px 反复测、白烧几十分钟 | 比对 mtime / 字节数变了才可信 |
+| 17 | `output/` 下 PNG 被编辑器导入 | 每轮录制都触发导入、卡编辑器 | `output/.gdignore` |
+
+### 7.3 规矩（不是建议）
+
+1. **改 `src/core/` 必须配一条能反向失败的单测**，并亲手验证它会红（§6.9）。
+2. **视图层不许猜数量/位置**：一律用 sim 的 `taken` / `spawn` / 快照。
+3. **短跑不进成品目录**；完整出片才写 `output/mov/<stamp>/film.mp4`。
+4. **先打数据再改代码**：涉及"从哪飞到哪"，先打印起点/落点/来源格子三个数。
+5. **一次只改一个行为**：改完 编译 → 测试 → 一张图，再进下一个。

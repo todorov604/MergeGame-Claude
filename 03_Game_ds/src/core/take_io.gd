@@ -23,13 +23,16 @@ extends RefCounted
 const SCHEMA := 1
 ## How long the hand reads as "pressed" after a click, and how much it shrinks.
 const PRESS_SECONDS := 0.10
-const PRESS_SCALE := 0.92
+## 按下白环：0.25s 内从 0 扩散到 RING_RADIUS，透明度线性淡出。
+const RING_SECONDS := 0.25
+const RING_RADIUS := 150.0
+const PRESS_SCALE := 0.86
 
 const EventModel = preload("res://src/core/event_model.gd")
 
 
 static func build(seed_value: int, fps: int, duration: float, cursor: Array,
-		clicks: Array, timeline: Array, project_path: String) -> Dictionary:
+		clicks: Array, timeline: Array, project_path: String, drag: Array = []) -> Dictionary:
 	return {
 		"schema": SCHEMA,
 		"seed": seed_value,
@@ -38,8 +41,38 @@ static func build(seed_value: int, fps: int, duration: float, cursor: Array,
 		"project": project_path,
 		"cursor": cursor.duplicate(true),
 		"clicks": clicks.duplicate(true),
+		"drag": drag.duplicate(true),
 		"timeline": timeline.duplicate(true),
 	}
+
+
+## 拖动轨迹取样：{from: [x,y], pos: Vector2} 或 {}（不在拖动中）。
+## rows 是 [[t, from_x, from_y, pos_x, pos_y], ...]，按时间线性插值。
+static func drag_at(take: Dictionary, t: float) -> Dictionary:
+	var rows = take.get("drag", [])
+	if typeof(rows) != TYPE_ARRAY or (rows as Array).is_empty():
+		return {}
+	var arr: Array = rows
+	var head: Array = arr[0]
+	var tail: Array = arr[arr.size() - 1]
+	if t < float(head[0]) or t > float(tail[0]):
+		return {}
+	var prev: Array = head
+	var next: Array = head
+	for row in arr:
+		if typeof(row) != TYPE_ARRAY or (row as Array).size() < 5:
+			continue
+		if float((row as Array)[0]) <= t:
+			prev = row
+		else:
+			next = row
+			break
+	var t0 := float((prev as Array)[0])
+	var t1 := float((next as Array)[0])
+	var p := 0.0 if t1 <= t0 else clampf((t - t0) / (t1 - t0), 0.0, 1.0)
+	var pos := Vector2(float((prev as Array)[3]), float((prev as Array)[4])).lerp(
+			Vector2(float((next as Array)[3]), float((next as Array)[4])), p)
+	return {"from": [int((prev as Array)[1]), int((prev as Array)[2])], "pos": pos}
 
 
 ## Linear sample of the recorded path. `visible` is false when the take carries no

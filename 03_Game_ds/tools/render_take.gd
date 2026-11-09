@@ -61,6 +61,10 @@ func _initialize() -> void:
 	# mp4 / manifest / log 直接放在该目录下。
 	var out_dir := out_abs.get_base_dir()
 	var frames_dir := out_dir.path_join("frames")
+	# 2026-11-09：抽帧前先清空 frames/，否则上一轮残留的半截 PNG 会让 ffmpeg 退 -22。
+	if DirAccess.dir_exists_absolute(frames_dir):
+		for old_name in DirAccess.get_files_at(frames_dir):
+			DirAccess.remove_absolute(frames_dir.path_join(old_name))
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	DirAccess.make_dir_recursive_absolute(frames_dir)
 	var base := out_abs.get_basename()

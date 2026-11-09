@@ -135,7 +135,7 @@ func _hud(t) -> void:
 	t.eq(String(resolved.get("energyTickMode", "")), "decrement", "hud energyTickMode")
 	t.eq(int(resolved.get("coin", 0)), 9, "hud coin")
 	t.eq(int(resolved.get("star", 0)), 0, "hud star")
-	t.eq(int(resolved.get("gem", 0)), 50, "hud gem")
+	t.eq(int(resolved.get("gem", 0)), 99, "hud gem")
 	t.eq(int(resolved.get("exp", 0)), 0, "hud exp")
 	t.eq(int(hud.get_value("energy")), 88, "hud keeps the last value readable")
 

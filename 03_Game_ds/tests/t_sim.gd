@@ -35,6 +35,8 @@ func run(t) -> void:
 	_test_rare_pool(t)
 	_test_deliver(t)
 	_test_claim(t)
+	_test_claim_consumes_the_clicked_cell(t)
+	_test_claim_reports_consumed_cells(t)
 	_test_claim_unsatisfied_is_pure(t)
 	_test_level_flow(t)
 	_test_sample_run(t)
@@ -570,6 +572,77 @@ func _test_claim(t) -> void:
 	var junk = _new_sim(_deliver_project(), 3)
 	var r4: Dictionary = junk.apply({"type": "order_claim", "payload": {"order": "nope"}})
 	t.eq(String(r4.get("code", "")), "SIM_ORDER_UNKNOWN", "unknown order id")
+
+
+## 2026-11-09 回归：交付必须消耗"被点击的那一格"。
+## 之前 sim 只取行优先第一个匹配格，第 2 关棋子一多就会去别处取棋，
+## 玩家点的格子原地不动（看起来"交了但没消失"，绿框也不退）。
+func _test_claim_consumes_the_clicked_cell(t) -> void:
+	var m = ProjectModel.new()
+	t.ok(m.load_data(_clicked_cell_project()), "clicked-cell project loads")
+	var s = Sim.new()
+	s.setup(m, 3)
+	# 行优先第一枚是 (0,0)；玩家点的是 (2,0)。
+	t.ok(s.board.has_item(Vector2i(0, 0)), "(0,0) has the first row-major match")
+	t.ok(s.board.has_item(Vector2i(2, 0)), "(2,0) is the clicked cell")
+	var r: Dictionary = s.apply({"type": "order_claim",
+			"payload": {"order": "o1", "src": [2, 0]}})
+	t.ok(bool(r.get("ok", false)), "claim with src succeeds", str(r))
+	t.ok(not s.board.has_item(Vector2i(2, 0)), "the clicked cell is consumed")
+	t.ok(s.board.has_item(Vector2i(0, 0)), "the earlier row-major match is left alone")
+
+	# 第二行任务仍然走行优先回退：点击格只吃掉它匹配的那一行。
+	var s2 = Sim.new()
+	s2.setup(m, 3)
+	var r2: Dictionary = s2.apply({"type": "order_claim",
+			"payload": {"order": "o2", "src": [0, 0]}})
+	t.ok(bool(r2.get("ok", false)), "claim o2 with src (0,0)", str(r2))
+	t.ok(not s2.board.has_item(Vector2i(0, 0)), "clicked (0,0) consumed for o2")
+	t.ok(s2.board.has_item(Vector2i(2, 0)), "(2,0) untouched by o2 claim")
+
+
+func _clicked_cell_project() -> Dictionary:
+	return {
+		"version": 2,
+		"hud": _hud(),
+		"entities": _entities(),
+		"generators": {},
+		"characters": {"CH": {"display": "T"}},
+		"levels": [
+			{
+				"id": "c1",
+				"board": {"width": 3, "height": 1, "slots": [
+					{"x": 0, "y": 0, "entity": "A", "level": 2},
+					{"x": 2, "y": 0, "entity": "A", "level": 2},
+				]},
+				"obstacles": [],
+				"orders": [
+					{"id": "o1", "character": "CH",
+						"mission": [{"entity": "A", "level": 2}], "star": 1, "coin": 4},
+					{"id": "o2", "character": "CH",
+						"mission": [{"entity": "A", "level": 2}], "star": 1, "coin": 4},
+				],
+			},
+		],
+		"timeline": [],
+	}
+
+
+## 2026-11-09 回归：交付要把"真正被消耗的格子"回报给视图层，
+## 视图层据此为每一枚棋子播一次飞行动画（2 行任务就要飞 2 枚）。
+func _test_claim_reports_consumed_cells(t) -> void:
+	var m = ProjectModel.new()
+	t.ok(m.load_data(_clicked_cell_project()), "project loads")
+	var s = Sim.new()
+	s.setup(m, 3)
+	var r: Dictionary = s.apply({"type": "order_claim",
+			"payload": {"order": "o1", "src": [2, 0]}})
+	t.ok(bool(r.get("ok", false)), "claim ok", str(r))
+	var taken = r.get("taken", [])
+	t.ok(typeof(taken) == TYPE_ARRAY, "result carries taken")
+	t.eq((taken as Array).size(), 1, "one consumed cell reported")
+	t.eq(int((taken as Array)[0][0]), 2, "reported x is the clicked cell")
+	t.eq(int((taken as Array)[0][1]), 0, "reported y is the clicked cell")
 
 
 func _test_claim_unsatisfied_is_pure(t) -> void:

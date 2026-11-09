@@ -237,7 +237,7 @@ class Chrome extends Control:
 		# 2026-11-06: portraits are drawn by the order panel now (they must shrink with
 		# their card), so the chrome no longer paints them.
 		_sync_card_anchors(used)
-		_draw_topbar(snap)
+		# 2026-11-09：顶栏由 TopBar 组件绘制，这里不再画第二份。
 
 
 	## Card anchors in order-band local space (the panel sits at ORDER_BAND_Y).
@@ -572,7 +572,7 @@ class Cursor extends Control:
 	const HOTSPOT := Vector2(0.135, 0.004)
 	const SIZE := 96.0
 	const PRESS_SECONDS := 0.10
-	const PRESS_SCALE := 0.92
+	const PRESS_SCALE := 0.86
 
 	var host = null
 
@@ -581,12 +581,37 @@ class Cursor extends Control:
 			return
 		if host._freeze or not host._free_mode:
 			return
-		var point: Vector2 = host.get_local_mouse_position()
+		var point := _canvas_point()
 		var press := 1.0
 		if host._clock - float(host._last_click_at) <= PRESS_SECONDS:
 			press = PRESS_SCALE
 		var size := Vector2(SIZE, SIZE) * press
+		_draw_press_ring()
 		draw_texture_rect(host._cursor_tex, Rect2(point - HOTSPOT * size, size), false)
+
+
+	## 按下白环：与成片同一套参数（0.25s，18 -> 150px）。
+	func _draw_press_ring() -> void:
+		var age: float = float(host._clock) - float(host._last_click_at)
+		if age < 0.0 or age > TakeIo.RING_SECONDS:
+			return
+		var p := age / TakeIo.RING_SECONDS
+		var centre: Vector2 = host._last_click_point
+		var radius := lerpf(18.0, TakeIo.RING_RADIUS, p)
+		var alpha := 0.75 * (1.0 - p)
+		draw_arc(centre, radius, 0.0, TAU, 48, Color(1, 1, 1, alpha), 8.0, true)
+		draw_arc(centre, radius * 0.62, 0.0, TAU, 48, Color(1, 1, 1, alpha * 0.5), 4.0, true)
+
+
+	## 窗口像素 -> 画布像素：viewport 拉伸下窗口 540x960、画布 1080x1920。
+	func _canvas_point() -> Vector2:
+		var win := Vector2(DisplayServer.window_get_size())
+		var vp := get_viewport().get_visible_rect().size
+		if win.x <= 0.0 or win.y <= 0.0:
+			return Vector2.ZERO
+		var raw: Vector2 = Vector2(DisplayServer.mouse_get_position()) \
+				- Vector2(DisplayServer.window_get_position())
+		return Vector2(raw.x * vp.x / win.x, raw.y * vp.y / win.y)
 
 
 var board
@@ -648,10 +673,14 @@ var _rec_start: float = 0.0
 var _rec_cursor: Array = []
 var _rec_clicks: Array = []
 var _rec_events: Array = []
+## 拖动轨迹：[[t, from_x, from_y, pos_x, pos_y], ...]，成片按它回放"手拖着棋子走"。
+var _rec_drag: Array = []
 var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
 var _last_click_at: float = -1000.0
+## 最近一次点击的画布坐标（按下白环画在它上面）。
+var _last_click_point: Vector2 = Vector2.ZERO
 ## Coin-bar number pop after a reward lands.
 var _coin_pop_at: float = -1000.0
 ## 顶栏组件（与成片共用同一实现）。
@@ -704,6 +733,9 @@ func _ready() -> void:
 		var arg := String(raw)
 		if arg.begins_with("--preview="):
 			_preview_pending = float(arg.substr(10))
+	# 2026-11-09：默认"玩"是 50%（540x960）；出片（--write-movie）保持 1080x1920。
+	if _preview_pending <= 0.0 and not _is_movie_run():
+		_preview_pending = 0.5
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if size.x <= 0.0 or size.y <= 0.0:
 		size = PAGE
@@ -1471,7 +1503,7 @@ func _play_coin_reward(order_id: String) -> void:
 
 ## The claimed chip arcs from its board cell to the order card, growing to 2.5x and
 ## vanishing on arrival (fly_anim's "deliver_chip" motion owns the curve).
-func _play_claim_flight(order_id: String, cell: Vector2i, item: Dictionary) -> void:
+func _play_claim_flight(order_id: String, cell: Vector2i, item: Dictionary, delay: float = 0.0) -> void:
 	if fly == null:
 		return
 	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
@@ -1484,7 +1516,7 @@ func _play_claim_flight(order_id: String, cell: Vector2i, item: Dictionary) -> v
 	# synthetic "deliver_chip" event carries the texture and the drop point.
 	fly.play_event({
 		"type": "deliver_chip",
-		"at": _clock,
+		"at": _clock + delay,
 		"payload": {
 			"from": [cell.x, cell.y],
 			"order": order_id,
@@ -1535,6 +1567,7 @@ func _process(delta: float) -> void:
 			_note_sim_result(evaluator.step())
 	if _recording:
 		_sample_cursor()
+		_process_drag_sample()   # 拖动轨迹按帧率(60Hz)补采样
 	if _cursor_layer != null:
 		_cursor_layer.queue_redraw()
 	board.set_clock(_clock)
@@ -1637,15 +1670,35 @@ func _locale_text(key: String) -> String:
 
 ## F9 = 50% (540x960), F11 = 100% (1080x1920). Both keep the 1080x1920 design
 ## resolution, so layout, hit-testing and rendering stay identical.
+## 是否在 Movie Maker 录制：录制时不允许改窗口尺寸。
+func _is_movie_run() -> bool:
+	for arg in OS.get_cmdline_args():
+		if String(arg).begins_with("--write-movie"):
+			return true
+	return false
+
+
 func _cycle_preview(scale: float) -> void:
 	var target := Vector2i(int(round(1080.0 * scale)), int(round(1920.0 * scale)))
-	if DisplayServer.get_name() == "headless":
+	if DisplayServer.get_name() == "headless" or _is_movie_run():
 		return
 	get_window().size = target
 	var screen := DisplayServer.screen_get_size()
 	get_window().position = Vector2i(
 			maxi((screen.x - target.x) / 2, 0), maxi((screen.y - target.y) / 2, 0))
 	print("[game] preview window=", target.x, "x", target.y, " scale=", scale)
+
+
+## 窗口像素 -> 画布像素（viewport 拉伸下窗口 540x960、画布 1080x1920）。
+## 录制、点击、自绘光标都用它，保证三者坐标同一套。
+func _mouse_canvas_point() -> Vector2:
+	var win := Vector2(DisplayServer.window_get_size())
+	var vp := get_viewport().get_visible_rect().size
+	if win.x <= 0.0 or win.y <= 0.0:
+		return Vector2.ZERO
+	var raw: Vector2 = Vector2(DisplayServer.mouse_get_position()) \
+			- Vector2(DisplayServer.window_get_position())
+	return Vector2(raw.x * vp.x / win.x, raw.y * vp.y / win.y)
 
 
 func _input(event: InputEvent) -> void:
@@ -1692,6 +1745,7 @@ func _input(event: InputEvent) -> void:
 				var rcell := _cell_at(mouse.position)
 				if rcell.x >= 0 and _claim_from_cell(rcell):
 					_last_click_at = _clock
+					_last_click_point = _mouse_canvas_point()
 			return
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
@@ -1727,6 +1781,14 @@ func _begin_press(point: Vector2) -> void:
 
 ## A press on a chip that moves more than DRAG_THRESHOLD becomes a drag: the chip and
 ## its white frame follow the pointer (board_view renders both), selection is dropped.
+## 记一帧拖动位置（时间 + 起点格 + 当前中心点）。
+func _rec_drag_sample(at: Vector2) -> void:
+	if not _recording or not _dragging:
+		return
+	_rec_drag.append([snappedf(_rec_offset(), 0.001), _drag_from.x, _drag_from.y,
+			snappedf(at.x, 0.1), snappedf(at.y, 0.1)])
+
+
 func _maybe_start_drag(point: Vector2) -> void:
 	if not _pressing or _dragging:
 		return
@@ -1749,6 +1811,7 @@ func _maybe_start_drag(point: Vector2) -> void:
 	_selected = Vector2i(-1, -1)
 	_sync_from_sim()
 	board.set_drag_state({"from": _drag_from, "pos": centre})
+	_rec_drag_sample(centre)
 	var drag_tex: Texture2D = board.chip_texture(
 			String(_board_item(_drag_from).get("entity", "")),
 			int(_board_item(_drag_from).get("level", 1)))
@@ -1762,11 +1825,27 @@ func _maybe_start_drag(point: Vector2) -> void:
 			ghost.clear()
 
 
+## 每帧采样：拖动时按渲染帧率（60Hz）记一次，避免快速拖动轨迹太稀。
+func _process_drag_sample() -> void:
+	if not _recording or not _dragging:
+		return
+	var point := _mouse_canvas_point()
+	var at := point + _drag_grab
+	if _rec_drag.is_empty():
+		_rec_drag_sample(at)
+		return
+	var last: Array = _rec_drag[_rec_drag.size() - 1]
+	if absf(float(last[3]) - at.x) < 0.05 and absf(float(last[4]) - at.y) < 0.05:
+		return
+	_rec_drag_sample(at)
+
+
 func _update_drag(point: Vector2) -> void:
 	if not _dragging:
 		return
 	var at := point + _drag_grab
 	board.set_drag_state({"from": _drag_from, "pos": at})
+	_rec_drag_sample(at)
 	if ghost != null:
 		var tex: Texture2D = board.chip_texture(
 				String(_board_item(_drag_from).get("entity", "")),
@@ -1780,6 +1859,8 @@ func _update_drag(point: Vector2) -> void:
 ## Release: a drag either merges (same entity+level) or cancels; a press without
 ## movement stays the old click semantics (select / tap / claim / next).
 func _end_press(release_point: Vector2) -> void:
+	if _recording and _dragging:
+		_rec_drag_sample(release_point + _drag_grab)
 	if not _pressing:
 		return
 	# 2026-11-06: a row drag must never be read as a click on a card — otherwise
@@ -1806,6 +1887,7 @@ func _end_press(release_point: Vector2) -> void:
 			_pressing = false
 			board.drag_chip_visible = true
 			_last_click_at = _clock
+			_last_click_point = _mouse_canvas_point()
 			_record_click(point, {"kind": "order_claim", "ok": true})
 			return
 		var action: Dictionary = FreeMode.drag_action(_drag_from, to, evaluator.sim, model,
@@ -1820,6 +1902,7 @@ func _end_press(release_point: Vector2) -> void:
 		if kind == FreeMode.ACTION_MERGE or kind == FreeMode.ACTION_SWAP \
 				or kind == FreeMode.ACTION_MOVE:
 			_last_click_at = _clock
+			_last_click_point = _mouse_canvas_point()
 			var event_type := "drag" if kind == FreeMode.ACTION_MERGE else "swap"
 			if kind == FreeMode.ACTION_MOVE:
 				event_type = "move"
@@ -1864,6 +1947,10 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 	if order_id.is_empty():
 		return false
 	var item: Dictionary = evaluator.sim.board.item(cell)
+	# 交付会消耗若干枚棋子（2 行任务就 2 枚）；先记住它们交前的样子，交完逐枚播飞行。
+	var before := {}
+	for pos in evaluator.sim.board.cells.keys():
+		before[pos] = (evaluator.sim.board.item(pos) as Dictionary).duplicate(true)
 	_arm_claim_hold(order_id)
 	var result: Dictionary = _apply_free("order_claim",
 			{"order": order_id, "src": [cell.x, cell.y]})
@@ -1872,7 +1959,17 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 			orders.release_hold(order_id)
 		return false
 	_schedule_coin(order_id)
-	_play_claim_flight(order_id, cell, item)
+	var taken = result.get("taken", [])
+	if typeof(taken) == TYPE_ARRAY and (taken as Array).size() > 0:
+		for i in (taken as Array).size():
+			var raw = (taken as Array)[i]
+			if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 2:
+				continue
+			var pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
+			var it: Dictionary = before.get(pos, {})
+			_play_claim_flight(order_id, pos, it, 0.08 * float(i))
+	else:
+		_play_claim_flight(order_id, cell, item)
 	return true
 
 
@@ -1884,7 +1981,7 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 func _free_click() -> void:
 	if evaluator == null or evaluator.sim == null:
 		return
-	_free_click_at(get_global_mouse_position())
+	_free_click_at(_mouse_canvas_point())
 
 
 ## Same click, at an explicit page-space point. Split out so a headless probe can
@@ -1896,6 +1993,7 @@ func _free_click_at(point: Vector2) -> Dictionary:
 	if evaluator == null or evaluator.sim == null:
 		return {"kind": "none", "ok": false, "cell": null}
 	_last_click_at = _clock
+	_last_click_point = _mouse_canvas_point()
 	var out := {"kind": "none", "ok": false, "cell": null}
 	var cell := _cell_at(point)
 	if cell.x >= 0:
@@ -2057,7 +2155,7 @@ func _rec_offset() -> float:
 
 
 func _sample_cursor(force: bool = false) -> void:
-	var point := get_global_mouse_position()
+	var point := _mouse_canvas_point()
 	if not force and _rec_last.x > -1.0e8 and point.distance_to(_rec_last) < 0.25:
 		return
 	_rec_cursor.append([snappedf(_rec_offset(), 0.001), int(round(point.x)), int(round(point.y))])
@@ -2073,6 +2171,7 @@ func _start_recording() -> void:
 	_rec_cursor = []
 	_rec_clicks = []
 	_rec_events = []
+	_rec_drag = []
 	_rec_last = Vector2(-1.0e9, -1.0e9)
 	_sample_cursor(true)
 	board.show_toast("REC", TOAST_SECONDS)
@@ -2087,14 +2186,17 @@ func _stop_recording() -> void:
 	_recording = false
 	_sample_cursor(true)
 	var take := TakeIo.build(_seed, TAKE_FPS, _rec_offset(), _rec_cursor, _rec_clicks,
-			_rec_events, SAMPLE_PROJECT)
+			_rec_events, SAMPLE_PROJECT, _rec_drag)
 	var check: Dictionary = TakeIo.validate(take)
 	if not bool(check.get("ok", false)):
 		print("[game] take invalid: " + str(check.get("errors", [])))
 		return
 	var stamp := Time.get_datetime_string_from_system(false, false)
 	stamp = stamp.replace("-", "").replace(":", "").replace("T", "_")
-	var base := MOV_DIR + "/take_" + stamp
+	# 2026-11-09：一次录制 = 一个时间戳目录（take / 成片 / PNG 序列都在里面）。
+	var rec_dir := MOV_DIR + "/" + stamp
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(rec_dir))
+	var base := rec_dir + "/take_" + stamp
 	_take_path = base + ".take.json"
 	if not TakeIo.save(take, _take_path):
 		print("[game] take save FAILED " + _take_path)
@@ -2104,7 +2206,7 @@ func _stop_recording() -> void:
 		print("[game] --no-render set; film not started")
 		board.show_toast("take " + _take_path.get_file(), TOAST_SECONDS)
 		return
-	var movie_path := base + ".mp4"
+	var movie_path := rec_dir + "/film.mp4"
 	var pid := _spawn_render(_take_path, movie_path)
 	if pid > 0:
 		print("[game] rendering -> %s (pid %d)" % [movie_path, pid])

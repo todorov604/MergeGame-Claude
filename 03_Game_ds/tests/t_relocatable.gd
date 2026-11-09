@@ -116,8 +116,10 @@ func _test_project_config(t) -> void:
 			"viewport width is 1080")
 	t.eq(int(ProjectSettings.get_setting("display/window/size/viewport_height", 0)), 1920,
 			"viewport height is 1920")
-	t.eq(String(ProjectSettings.get_setting("display/window/stretch/mode", "")), "canvas_items",
-			"stretch mode is canvas_items")
+	# 2026-11-09：改成 viewport —— 窗口 540x960 玩，但根视口固定 1080x1920，
+	# 这样 Movie Maker 录出来的是真 1080 像素，而不是把 540 的画面放大。
+	t.eq(String(ProjectSettings.get_setting("display/window/stretch/mode", "")), "viewport",
+			"stretch mode is viewport (crisp 1080x1920 film)")
 	t.eq(String(ProjectSettings.get_setting("display/window/stretch/aspect", "")), "keep",
 			"stretch aspect is keep")
 

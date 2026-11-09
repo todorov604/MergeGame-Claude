@@ -685,35 +685,52 @@ func _do_order_claim(payload: Dictionary) -> Dictionary:
 	var mission: Array = order["mission"]
 	var plan: Array = []
 	var used := {}
+	# 2026-11-09：交付优先消耗"被点击的那一格"。以前只看 sorted_cells 的第一个匹配格，
+	# 第 2 关棋子多、订单多时就会去别处取棋，玩家点的格子原地不动（"交了但没消失"）。
+	var src_cell := INVALID_POS
+	var raw_src = payload.get("src", null)
+	if typeof(raw_src) == TYPE_ARRAY and (raw_src as Array).size() >= 2:
+		src_cell = Vector2i(int((raw_src as Array)[0]), int((raw_src as Array)[1]))
 	for k in range(mission.size()):
 		var need: Dictionary = mission[k]
 		if int(need["have"]) >= 1:
 			plan.append({"k": k, "delivered": true, "slot": INVALID_POS})
 			continue
 		var found := Vector2i(-1, -1)
-		for pos in board.sorted_cells():
-			if used.has(pos):
-				continue
-			var it: Dictionary = board.item(pos)
-			if String(it.get("entity", "")) == String(need["entity"]) and int(it.get("level", 1)) == int(need["level"]):
-				found = pos
-				break
+		if src_cell.x >= 0 and not used.has(src_cell) and board.has_item(src_cell):
+			var clicked: Dictionary = board.item(src_cell)
+			if String(clicked.get("entity", "")) == String(need["entity"]) \
+					and int(clicked.get("level", 1)) == int(need["level"]):
+				found = src_cell
+		if found.x < 0:
+			for pos in board.sorted_cells():
+				if used.has(pos):
+					continue
+				var it: Dictionary = board.item(pos)
+				if String(it.get("entity", "")) == String(need["entity"]) and int(it.get("level", 1)) == int(need["level"]):
+					found = pos
+					break
 		if found.x < 0:
 			return _err("SIM_ORDER_UNSATISFIED", "\"" + order_id + "\" still needs " + String(need["entity"]) + " lv" + str(int(need["level"])))
 		used[found] = true
 		plan.append({"k": k, "delivered": false, "slot": found})
 
+	var taken: Array = []
 	for step in plan:
 		var k: int = int(step["k"])
 		mission[k]["have"] = 0
 		if not bool(step["delivered"]):
 			board.take(step["slot"])
+			taken.append([int((step["slot"] as Vector2i).x), int((step["slot"] as Vector2i).y)])
 	order["done"] = true
 	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
 	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
 	if _all_orders_done():
 		level_complete_pending = true
-	return _ok("claimed \"" + order_id + "\"")
+	var out := _ok("claimed \"" + order_id + "\"")
+	# 视图层据此为每一枚被消耗的棋子播一次飞行动画（2 枚任务就飞 2 枚）。
+	out["taken"] = taken
+	return out
 
 
 # ------------------------------------------------------------ level / energy

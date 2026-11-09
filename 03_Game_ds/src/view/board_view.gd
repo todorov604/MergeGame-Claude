@@ -155,6 +155,8 @@ var allow_placeholders: bool = false
 ## and §20.5 items bar, so it can switch them off with one assignment.
 var show_debug_labels: bool = true
 var project_path: String = ""
+var _entities: Dictionary = {}
+var _generators: Dictionary = {}
 var level_index: int = 0
 var level_id: String = ""
 var board_width: int = COLS
@@ -258,6 +260,8 @@ func build_from_project(path: String, index: int = 0) -> Dictionary:
 
 	var entities := _as_dict(project.get("entities", {}))
 	var generators := _as_dict(project.get("generators", {}))
+	_entities = entities
+	_generators = generators
 
 	project_path = path
 	level_index = index
@@ -302,6 +306,26 @@ func build_from_project(path: String, index: int = 0) -> Dictionary:
 
 
 ## View state only: {"selected": [x, y], "completed": [[x, y], ...]}.
+## 成片用：把 sim 的棋子布局整体覆盖过来（[[x, y, entity, level], ...]）。
+## 实机是自己维护 _items，成片没有输入循环，只能每帧把快照盖过来。
+func set_chips(cells: Array) -> void:
+	_items.clear()
+	for raw in cells:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 4:
+			continue
+		var slot := {
+			"x": int((raw as Array)[0]),
+			"y": int((raw as Array)[1]),
+			"entity": String((raw as Array)[2]),
+			"level": int((raw as Array)[3]),
+		}
+		var key := Vector2i(int(slot["x"]), int(slot["y"]))
+		if not _in_bounds(key):
+			continue
+		_items[key] = _make_item(slot, _entities, _generators)
+	queue_redraw()
+
+
 func apply_state(state: Dictionary) -> void:
 	_selected = Vector2i(-1, -1)
 	_completed.clear()

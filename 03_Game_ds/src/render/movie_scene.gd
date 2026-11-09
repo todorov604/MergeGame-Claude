@@ -210,8 +210,13 @@ var _theme_loader = null
 var _live_band = null
 var _live_top = null
 var _live_bottom = null
+var _overlay = null
 var _live_board = null
 var _live_fly = null
+## 金币数字分批上涨（与实机同规则）：tick 队列 + 当前显示值 + 弹跳时刻。
+var _coin_ticks: Array = []
+var _coin_display: float = -1.0
+var _coin_pop_at: float = -1000.0
 var _board_level := -1
 var _band_level := -1
 var _guard_blocked: Array = []
@@ -339,10 +344,13 @@ func _ready() -> void:
 	# _draw() only reads the cache, so no frame ever touches the filesystem.
 	_resolve_ui_art()
 	_setup_live_board()
-	_setup_live_fly()
 	_setup_live_band()
 	_setup_live_top()
 	_setup_live_bottom()
+	# 交付飞行必须在订单带之后建（Godot 后添加的子节点画在上面），
+	# 否则芯片会被卡片盖住 —— 这正是"一个在上面、一个在下面"的那半。
+	_setup_live_fly()
+	_setup_overlay()
 	if not _take.is_empty() and not no_cursor:
 		_cursor_tex = _load_cursor()
 
@@ -452,7 +460,12 @@ func _load_cursor() -> Texture2D:
 
 
 func _draw_cursor() -> void:
-	if no_cursor or _take.is_empty() or _cursor_tex == null:
+	_paint_cursor(self)
+
+
+## 光标画到指定 CanvasItem（成片里必须画在最上层 overlay，否则被托管组件盖住）。
+func _paint_cursor(target: CanvasItem) -> void:
+	if no_cursor or _take.is_empty() or _cursor_tex == null or target == null:
 		return
 	var pos: Dictionary = TakeIo.cursor_at(_take, _t)
 	if not bool(pos.get("visible", false)):
@@ -462,7 +475,24 @@ func _draw_cursor() -> void:
 		press = TakeIo.PRESS_SCALE
 	var size := Vector2(CURSOR_SIZE, CURSOR_SIZE) * press
 	var origin := Vector2(float(pos["x"]), float(pos["y"])) - CURSOR_HOTSPOT_RATIO * size
-	draw_texture_rect(_cursor_tex, Rect2(origin, size), false)
+	_paint_press_ring(target)
+	target.draw_texture_rect(_cursor_tex, Rect2(origin, size), false)
+
+
+## 按下反馈：以点击点为中心扩散的白环（0.25s），与实机同一套参数。
+func _paint_press_ring(target: CanvasItem) -> void:
+	var click: Dictionary = TakeIo.click_at(_take, _t)
+	if click.is_empty():
+		return
+	var age := _t - float(click.get("t", -99.0))
+	if age < 0.0 or age > TakeIo.RING_SECONDS:
+		return
+	var p := age / TakeIo.RING_SECONDS
+	var centre := Vector2(float(click.get("x", 0.0)), float(click.get("y", 0.0)))
+	var radius := lerpf(18.0, TakeIo.RING_RADIUS, p)
+	var alpha := 0.75 * (1.0 - p)
+	target.draw_arc(centre, radius, 0.0, TAU, 48, Color(1, 1, 1, alpha), 8.0, true)
+	target.draw_arc(centre, radius * 0.62, 0.0, TAU, 48, Color(1, 1, 1, alpha * 0.5), 4.0, true)
 
 
 func _load_font(path: String) -> Font:
@@ -740,6 +770,8 @@ func _process(_delta: float) -> void:
 		# without this drain a zero-duration event exactly at the end would be lost
 		_advance_to(_end_time)
 	queue_redraw()
+	if _overlay != null:
+		_overlay.queue_redraw()
 	if _frame >= _total_frames:
 		_finish()
 
@@ -787,26 +819,30 @@ func _advance_to(t: float) -> void:
 				})
 		if channel == "sim" and bool(r.get("ok", false)) \
 				and (String(r.get("type", "")) == "merge" or String(r.get("type", "")) == "drag"):
-			var payload = (r.get("payload", {}) as Dictionary)
+			var payload = (ev.get("payload", {}) as Dictionary)
 			var to_raw = payload.get("to", [])
 			if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
 				_pulse = {"cell": Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])),
 						"started": float(r.get("at", t))}
 		if channel == "sim" and bool(r.get("ok", false)) \
 				and String(r.get("type", "")) == "order_claim":
-			var claim_payload = (r.get("payload", {}) as Dictionary)
+			var claim_payload = (ev.get("payload", {}) as Dictionary)
 			var src_raw = claim_payload.get("src", [])
 			var ord := String(claim_payload.get("order", ""))
 			if typeof(src_raw) == TYPE_ARRAY and (src_raw as Array).size() >= 2:
 				var src_cell := Vector2i(int((src_raw as Array)[0]), int((src_raw as Array)[1]))
 				var ord_rect := _claim_card_rect(ord)
-				_claim_flys.append({
-					"from": _slot_rect(src_cell.x, src_cell.y).get_center(),
-					"to": ord_rect.get_center(),
-					"texture": _claim_texture(ord),
-					"started": float(r.get("at", t)),
-				})
-				_play_claim_effects(ord, src_cell, float(r.get("at", t)))
+				_play_claim_effects(ord, src_cell, float(r.get("at", t)), r.get("taken", []))
+				# 交付后金库立刻 +N（sim 是瞬时的）；这笔 N 从关卡订单数据取，不依赖显示值。
+				var coin_after := int(_evaluator.sim.hud.get("coin", 0))
+				var gained := _order_coin_from_model(ord, int(_evaluator.sim.level_index))
+				if gained <= 0:
+					gained = maxi(coin_after - int(round(_coin_display)), 0)
+				_coin_display = minf(_coin_display, float(coin_after - gained))
+				_queue_coin_ticks(gained, float(r.get("at", t)))
+				if _live_band != null:
+					# 与实机同一时序：芯片 0.55s + 金币起飞后 1s，卡片才缩。
+					_live_band.hold_done(ord, 1.55)
 		if channel == "sim" and bool(r.get("ok", false)) \
 				and String(r.get("type", "")) in ["tap", "stockpile_tap"] and _live_board != null:
 			var spawn_now: Dictionary = _evaluator.sim.last_spawn
@@ -820,7 +856,7 @@ func _advance_to(t: float) -> void:
 					_live_board.start_fly(spawn_now, float(r.get("at", t)))
 		if channel == "sim" and bool(r.get("ok", false)) \
 				and String(r.get("type", "")) in ["merge", "drag"] and _live_board != null:
-			var pl = (r.get("payload", {}) as Dictionary)
+			var pl = (ev.get("payload", {}) as Dictionary)
 			var to_r = pl.get("to", [])
 			if typeof(to_r) == TYPE_ARRAY and (to_r as Array).size() >= 2:
 				_live_board.pulse(Vector2i(int((to_r as Array)[0]), int((to_r as Array)[1])),
@@ -915,8 +951,6 @@ func _draw() -> void:
 
 
 	_draw_view_layer()
-	_draw_toast()
-	_draw_cursor()
 
 
 ## Bottom band: metrics.band_height is the one theme knob with no other consumer, so
@@ -927,15 +961,56 @@ func _draw() -> void:
 ## 建面板：与实机同一位置/尺寸/主题，唯一差异是立绘交给成片自己画（层级）。
 ## 棋盘也托管实机组件（board_view）：进关建一次，之后每帧只推状态与时钟。
 ## 交付时：芯片飞向卡片（0.55s），然后金币螺旋飞到顶栏（与实机同一套 FlyAnim 事件）。
-func _play_claim_effects(order_id: String, cell: Vector2i, at: float) -> void:
+## 与实机同规则：tick 起点 = 芯片落地(0.55s)，0.85s 内均匀发完。
+func _queue_coin_ticks(amount: int, at: float) -> void:
+	if amount <= 0:
+		return
+	var n: int = clampi(amount / 5, 3, 8)
+	var start := at + 0.55
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		_coin_ticks.append({"at": start + gap * float(i),
+				"amount": base + (1 if i < rest else 0)})
+
+
+func _play_claim_effects(order_id: String, cell: Vector2i, at: float, taken: Array = []) -> void:
 	if _live_fly == null:
 		return
-	var texture := _claim_texture(order_id)
-	if texture != null:
-		var target := orders_anchor(order_id)
-		_live_fly.play_event({"type": "deliver_chip", "at": at, "payload": {
-			"from": [cell.x, cell.y], "order": order_id,
-			"to_point": [target.x, target.y], "texture": texture}})
+	# 与实机一致：sim 消耗了几枚就飞几枚（2 行任务的订单会飞两枚），
+	# 起点 = 每枚被消耗的格子，落点 = 订单卡中心。数据来自 sim 的 `taken`。
+	var target := orders_anchor(order_id)
+	var flown := 0
+	if typeof(taken) == TYPE_ARRAY:
+		for i in (taken as Array).size():
+			var raw = (taken as Array)[i]
+			if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 2:
+				continue
+			var pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
+			var it := _item_at_cell(pos)
+			var tex: Texture2D = null
+			if not it.is_empty():
+				tex = _chip_texture(String(it.get("entity", "")), int(it.get("level", 1)))
+			if tex == null:
+				tex = _claim_texture(order_id)
+			if tex == null:
+				continue
+			_live_fly.play_event({"type": "deliver_chip", "at": at + 0.08 * float(i), "payload": {
+				"from": [pos.x, pos.y], "order": order_id,
+				"to_point": [target.x, target.y], "texture": tex}})
+			flown += 1
+	if flown == 0:
+		var src_item := _item_at_cell(cell)
+		var texture: Texture2D = null
+		if not src_item.is_empty():
+			texture = _chip_texture(String(src_item.get("entity", "")), int(src_item.get("level", 1)))
+		if texture == null:
+			texture = _claim_texture(order_id)
+		if texture != null:
+			_live_fly.play_event({"type": "deliver_chip", "at": at, "payload": {
+				"from": [cell.x, cell.y], "order": order_id,
+				"to_point": [target.x, target.y], "texture": texture}})
 	var amount := _order_coin(order_id)
 	if amount > 0:
 		var centre := orders_anchor(order_id)
@@ -944,11 +1019,39 @@ func _play_claim_effects(order_id: String, cell: Vector2i, at: float) -> void:
 			"count": clampi(amount / 5, 3, 8), "texture": _ui("coin_big")}})
 
 
+
+## 交付前快照里某个格子的棋子（entity/level）；空格返回 {}。
+func _item_at_cell(cell: Vector2i) -> Dictionary:
+	var cells = (_snap.get("board", {}) as Dictionary).get("cells", [])
+	if typeof(cells) != TYPE_ARRAY:
+		return {}
+	for raw in cells:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 4:
+			continue
+		if int((raw as Array)[0]) == cell.x and int((raw as Array)[1]) == cell.y:
+			return {"entity": String((raw as Array)[2]), "level": int((raw as Array)[3])}
+	return {}
+
+
 func orders_anchor(order_id: String) -> Vector2:
 	if _live_band == null:
 		return Vector2(540.0, 320.0)
 	var r: Rect2 = _live_band.card_rect(order_id)
 	return r.get_center() + _live_band.position
+
+
+## 订单奖励金币：直接查关卡数据，和 sim 的瞬时到账解耦。
+func _order_coin_from_model(order_id: String, level_index: int = -1) -> int:
+	if _model == null:
+		return 0
+	var idx := level_index
+	if idx < 0:
+		idx = int(_snap.get("level_index", 0))
+	var level: Dictionary = _model.level(idx)
+	for raw in level.get("orders", []):
+		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
+			return int((raw as Dictionary).get("coin", 0))
+	return 0
 
 
 func _order_coin(order_id: String) -> int:
@@ -964,10 +1067,7 @@ func _setup_live_fly() -> void:
 	add_child(_live_fly)
 	_live_fly.set_palette(_colors)
 	_live_fly.set_metrics(_metrics)
-	var table := {}
-	table["hud:coin"] = Vector2(473.6, 49.6)
-	table["order:default"] = Vector2(540.0, 320.0)
-	_live_fly.set_anchors(table)
+	_refresh_flight_anchors()
 
 
 func _setup_live_board() -> void:
@@ -978,6 +1078,8 @@ func _setup_live_board() -> void:
 	_live_board.position = Vector2.ZERO
 	add_child(_live_board)
 	_live_board.set_chip_icons(_theme_loader, _model.project)
+	# 2026-11-09：棋盘也要拿到主题资源，否则拖动白角框（ui_select_frame）取不到贴图。
+	_live_board.set_asset_theme(_theme_loader, _model.project)
 	_live_board.show_debug_labels = false
 
 
@@ -991,6 +1093,21 @@ func _sync_live_board() -> void:
 		if not level.is_empty():
 			_live_board.build_from_level_data(level, _model.project.get("entities", {}), {})
 	_live_board.set_clock(_t)
+	# FlyAnim 的起点/落点全部来自实机几何：每帧刷新，芯片才会从"被点的那个格子"起飞。
+	_refresh_flight_anchors()
+	# 拖动回放：手拖着棋子走，起点格保留四边选中框（与实机同一套绘制）
+	var drag_now: Dictionary = TakeIo.drag_at(_take, _t)
+	if drag_now.is_empty():
+		_live_board.set_drag_state({})
+		_live_board.drag_chip_visible = true
+	else:
+		# 实机把棋子交给上层 ghost 画（含白角框）；成片没有 ghost 层，
+		# 所以让棋盘自己画棋子+白角框（common_main_frame_s / ui_select_frame）。
+		_live_board.drag_chip_visible = true
+		_live_board.set_drag_state(drag_now)
+	var cells_now = (_snap.get("board", {}) as Dictionary).get("cells", [])
+	if typeof(cells_now) == TYPE_ARRAY:
+		_live_board.set_chips(cells_now)
 	_live_board.apply_state({"selected": [-1, -1],
 			"completed": CompletedCells.from_snapshot(_snap)})
 	if _live_board.has_method("set_safeboxes") and _evaluator != null and _evaluator.sim != null:
@@ -1035,18 +1152,71 @@ func _push_live_top() -> void:
 	if _live_top == null or _snap.is_empty():
 		return
 	var hud: Dictionary = _snap.get("hud", {})
+	var coin_now := int(hud.get("coin", 0))
+	if _coin_display < 0.0:
+		_coin_display = float(coin_now)
+	if not _coin_ticks.is_empty():
+		var keep: Array = []
+		for row in _coin_ticks:
+			if _t >= float((row as Dictionary).get("at", 0.0)):
+				_coin_display = minf(_coin_display + float((row as Dictionary).get("amount", 0)),
+						float(coin_now))
+				_coin_pop_at = _t
+			else:
+				keep.append(row)
+		_coin_ticks = keep
+	elif absf(_coin_display - float(coin_now)) > 0.01:
+		_coin_display = lerpf(_coin_display, float(coin_now), 0.25)
+		if absf(_coin_display - float(coin_now)) < 1.0:
+			_coin_display = float(coin_now)
+	var pop := 0.0
+	var since := _t - _coin_pop_at
+	if since >= 0.0 and since < 0.35:
+		pop = 0.38 * sin(PI * since / 0.35)
 	_live_top.set_state({
 		"level": int(hud.get("level", 1)),
 		"energy": int(hud.get("energy", 0)),
 		"coin": int(hud.get("coin", 0)),
 		"gem": int(hud.get("gem", 0)),
 		"clock": _mmss(_energy_countdown()),
-		"coin_display": float(hud.get("coin", 0)),
-		"pop": 0.0,
+		"coin_display": _coin_display,
+		"pop": pop,
 	})
 
 
 ## 底栏同样托管实机组件。
+## 把实机棋盘的每格中心 + 订单卡中心喂给 FlyAnim（否则它只会退回棋盘中心）。
+func _refresh_flight_anchors() -> void:
+	if _live_fly == null or _live_board == null:
+		return
+	var table := {}
+	for y in 9:
+		for x in 7:
+			table["cell:%d,%d" % [x, y]] = _live_board.cell_rect(x, y).get_center()
+	table["hud:coin"] = Vector2(473.6, 49.6)
+	table["order:default"] = Vector2(540.0, 320.0)
+	if _live_band != null:
+		for card in _live_band.cards:
+			if typeof(card) != TYPE_DICTIONARY:
+				continue
+			var cid := String((card as Dictionary).get("id", ""))
+			if cid.is_empty():
+				continue
+			table["order:" + cid] = _live_band.card_rect(cid).get_center() + _live_band.position
+	_live_fly.set_anchors(table)
+
+
+## 最上层：手型光标 + toast，必须画在托管进来的实机组件之上。
+func _setup_overlay() -> void:
+	_overlay = FilmOverlay.new()
+	_overlay.name = "FilmOverlay"
+	_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_overlay.position = Vector2.ZERO
+	_overlay.size = _page
+	_overlay.host = self
+	add_child(_overlay)
+
+
 func _setup_live_bottom() -> void:
 	_live_bottom = BottomBarScene.new()
 	_live_bottom.name = "LiveBottomBar"
@@ -1312,6 +1482,13 @@ func _claim_texture(order_id: String) -> Texture2D:
 
 
 func _draw_claim_flys() -> void:
+	_paint_claim_flys(self)
+
+
+## 交付飞行的芯片要压在订单卡/顶栏之上（实机是最上层），所以由 FilmOverlay 调它。
+func _paint_claim_flys(target: CanvasItem) -> void:
+	if target == null:
+		return
 	var now := float(_frame) / float(FPS)
 	var alive: Array = []
 	for fly in _claim_flys:
@@ -1335,9 +1512,9 @@ func _draw_claim_flys() -> void:
 		var side: float = lerpf(120.0, 2.5 * 132.0, ease)
 		var alpha := 1.0 if t < 0.78 else clampf((1.0 - t) / 0.22, 0.0, 1.0)
 		var scale := side / maxf(size.x, 1.0)
-		draw_set_transform(pos, 0.0, Vector2(scale, scale))
-		draw_texture_rect(texture, Rect2(-size * 0.5, size), false, Color(1, 1, 1, alpha))
-		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		target.draw_set_transform(pos, 0.0, Vector2(scale, scale))
+		target.draw_texture_rect(texture, Rect2(-size * 0.5, size), false, Color(1, 1, 1, alpha))
+		target.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_claim_flys = alive
 
 
@@ -1491,7 +1668,6 @@ func _draw_board(snap: Dictionary) -> void:
 
 	for fly in _flys:
 		_draw_fly(fly)
-	_draw_claim_flys()
 
 	for cell in completed:
 		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
@@ -2219,3 +2395,13 @@ func _locale(key: String) -> String:
 	if typeof(val) != TYPE_STRING:
 		return key
 	return String(val)
+
+
+## 最上层绘制层：手型光标等"必须在所有托管组件之上"的东西。
+class FilmOverlay extends Control:
+	var host = null
+
+	func _draw() -> void:
+		if host == null:
+			return
+		host._paint_cursor(self)

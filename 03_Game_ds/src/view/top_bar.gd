@@ -74,18 +74,23 @@ func _ui(key: String) -> Texture2D:
 
 
 ## 等比放进矩形（与 panel 的 draw_ui_fit 同一规则）。
-func _draw_fit(key: String, rect: Rect2) -> bool:
+## 等比放进矩形；返回实际画出来的矩形（调用方按它的高度定字号）。
+func _draw_fit_rect(key: String, rect: Rect2) -> Rect2:
 	var texture := _ui(key)
 	if texture == null:
-		return false
+		return Rect2()
 	var src := texture.get_size()
 	if src.x <= 0.0 or src.y <= 0.0:
-		return false
+		return Rect2()
 	var scale: float = minf(rect.size.x / src.x, rect.size.y / src.y)
 	var size := src * scale
 	var at := rect.position + (rect.size - size) * 0.5
 	draw_texture_rect(texture, Rect2(at, size), false)
-	return true
+	return Rect2(at, size)
+
+
+func _draw_fit(key: String, rect: Rect2) -> bool:
+	return _draw_fit_rect(key, rect).size.x > 0.0
 
 
 func _font() -> Font:
@@ -96,6 +101,11 @@ func _font() -> Font:
 
 var font_bold: Font = null
 var font_fallback: Font = null
+
+
+## 与实机同一比例：数字高度约为 bar 实际高度的 0.54（74 高 -> 40px）。
+func _size_for(rect: Rect2) -> int:
+	return int(round(clampf(rect.size.y * 0.54, 26.0, 40.0)))
 
 
 func _text(r: Rect2, text: String, size_px: int, color: Color) -> void:
@@ -131,9 +141,13 @@ func _draw() -> void:
 		return
 	var bars := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
 	var rects := bar_rects()
+	var art_rects := {}
 	for key in bars.keys():
-		if not _draw_fit(String(bars[key]), rects[key]):
+		var art := _draw_fit_rect(String(bars[key]), rects[key])
+		if art.size.x <= 0.0:
 			draw_rect(rects[key], Color(1, 1, 1, 0.82), true)
+			art = rects[key]
+		art_rects[key] = art
 	var badge_drawn := _draw_fit("level_badge_bg", LEVEL_BADGE)
 	badge_drawn = _draw_fit("level_badge", LEVEL_BADGE) or badge_drawn
 	if not badge_drawn:
@@ -142,7 +156,8 @@ func _draw() -> void:
 			Color(1, 1, 1, 0.98))
 	var num_color := Color("#3B5C8F")
 	var energy_rect: Rect2 = rects["energy"]
-	_text(energy_rect, str(int(_state.get("energy", 0))), 40, num_color)
+	var digit_px := _size_for(energy_rect)
+	_text(energy_rect, str(int(_state.get("energy", 0))), digit_px, num_color)
 	var clock := String(_state.get("clock", ""))
 	var clock_rect := Rect2(energy_rect.position.x, energy_rect.position.y - 8.0,
 			energy_rect.size.x, 26.0)
@@ -157,11 +172,16 @@ func _draw() -> void:
 		if key == "coin" and float(_state.get("coin_display", -1.0)) >= 0.0:
 			shown = int(round(float(_state.get("coin_display", 0.0))))
 			pop = float(_state.get("pop", 0.0))
+		# 宝石条盘面比另外两根矮：数字统一缩到 0.62 档（36 -> 22），避免顶到盘面上下边
+		var px := digit_px if key == "coin" else maxi(int(round(float(digit_px) * 0.56)), 20)
+		if key == "gem":
+			rect = Rect2(rect.position + Vector2(rect.size.x * 0.10, 0.0),
+					Vector2(rect.size.x * 0.86, rect.size.y))
 		if pop > 0.001:
 			draw_set_transform(rect.get_center(), 0.0, Vector2(1.0 + pop, 1.0 + pop))
-			_text(Rect2(-rect.size * 0.5, rect.size), str(shown), 40, num_color)
+			_text(Rect2(-rect.size * 0.5, rect.size), str(shown), px, num_color)
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		else:
-			_text(rect, str(shown), 40, num_color)
+			_text(rect, str(shown), px, num_color)
 	if not _draw_fit("shop", SHOP):
 		draw_rect(SHOP, Color("#5B8DEF"), true)

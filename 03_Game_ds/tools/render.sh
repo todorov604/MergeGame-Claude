@@ -35,6 +35,7 @@ SCENE="res://src/render/movie_scene.tscn"
 FRAMES_ARG=""
 STAMP="$(date +%Y%m%d_%H%M%S)"
 OUT="output/mov/$STAMP/film.mp4"
+OUT_GIVEN=0
 PROJECT="res://data/sample_project.json"
 THEME=""
 TAKE=""
@@ -47,8 +48,8 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--frames) ARG="${2:-}"; FRAMES_ARG="$ARG"; shift 2 ;;
 		--frames=*) FRAMES_ARG="${1#*=}"; shift ;;
-		--out) OUT="${2:-}"; shift 2 ;;
-		--out=*) OUT="${1#*=}"; shift ;;
+		--out) OUT="${2:-}"; OUT_GIVEN=1; shift 2 ;;
+		--out=*) OUT="${1#*=}"; OUT_GIVEN=1; shift ;;
 		--project) PROJECT="${2:-}"; shift 2 ;;
 		--project=*) PROJECT="${1#*=}"; shift ;;
 		--take) TAKE="${2:-}"; shift 2 ;;
@@ -63,6 +64,12 @@ while [ $# -gt 0 ]; do
 		*) echo "[render] FAIL unknown argument: $1" >&2; exit 2 ;;
 	esac
 done
+
+# 2026-11-09：有 --take 又没指定 --out 时，成片写回 take 所在的同一个时间戳目录。
+if [ "$OUT_GIVEN" -eq 0 ] && [ -n "$TAKE" ]; then
+	TAKE_DIR="$(dirname "${TAKE#res://}")"
+	[ "$TAKE_DIR" != "." ] && OUT="$TAKE_DIR/film.mp4"
+fi
 
 START_MS=$(date +%s%3N 2>/dev/null || echo 0)
 
@@ -305,6 +312,8 @@ echo "[render] mp4 bytes=$MP4_BYTES"
 OUT_DIR="$(dirname "$OUT")"
 FRAMES_DIR="$OUT_DIR/frames"
 mkdir -p "$FRAMES_DIR" || fail "cannot create frames dir: $FRAMES_DIR"
+# 2026-11-09：先清空 frames/，上一轮残留的半截 PNG 会让 ffmpeg 抽帧退 -22。
+rm -f "$FRAMES_DIR"/*.png
 "$FFMPEG_BIN" -y -hide_banner -loglevel error -i "$OUT" \
 	-vf "scale=${WIDTH}:${HEIGHT}:flags=lanczos" "$FRAMES_DIR/%05d.png" \
 	|| fail "png extraction failed"

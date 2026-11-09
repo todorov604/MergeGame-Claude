@@ -211,6 +211,7 @@ var _live_band = null
 var _live_top = null
 var _live_bottom = null
 var _live_board = null
+var _live_fly = null
 var _board_level := -1
 var _band_level := -1
 var _guard_blocked: Array = []
@@ -338,6 +339,7 @@ func _ready() -> void:
 	# _draw() only reads the cache, so no frame ever touches the filesystem.
 	_resolve_ui_art()
 	_setup_live_board()
+	_setup_live_fly()
 	_setup_live_band()
 	_setup_live_top()
 	_setup_live_bottom()
@@ -804,6 +806,36 @@ func _advance_to(t: float) -> void:
 					"texture": _claim_texture(ord),
 					"started": float(r.get("at", t)),
 				})
+				_play_claim_effects(ord, src_cell, float(r.get("at", t)))
+		if channel == "sim" and bool(r.get("ok", false)) \
+				and String(r.get("type", "")) in ["tap", "stockpile_tap"] and _live_board != null:
+			var spawn_now: Dictionary = _evaluator.sim.last_spawn
+			if not spawn_now.is_empty():
+				if String(r.get("type", "")) == "stockpile_tap":
+					var sp: Dictionary = spawn_now.duplicate(true)
+					var sp_rect: Rect2 = Layout.STOCKPILE_RECT
+					sp["from_page"] = [sp_rect.get_center().x, sp_rect.get_center().y]
+					_live_board.start_fly(sp, float(r.get("at", t)))
+				else:
+					_live_board.start_fly(spawn_now, float(r.get("at", t)))
+		if channel == "sim" and bool(r.get("ok", false)) \
+				and String(r.get("type", "")) in ["merge", "drag"] and _live_board != null:
+			var pl = (r.get("payload", {}) as Dictionary)
+			var to_r = pl.get("to", [])
+			if typeof(to_r) == TYPE_ARRAY and (to_r as Array).size() >= 2:
+				_live_board.pulse(Vector2i(int((to_r as Array)[0]), int((to_r as Array)[1])),
+						"merge" if String(r.get("type", "")) == "merge" else "settle",
+						float(r.get("at", t)))
+		if channel == "sim" and bool(r.get("ok", false)) \
+				and String(r.get("type", "")) == "merge" and _live_board != null:
+			for row in _evaluator.sim.last_unlocks:
+				if typeof(row) != TYPE_DICTIONARY:
+					continue
+				var cr = (row as Dictionary).get("cell", [])
+				if typeof(cr) != TYPE_ARRAY or (cr as Array).size() < 2:
+					continue
+				_live_board.unlock(Vector2i(int((cr as Array)[0]), int((cr as Array)[1])),
+						String((row as Dictionary).get("kind", "")), float(r.get("at", t)))
 		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
 			var spawn: Dictionary = _evaluator.sim.last_spawn
 			if not spawn.is_empty():
@@ -894,6 +926,50 @@ func _draw() -> void:
 ## underneath them and is only visible in the no-asset fallback.
 ## 建面板：与实机同一位置/尺寸/主题，唯一差异是立绘交给成片自己画（层级）。
 ## 棋盘也托管实机组件（board_view）：进关建一次，之后每帧只推状态与时钟。
+## 交付时：芯片飞向卡片（0.55s），然后金币螺旋飞到顶栏（与实机同一套 FlyAnim 事件）。
+func _play_claim_effects(order_id: String, cell: Vector2i, at: float) -> void:
+	if _live_fly == null:
+		return
+	var texture := _claim_texture(order_id)
+	if texture != null:
+		var target := orders_anchor(order_id)
+		_live_fly.play_event({"type": "deliver_chip", "at": at, "payload": {
+			"from": [cell.x, cell.y], "order": order_id,
+			"to_point": [target.x, target.y], "texture": texture}})
+	var amount := _order_coin(order_id)
+	if amount > 0:
+		var centre := orders_anchor(order_id)
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.55, "payload": {
+			"from_point": [centre.x, centre.y], "amount": amount,
+			"count": clampi(amount / 5, 3, 8), "texture": _ui("coin_big")}})
+
+
+func orders_anchor(order_id: String) -> Vector2:
+	if _live_band == null:
+		return Vector2(540.0, 320.0)
+	var r: Rect2 = _live_band.card_rect(order_id)
+	return r.get_center() + _live_band.position
+
+
+func _order_coin(order_id: String) -> int:
+	for raw in _snap.get("orders", []):
+		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
+			return int((raw as Dictionary).get("coin", 0))
+	return 0
+
+
+func _setup_live_fly() -> void:
+	_live_fly = FlyAnimScene.new()
+	_live_fly.name = "LiveFly"
+	add_child(_live_fly)
+	_live_fly.set_palette(_colors)
+	_live_fly.set_metrics(_metrics)
+	var table := {}
+	table["hud:coin"] = Vector2(473.6, 49.6)
+	table["order:default"] = Vector2(540.0, 320.0)
+	_live_fly.set_anchors(table)
+
+
 func _setup_live_board() -> void:
 	if not is_instance_valid(_model):
 		return
@@ -917,6 +993,8 @@ func _sync_live_board() -> void:
 	_live_board.set_clock(_t)
 	_live_board.apply_state({"selected": [-1, -1],
 			"completed": CompletedCells.from_snapshot(_snap)})
+	if _live_board.has_method("set_safeboxes") and _evaluator != null and _evaluator.sim != null:
+		_live_board.set_safeboxes(_evaluator.sim.safeboxes)
 
 
 func _setup_live_band() -> void:
@@ -989,6 +1067,8 @@ func _sync_live_band() -> void:
 		if not level.is_empty():
 			_live_band.build_from_level(level)
 	_sync_live_board()
+	if _live_fly != null:
+		_live_fly.set_clock(_t)
 	_push_live_top()
 	_live_band.set_clock(_t)
 	_live_band.sync_orders(OrderRows.build(_snap, _model))
@@ -1153,6 +1233,7 @@ const OrderRows := preload("res://src/view/order_rows.gd")
 const TopBarScene := preload("res://src/view/top_bar.gd")
 const BottomBarScene := preload("res://src/view/bottom_bar.gd")
 const BoardScene := preload("res://src/view/board_view.tscn")
+const FlyAnimScene := preload("res://src/view/fly_anim.gd")
 const CARD_H := Layout.CARD_H
 const CARD_GAP := Layout.CARD_GAP_X
 ## 2026-11-06: 队列几何与实机 OrderPanel 对齐（左起点 250 / 卡宽 250 / 间距 18）。

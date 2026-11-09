@@ -142,6 +142,7 @@ const EXPECTED_IN_PROJECT := [
 	"ui_button_primary",
 	"ui_button_secondary",
 	"ui_energy_timer",
+	"ui_exclamation",
 	"ui_icon_star",
 	"ui_level_badge",
 	"ui_order_card",
@@ -283,7 +284,7 @@ func _test_in_project(t, resources: Dictionary) -> void:
 	declared.sort()
 
 	var expected := _sorted_string_array(EXPECTED_IN_PROJECT)
-	t.ok(declared.size() == 62, "exactly 62 records report in_project=true", str(declared.size()))
+	t.ok(declared.size() == 63, "exactly 63 records report in_project=true", str(declared.size()))
 	t.ok(declared == expected, "in_project=true ids are the 40 chip icons + 2 fonts + 5 placeholders + 15 layout files", _detail_values(declared))
 
 	# The flag must describe the disk, not a wish: recompute it from res://assets.

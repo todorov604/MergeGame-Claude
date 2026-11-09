@@ -276,7 +276,9 @@ func sync_orders(rows: Array) -> void:
 			_done_at[String(card.get("id", ""))] = _clock_now
 		var mission_rows = row.get("mission", [])
 		var items: Array = card["mission"]
-		var done := bool(card["done"])
+		# 2026-11-09：交任务那一刻起（含交付动画的 hold 期）角标就要读成 1/1 绿，
+		# 所以 claim_pending 也算"已交付"；sim 里的 have 仍是 0，这里只是显示推导。
+		var done := bool(card["done"]) or bool(card.get("claim_pending", false))
 		for i in range(items.size()):
 			# A claimed order reads as satisfied even though the sim zeroes `have`
 			# on claim; that is a display derivation, the sim data stays untouched.
@@ -587,12 +589,28 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 		# 2026-11-05: the mission slot shows the real chip icon when the loader can
 		# resolve it; the procedural tile stays as the no-asset fallback.
 		var icon := _chip_texture(String(item.get("entity", "")), int(item.get("level", 1)))
+		var done_chip := mission_badge_done(int(item.get("have", 0)),
+				int(item.get("need", 1)), bool(item.get("ready", false)))
+		# 2026-11-09：底板改成贴图（九宫格，倒角不缩放）：完成 = 浅绿框，未完成 = 米色框。
+		var plate_rect := mission_plate_rect(chip)
+		var frame := _ui_texture("mission_frame_done" if done_chip else "mission_frame_todo")
+		if frame != null:
+			_draw_nine(frame, plate_rect, minf(14.0, plate_rect.size.x * 0.28))
+		else:
+			_rounded(plate_rect, int(round(plate_rect.size.x * 0.22)),
+					MISSION_DONE_PLATE if done_chip else MISSION_TODO_PLATE)
 		if icon != null:
 			draw_texture_rect(icon, chip, false)
 		else:
 			_rounded(chip, 14, hue if ready else hue.lerp(Color(1.0, 1.0, 1.0), 0.28))
 			_rounded_outline(chip, 14, hue.darkened(0.22), 2)
 			_text_center(chip, String(item.get("label", "?")), 24, Color.WHITE)
+		# 2026-11-09：**只有真正收齐**（1/1、2/2）才加叹号；棋盘上刚合出来的 0/1 不给。
+		if mission_bang_visible(int(item.get("have", 0)), int(item.get("need", 1))):
+			_draw_mission_bang(chip)
+		# 每个任务棋子右下角带 "已收集/需要" 角标，完成时整块换成绿色。
+		_draw_mission_badge(chip, int(item.get("have", 0)), int(item.get("need", 1)),
+				bool(item.get("ready", false)))
 
 
 	_draw_reward_row(r, int(card.get("coin", 0)), 0.0)
@@ -639,6 +657,25 @@ const REWARD_LABEL_PX := 28
 const REWARD_LABEL_COLOR := Color(1.0, 1.0, 1.0, 1.0)
 const REWARD_LABEL_STROKE := Color("#304870")
 const REWARD_LABEL_STROKE_PX := 2.0
+## 2026-11-09：任务棋子右下角的 "已收集/需要" 角标。颜色取自操作者给的参考图：
+## 未完成 = 米白字 + 暖棕描边（#FCFCFC / #947450）；完成 = 亮绿字 + 深绿描边（#B0FC74 / #508018）。
+const MISSION_BADGE_PX := 28
+const MISSION_BADGE_STROKE_PX := 2.0
+const MISSION_BADGE_FILL_OPEN := Color("#FCFCFC")
+const MISSION_BADGE_STROKE_OPEN := Color("#947450")
+const MISSION_BADGE_FILL_DONE := Color("#B0FC74")
+const MISSION_BADGE_STROKE_DONE := Color("#508018")
+## 2026-11-09：任务收齐时棋子换成浅绿底板 + 左上角一枚绿色叹号（取色自操作者参考图）。
+const MISSION_DONE_PLATE := Color("#ACC08C")
+## 未完成底板的兜底色（有贴图时用 mission_frame_todo）。
+const MISSION_TODO_PLATE := Color("#E8D5C0")
+## 叹号贴在棋子的哪个角：参考图是左上角（false）；改 true 就跑到右上角。
+const MISSION_BANG_TOP_RIGHT := false
+## 叹号占棋子宽度的比例（参考图里它比底板还大，故意溢出）。
+const MISSION_BANG_SCALE := 0.40
+## 角标离棋子右下角的留白：往内缩一点，别压在卡片蓝条的分界线上。
+const MISSION_BADGE_PAD := 4.0
+const MISSION_BADGE_INSET := 6.0
 const REWARD_ICON_TEXT_GAP := 6.0
 ## 两组之间的间距（比组内的图标-数字间距大，读起来才是两组）
 const REWARD_PAIR_GAP := 16.0
@@ -950,6 +987,91 @@ func _c(key: String, fallback: Color) -> Color:
 	if value is Color:
 		return value
 	return fallback
+
+
+## 完成态底板：比棋子小一圈，**底边贴着蓝条**，只从上方和两侧收缩（操作者参考图口径）。
+static func mission_plate_rect(chip: Rect2) -> Rect2:
+	var inset_x := chip.size.x * 0.06
+	var inset_top := chip.size.y * 0.10
+	return Rect2(chip.position + Vector2(inset_x, inset_top),
+			chip.size - Vector2(inset_x * 2.0, inset_top))
+
+
+## 完成叹号的矩形：**以叹号的右下角为锚点**挂在底板左上角，所以会溢出底板。
+static func mission_bang_rect(chip: Rect2) -> Rect2:
+	var side := chip.size.x * MISSION_BANG_SCALE
+	var plate := mission_plate_rect(chip)
+	# 向中心收：右下角落在底板左上角往里 55% 叹号边长处，约等于"叹号中心压角"
+	var inset := side * 0.55
+	var anchor := plate.position + Vector2(inset, inset)
+	if MISSION_BANG_TOP_RIGHT:
+		anchor = Vector2(plate.end.x - inset, plate.position.y + inset)
+	# 右下角落在 anchor 上 -> 左上角 = anchor - side
+	return Rect2(anchor - Vector2(side, side), Vector2(side, side))
+
+
+## 叹号什么时候出现：**只认真正收齐**（1/1、2/2…）。棋盘上合出来了但还没交（0/1 绿）不给，
+## 这是操作者 2026-11-09 补的口径——和底板/角标的绿色判定是两件事。
+static func mission_bang_visible(have: int, need: int) -> bool:
+	return have >= maxi(need, 1)
+
+
+## 角标什么时候算"完成态（绿色）"：棋盘上已经有这枚棋子（ready），或已经交付（have >= need）。
+static func mission_badge_done(have: int, need: int, ready: bool) -> bool:
+	return ready or have >= maxi(need, 1)
+
+
+## 任务棋子右下角的 "have/need" 角标矩形（右下角对齐，宽按文字量出来）。
+static func mission_badge_rect(chip: Rect2, text_w: float) -> Rect2:
+	var box := Vector2(maxf(text_w, 1.0) + MISSION_BADGE_PAD, float(MISSION_BADGE_PX) * 1.3)
+	return Rect2(chip.end - box - Vector2(MISSION_BADGE_INSET, MISSION_BADGE_INSET), box)
+
+
+## 画"任务完成"的小叹号：有贴图就用贴图，没有就画同色的程序化叹号。
+func _draw_mission_bang(chip: Rect2) -> void:
+	var box := mission_bang_rect(chip)
+	var icon := _ui_texture("exclamation")
+	if icon != null:
+		draw_texture_rect(icon, box, false)
+		return
+	var w := box.size.x
+	_rounded(Rect2(box.position + Vector2(w * 0.38, w * 0.16), Vector2(w * 0.24, w * 0.46)),
+			8, Color("#98DC18"))
+	draw_circle(box.position + Vector2(w * 0.5, w * 0.80), w * 0.14, Color("#98DC18"))
+
+
+## 画一枚角标：描边（8 方向 + 4 对角）压正文，颜色随"是否收齐"切换。
+## 三态（2026-11-09 操作者口径）：
+##   0/1 棕色  = 还没有这枚棋子
+##   0/1 绿色  = 棋盘上已经合成出来了（多出来的一步）
+##   1/1 绿色  = 已经交付给订单
+func _draw_mission_badge(chip: Rect2, have: int, need: int, ready: bool) -> void:
+	var font: Font = _font_display()
+	if font == null:
+		font = _font
+	if font == null:
+		return
+	var want := maxi(need, 1)
+	var text := "%d/%d" % [clampi(have, 0, want), want]
+	var done := mission_badge_done(have, want, ready)
+	var text_w := _text_width(font, text, MISSION_BADGE_PX)
+	var label := mission_badge_rect(chip, text_w)
+	var stroke: Color = MISSION_BADGE_STROKE_DONE if done else MISSION_BADGE_STROKE_OPEN
+	var fill: Color = MISSION_BADGE_FILL_DONE if done else MISSION_BADGE_FILL_OPEN
+	var r := MISSION_BADGE_STROKE_PX
+	var ring: Array = []
+	for i in 8:
+		var a := TAU * float(i) / 8.0
+		ring.append(Vector2(cos(a), sin(a)) * r)
+	var d := r * 0.7071
+	ring.append(Vector2(d, d))
+	ring.append(Vector2(-d, d))
+	ring.append(Vector2(d, -d))
+	ring.append(Vector2(-d, -d))
+	for off in ring:
+		_text_center_font(font, Rect2(label.position + off, label.size), text,
+				MISSION_BADGE_PX, stroke)
+	_text_center_font(font, label, text, MISSION_BADGE_PX, fill)
 
 
 ## 2026-11-09：卡片底部蓝条里的奖励 —— 闪电（体力）在前、钻石在后，各自一个数字。

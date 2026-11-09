@@ -47,12 +47,14 @@ static func build(snap: Dictionary, model) -> Array:
 				var entity_id := String(slot["entity"])
 				var level := int(slot["level"])
 				var visual := _visual(model, entity_id)
+				var need := 1
+				var key := "%s@%d" % [entity_id, level]
 				mission.append({
 					"entity": entity_id,
 					"level": level,
 					"have": int(slot["have"]),
-					"need": 1,
-					"ready": ready_keys.has("%s@%d" % [entity_id, level]),
+					"need": need,
+					"ready": ready_keys.has(key),
 					"hue": Color.from_string(String(visual.get("hue", "")), DEFAULT_HUE),
 					"label": String(visual.get("label", entity_id.left(3))),
 				})

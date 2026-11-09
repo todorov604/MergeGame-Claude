@@ -710,6 +710,32 @@
       "pending_manifest": true,
       "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
     },
+    "ui_mission_frame_done": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（来源 Icon / HotelManor）",
+      "category": "界面切图",
+      "use": "任务棋子底板（已完成，浅绿）",
+      "file_name": "main_menu_frame1.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/mission_frame_done.png",
+      "target_size": "40×40",
+      "actual_size": "40×40",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-09 已登记 manifest v8；快照(manifest_index)仍是 v7"
+    },
+    "ui_mission_frame_todo": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（来源 Icon / HotelManor）",
+      "category": "界面切图",
+      "use": "任务棋子底板（未完成，米色）",
+      "file_name": "main_menu_frame2.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/mission_frame_todo.png",
+      "target_size": "40×40",
+      "actual_size": "40×40",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-09 已登记 manifest v8；快照(manifest_index)仍是 v7"
+    },
     "ui_order_card_bar": {
       "usage": "PRODUCTION",
       "license": "公司自有（来源 Icon / HotelManor）",

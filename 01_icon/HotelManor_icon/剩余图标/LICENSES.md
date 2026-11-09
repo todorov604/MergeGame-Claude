@@ -66,3 +66,4 @@
 - 音频（audio_*）未补：属于音效/BGM，不是图标。
 - 2026-11-09 新增两个棋子系列（任务图标扩到 4 个）：`icon_10001101..110.png`（零食袋，实体 CleanSet_Cc）
   与 `icon_10005101..110.png`（沙滩球，实体 CleanSet_Cd），均取自工程内 `01_icon/HotelManor_icon/棋子icon/`。
+- 2026-11-09 任务完成叹号：`exclamation.png`（由 `界面切图/main_icon_exclamation1.png` 复制，52×52）。

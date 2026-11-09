@@ -52,10 +52,18 @@ static func layout(width: int, height: int, seed_value: int, level_index: int, s
 		return out
 	var rng = Rng.make(seed_value + 9173, 7 + level_index)
 
-	# The wide locker always pins to the last row.
-	if sizes.has(SIZE_1X7):
-		var wide: Vector2i = BOX_SPECS[SIZE_1X7]
-		out.append(_box(SIZE_1X7, 0, height - wide.y, mini(wide.x, width), wide.y, rng))
+	# 2026-11-09: 宽的 1x7 柜子可以要**多个**（操作者：多加几个 7*1 那样的盒子）。
+	# 从最后一行往上叠，一行一个；行数不够就停止。原来只认一个，多写的会被静默丢掉。
+	var wide: Vector2i = BOX_SPECS[SIZE_1X7]
+	var wide_count := 0
+	for size in sizes:
+		if String(size) == SIZE_1X7:
+			wide_count += 1
+	for i in wide_count:
+		var row := height - wide.y - i
+		if row < 0:
+			break
+		out.append(_box(SIZE_1X7, 0, row, mini(wide.x, width), wide.y, rng))
 
 	# Two-row boxes pack left to right, one shuffled order, overflowing upwards.
 	var tall: Array = []
@@ -81,10 +89,10 @@ static func layout(width: int, height: int, seed_value: int, level_index: int, s
 	# Without the wide locker the two-row boxes anchor to the very bottom row instead
 	# of leaving an empty row underneath them.
 	var cursor_x := 0
-	var band_y := height - (3 if sizes.has(SIZE_1X7) else 2)
+	var band_y := height - (2 + wide_count)
 	# Keep every box inside the bottom four rows: a box that cannot fit there is
 	# dropped instead of floating in the middle of the board.
-	var band_floor := maxi(height - 5, 0)
+	var band_floor := maxi(height - 5 - wide_count, 0)
 	for size in tall:
 		var spec: Vector2i = BOX_SPECS[size]
 		if spec.y > height:

@@ -60,7 +60,10 @@
       "shop": "ui_button_shop",
       "order_card": "ui_order_card_bar",
       "gem": "ui_gem_icon",
-      "energy": "ui_energy_icon"
+      "energy": "ui_energy_icon",
+      "exclamation": "ui_exclamation",
+      "mission_frame_done": "ui_mission_frame_done",
+      "mission_frame_todo": "ui_mission_frame_todo"
     }
   },
   "chip_icons": {

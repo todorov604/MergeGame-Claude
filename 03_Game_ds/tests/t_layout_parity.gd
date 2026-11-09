@@ -222,6 +222,50 @@ func _card_decor_matches(t) -> void:
 	t.eq(Layout.PORTRAIT_H, 300.3, "立绘随卡宽放大到 1.25 倍")
 	solo.free()
 
+	# 2026-11-09：每个任务棋子右下角带 have/need 角标；完成前后两套颜色（取色自参考图）
+	# 叹号只认"真收齐"（操作者 2026-11-09 补的口径）：0/1 就绪也不给，1/1、2/2 才给
+	t.ok(not OrderPanel.mission_bang_visible(0, 1), "0/1 不该出现叹号")
+	t.ok(OrderPanel.mission_bang_visible(1, 1), "1/1 出现叹号")
+	t.ok(not OrderPanel.mission_bang_visible(1, 2), "1/2 还没收齐，不给叹号")
+	t.ok(OrderPanel.mission_bang_visible(2, 2), "2/2 收齐，给叹号")
+	t.ok(OrderPanel.mission_bang_visible(3, 2), "超过 need 也算收齐")
+
+	# 完成态：浅绿底板 + 左上角绿色叹号（参考图口径；常量可翻到右上角）
+	t.eq(OrderPanel.MISSION_DONE_PLATE, Color("#ACC08C"), "完成底板的浅绿取自参考图")
+	var chip1: Rect2 = (OrderPanel.mission_chip_rects(card, 1) as Array)[0]
+	var bang: Rect2 = OrderPanel.mission_bang_rect(chip1)
+	# 2026-11-09 操作者口径：以叹号**右下角**为锚点挂在底板左上角，故意溢出底板
+	var plate: Rect2 = OrderPanel.mission_plate_rect(chip1)
+	var bang_inset: float = bang.size.x * 0.55
+	t.ok(absf(bang.end.x - (plate.position.x + bang_inset)) < 0.01, "叹号右边缘收进底板左上角", str(bang))
+	t.ok(absf(bang.end.y - (plate.position.y + bang_inset)) < 0.01, "叹号下边缘收进底板左上角")
+	t.ok(not chip1.encloses(bang), "叹号溢出棋子（参考图里它比底板还大）")
+	t.ok(absf(bang.size.x - chip1.size.x * OrderPanel.MISSION_BANG_SCALE) < 0.01,
+			"叹号大小 = 棋子宽度 × MISSION_BANG_SCALE")
+	t.ok(OrderPanel.mission_plate_rect(chip1).size.x < chip1.size.x, "底板比棋子小一圈")
+
+	# 三态：0/1 棕（还没有）→ 0/1 绿（棋盘上合出来了）→ 1/1 绿（交任务之后）
+	t.ok(not OrderPanel.mission_badge_done(0, 1, false), "0/1 未就绪 = 棕色")
+	t.ok(OrderPanel.mission_badge_done(0, 1, true), "0/1 但棋盘上已有 = 绿色（多出来的一步）")
+	t.ok(OrderPanel.mission_badge_done(1, 1, false), "1/1 已交付 = 绿色")
+	t.ok(not OrderPanel.mission_badge_done(0, 1, false) == OrderPanel.mission_badge_done(0, 1, true),
+			"就绪与否决定颜色，跟数字无关")
+	t.eq(OrderPanel.MISSION_BADGE_FILL_OPEN, Color("#FCFCFC"), "未完成角标是米白字")
+	t.eq(OrderPanel.MISSION_BADGE_STROKE_OPEN, Color("#947450"), "未完成角标是暖棕描边")
+	t.eq(OrderPanel.MISSION_BADGE_FILL_DONE, Color("#B0FC74"), "完成角标换成亮绿字")
+	t.eq(OrderPanel.MISSION_BADGE_STROKE_DONE, Color("#508018"), "完成角标换成深绿描边")
+	t.ok(OrderPanel.MISSION_BADGE_FILL_OPEN != OrderPanel.MISSION_BADGE_FILL_DONE,
+			"完成时字色确实变了")
+	t.ok(OrderPanel.MISSION_BADGE_STROKE_OPEN != OrderPanel.MISSION_BADGE_STROKE_DONE,
+			"完成时描边色也变了")
+	var chip96: Rect2 = (OrderPanel.mission_chip_rects(card, 1) as Array)[0]
+	var badge: Rect2 = OrderPanel.mission_badge_rect(chip96, 34.0)
+	t.ok(chip96.encloses(badge), "角标落在棋子矩形内（右下角）", str(badge))
+	t.ok(absf(badge.end.x - (chip96.end.x - OrderPanel.MISSION_BADGE_INSET)) < 0.01,
+			"角标右边贴着棋子右内边")
+	t.ok(absf(badge.end.y - (chip96.end.y - OrderPanel.MISSION_BADGE_INSET)) < 0.01,
+			"角标下边贴着棋子下内边")
+
 	t.eq(OrderPanel.REWARD_ICON_H, 32.0, "两种奖励图标统一按高 32 画")
 	var origin := OrderPanel.reward_row_rects(card, 50.0, 20.0)
 	var e_icon: Rect2 = origin["energy_icon"]

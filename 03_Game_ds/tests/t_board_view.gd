@@ -129,7 +129,7 @@ func _parsing(t) -> void:
 	var r2: Dictionary = v.build_from_project(SAMPLE, 1)
 	t.ok(bool(r2.get("ok", false)), "level 2 builds", String(r2.get("error", "")))
 	t.eq(int(r2.get("items", 0)), 16, "level 2 has 16 items (15 chips + the generator)")
-	t.eq(int(r2.get("obstacles", 0)), 2, "level 2 has 2 obstacles")
+	t.eq(int(r2.get("obstacles", 0)), 16, "level 2 has 16 obstacles（2 排冰块 14 + web + lock）")
 	t.eq(String(r2.get("level_id", "")), "level_2", "level 2 id")
 
 	var missing: Dictionary = v.build_from_project("res://data/does_not_exist.json", 0)

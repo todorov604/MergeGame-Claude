@@ -503,7 +503,7 @@ assets_local +20（69 条）、PROVENANCE +20 行、LICENSES、`theme.chip_icons
 
 **验证**：
 - 探针回放该 take：4 次交付全 ok，`SIM_taken` 依次 1 / 2 / 4 / 1 枚（与任务数一致）
-- 测试 **2721 checks / 0 failures**
+- 测试 **3189 checks / 0 failures**
 - 出片：两张卡同屏，4 图标卡 = 4 个不同系列/等级，3 图标卡 = 降难度那单
 
 ### 6.16 立绘放大 + 第 1 关卡宽统一（2026-11-09，操作者第五次改界面）
@@ -535,6 +535,119 @@ assets_local +20（69 条）、PROVENANCE +20 行、LICENSES、`theme.chip_icons
 - 反向验证：把单卡分支改回按 anchor 宽度 → 1 条红；恢复后 2720 / 0
 - 出片：第 1/2 关的卡完全一致；立绘头顶落在药丸下方、下沿被卡面盖住
 
+### 6.17 任务棋子加 have/need 角标（2026-11-09，操作者第六次改界面）
+
+**操作者原话**：「任务栏继续加逻辑，现在每个 clip 的小任务都要带上右下角的角标 Label。
+格式就是数字/数字…收集程度要和任务绑定。Json 化配置。字体要用工程字体。
+外面的包边颜色要参考图片上红框内的颜色。0/1 表示有一个没收集。1/1 表示任务已经收集完成。
+收集完成之后字体要变颜色，字体包边的颜色也要变。」
+
+**取色（从参考图采样）**：
+- 未完成 `0/1`：字 `#FCFCFC`、描边 `#947450`（暖棕）
+- 已收齐 `1/1`：字 `#B0FC74`、描边 `#508018`（深绿）
+
+**三态（操作者最终口径：数字看交付，颜色看"能不能交"）**：
+
+| 状态 | 数字 | 颜色 | 触发 |
+|---|---|---|---|
+| 还没这枚棋子 | `0/1` | 米白 + 暖棕描边 | 棋盘上没有同款 |
+| 棋盘中已合出来 | `0/1` | **亮绿 + 深绿描边** | `ready`（CompletedCells 说这枚能付单） |
+| 交任务之后 | `1/1` | 亮绿 + 深绿描边 | `have >= need`，或卡片处于 `claim_pending`（交付 hold 期） |
+
+**实现**（都在 `order_panel` / `order_rows`，实机与成片同一份）：
+- `mission_badge_rect(chip, text_w)`：右下角、内缩 `MISSION_BADGE_INSET = 6`，宽按字宽、高 `28 × 1.3`
+- `mission_badge_done(have, need, ready)`：**纯函数**，决定绿不绿（`ready or have >= need`），便于断言
+- `_draw_mission_badge(chip, have, need, ready)`：`"%d/%d"`，描边 8+4 方向铺一圈再压正文；
+  字体 `_font_display()`（江城圆体 700W）
+- 数字来自 sim：`orders[].mission[].have/need`；`ready` 来自 `OrderRows` 的 `_ready_keys(snap)`
+  （棋盘上真的有这枚棋子）。**不新增视图侧计数**。
+- `sync_orders()` 里 `done or claim_pending` 时把 `have` 抬到 `need` —— 交任务那一刻起就读 `1/1` 绿，
+  但 sim 的 `have` 不改（纯显示推导，和 `_do_order_claim` 把 have 归零不冲突）
+
+**为什么成片里也能看到三态**：第 1 关 take 在 1.86s 有一次合并（两枚 Ca1 → Ca2，正好是 order_1 要的），
+所以帧 60 = `0/1` 棕、帧 130 = `0/1` 绿、帧 175（claim 之后）= `1/1` 绿。
+
+**顺手修掉的一个大坑**：`t_local_assets` 里 `LOCAL_FILES[id]` 用下标取字典，缺条目会**运行时崩**、
+整段循环静默中断 —— 之前 20 个新 chip 的 400 多条断言根本没跑过。改成 `.get(key, "<missing>")`
++ 先断言 `has()`，一崩变红；补条目后 checks 从 2720 涨到 **3138**。
+**这类"下标取字典 + 静默崩"是本项目最容易骗过测试的写法，见到就改成 `.get`。**
+
+### 6.18 任务完成：浅绿底板 + 绿色叹号（2026-11-09，操作者第七次改界面）
+
+**操作者原话**：「追加逻辑，当任务完成的时候，比如 1/1 或者 2/2，右上角加一个绿色的小叹号。
+icon 地址如下 `…/界面切图/main_icon_exclamation1.png`，记得归档。」→ 随后给了参考图。
+
+**素材**：`main_icon_exclamation1.png`（52×52）→ 归档目录 `剩余图标/exclamation.png`，
+工程副本**沿用快照里的文件名** `assets/ui/main_icon_exclamation1.png`。
+⚠ 坑：v7 快照里**已经有** `ui_exclamation` 这条记录（`in_project=false`），
+所以**不能**再往 `assets_local.json` 加同 id 的本地记录——guard 会把它记为 `local_override_rejected`
+（t_local_assets 立刻红），而且贴图解析不到。正确做法：按快照的 `file_name` 放文件 + 把 `in_project` 翻成 true。
+
+**两态底板都用贴图（2026-11-09 第二次追加）**：
+- 完成 = `main_menu_frame1.png`（浅绿圆角框）→ `ui_mission_frame_done`
+- 未完成 = `main_menu_frame2.png`（米色圆角框）→ `ui_mission_frame_todo`
+两个都是 40×40，画的时候用**九宫格**（`_draw_nine` + 角 14），所以放大到 ~86px 时倒角不变形。
+两个状态**底板一样大**（操作者：「一样的，和绿框一样大」），`mission_plate_rect(chip)` 里算一次：
+横向各缩 6%、上方缩 10%，**底边贴着蓝条**。
+
+**叹号的时机（操作者 2026-11-09 第三次修正）**：**只认"真收齐"**——
+`mission_bang_visible(have, need)` = `have >= need`，所以 `0/1`（哪怕棋盘上已经合出来、底板已绿）、
+`1/2` 都**不给**叹号；只有 `1/1`、`2/2`、`3/2` 这种才显示。
+**底板/角标的绿色**仍然是 `mission_badge_done(have, need, ready)`（就绪就绿），
+两套判定分开：绿色地板 = "能交"，叹号 = "已交"。
+
+**叹号几何**：`mission_bang_rect(chip)` **以叹号的右下角为锚点**，
+锚点落在底板左上角往里 `0.55 × 叹号边长` 处（约等于"叹号中心压住底板左上角"），
+边长 `MISSION_BANG_SCALE = 0.40 × 棋子宽`，所以会**溢出底板**——参考图就是这么画的。
+`MISSION_BANG_TOP_RIGHT` 改 `true` 可以整组翻到右上角（操作者文字说过右上角，图里是左上角）。
+
+**素材归档**：两张 frame 都按 §0 走了全流程——
+归档目录 `剩余图标/mission_frame_done.png` / `mission_frame_todo.png`，
+工程副本沿用原名 `assets/ui/main_menu_frame1.png` / `main_menu_frame2.png`，
+manifest（253 条 / 256 行）、assets_local（71 条）、PROVENANCE、主题槽位
+`mission_frame_done` / `mission_frame_todo`。
+
+**踩到的两个坑**：
+1. `var plate` 在同函数里已经有一份（卡片底图那条），内层再声明直接 Parse Error —— 改名 `done_plate`。
+2. `t_local_assets` 里 `LOCAL_FILES[id]` 用下标取字典，缺条目会**运行时崩**、整段循环静默中断
+   —— 之前 20 个新 chip 的 400 多条断言根本没跑过。改成 `.get(key, "<missing>")` + 先断言 `has()`。
+
+**验证**：
+- `t_layout_parity`：叹号右下角收在底板左上角内 0.55 边长处、叹号**溢出**棋子、边长 = 棋子宽 × 0.40、
+  底板比棋子小一圈
+- 素材计数：payload **111**、guard 索引 251（strict 226 / loose 246）、主题 ui 键 **60**、
+  validator 主题引用 **100**、`t_local_assets` 本地 id **71**
+- 出片：帧 60 = 米色底板 + `0/1` 棕；帧 130 = 绿色底板 + 左上叹号 + `0/1` 绿
+- 测试 **3189 checks / 0 failures**
+
+### 6.19 第 2 关棋盘重排：柜子行不再压棋子 + 两排冰块（2026-11-09，操作者第八次改界面）
+
+**操作者原话**：「第 2 关的 Json 好好配置一下。最下面的一排都和占位数的 Safe 重叠了呀。
+多加几个 7*1 那样的盒子，加 2，3 个带冰块的。」→ 看到我加了 3 个 1x7 柜子后纠正：
+「错了，加这个盒子。不是最下面的那个 Safe。」（配图是**冰块那个蓝盒子**）
+
+**问题**：`safes: ["1x7"]` 按 `Safeboxes.layout` 钉在**最后一行**（y=8），而第 2 关的 6 枚棋子
+也摆在 y=8 → 棋子和柜子占位重叠，画面上棋子"飘"在柜子上。
+
+**改法**：
+1. **棋子全部退出盒子行**：原来 y=7 / y=8 的 8 枚棋子搬到 y=3 / y=5 / y=2；
+   现在 y=6 / y=7 是冰块行、y=8 是柜子行，棋子只占 y=0..5。
+2. **两排"7×1 的冰块盒子"**：`obstacles` 里 `ice` 铺满 y=7 与 y=6 两整行（7×2 = 14 块），
+   加上原来的 `web` + `lock`，第 2 关共 **16 个障碍**。
+3. **`Safeboxes.layout` 支持多个 1x7**：原来 `sizes.has("1x7")` 只会放**一个**，多写的静默丢掉；
+   改成按个数从最后一行往上叠（`["1x7","1x7","1x7"]` → y=8/7/6），两行盒子带的起点也跟着下移。
+   （这一轮虽然最后没多用，但能力留着：以后要"多加几个柜子"直接写进 JSON 就行。）
+
+**联动改动（不 hip 就会踩）**：棋盘一变，录制的 take 里第 2 关的落点全废了——
+原来 swap/claim 都指向 y=7，那里现在是冰块行。做法是把 take 里第 2 关的
+`to` / `src` 从 y=7 批量改到 y=4，再把踩到生成器格 (3,4) 的两个事件挪到 (3,5)
+（`SIM_NOT_SWAPPABLE`），最后 `rejected=0`、4 次交付 `ok=true`、`SIM_taken` 仍是 1/2/4/1。
+
+**验证**：
+- 测试 **3189 checks / 0 failures**
+- 探针回放：4 次 claim 全 `ok=true`
+- 出片：第 2 关棋盘下半部分是「两排冰块 + 一排柜子」，棋子不再压柜子
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
@@ -542,7 +655,7 @@ assets_local +20（69 条）、PROVENANCE +20 行、LICENSES、`theme.chip_icons
 ### 7.1 当前锚点
 
 - 分支 `main` @ `a4a20d1`（tag `录屏内容基本完成` 仍在 4943b0e）：§6.10 金币落点 / §6.11 交付枚数 / §6.12 卡面装饰（a50ff3c）、§6.13 / §6.14 新底图 + 钻石 + 体力奖励（2465f32）、**§6.15 / §6.16 4 个任务图标 + 两个新系列 + 立绘放大（a4a20d1）** 均已提交；之后的改动按 §7.3-6 等操作者说「提」再提
-- 测试 **2721 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
+- 测试 **3189 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 

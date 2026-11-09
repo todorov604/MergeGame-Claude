@@ -4029,6 +4029,38 @@
       "nine_slice": "n/a",
       "animation": "static",
       "notes": "2026-11-09 新增系列 CleanSet_Cd 第 10 级（任务图标扩展到 4 个系列）；1:1 复制，sha256 8b23c826b9a971b0…"
+    },
+    {
+      "id": "ui_mission_frame_done",
+      "category": "界面切图",
+      "use": "任务棋子底板（已完成，浅绿）",
+      "priority": "P0",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（来源 Icon / HotelManor）",
+      "file": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\界面切图\\main_menu_frame1.png",
+      "target_size": "40×40",
+      "actual_size": "40×40",
+      "fit": "nine_slice",
+      "nine_slice": "14",
+      "animation": "static",
+      "notes": "2026-11-09 任务棋子底板；1:1 复制，sha256 5f8e40d36b172f0d…"
+    },
+    {
+      "id": "ui_mission_frame_todo",
+      "category": "界面切图",
+      "use": "任务棋子底板（未完成，米色）",
+      "priority": "P0",
+      "status": "可用",
+      "usage": "PRODUCTION",
+      "license": "公司自有（来源 Icon / HotelManor）",
+      "file": "E:\\MergeGame-Claude\\01_icon\\HotelManor_icon\\界面切图\\main_menu_frame2.png",
+      "target_size": "40×40",
+      "actual_size": "40×40",
+      "fit": "nine_slice",
+      "nine_slice": "14",
+      "animation": "static",
+      "notes": "2026-11-09 任务棋子底板；1:1 复制，sha256 133eb167ee6f73ce…"
     }
   ]
 }

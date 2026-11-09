@@ -88,6 +88,8 @@ const LOCAL_IDS := [
 	"ui_items_bar",
 	"ui_level_badge_bg",
 	"ui_level_paw",
+	"ui_mission_frame_done",
+	"ui_mission_frame_todo",
 	"ui_order_card_bar",
 	"ui_red_dot",
 	"ui_reminder",
@@ -102,14 +104,37 @@ const LOCAL_IDS := [
 	"ui_stockpile_arrows",
 	"ui_stockpile_frame",
 	"ui_task_reward",
+
 ]
 
 const LOCAL_FILES := {
 	"char_part1": "part1.png",
 	"char_part2": "part2.png",
 	"ui_bg_top": "main_bg_01_top.png",
+	"chip_clean_cc_lv01": "icon_10001101.png",
+	"chip_clean_cc_lv02": "icon_10001102.png",
+	"chip_clean_cc_lv03": "icon_10001103.png",
+	"chip_clean_cc_lv04": "icon_10001104.png",
+	"chip_clean_cc_lv05": "icon_10001105.png",
+	"chip_clean_cc_lv06": "icon_10001106.png",
+	"chip_clean_cc_lv07": "icon_10001107.png",
+	"chip_clean_cc_lv08": "icon_10001108.png",
+	"chip_clean_cc_lv09": "icon_10001109.png",
+	"chip_clean_cc_lv10": "icon_10001110.png",
+	"chip_clean_cd_lv01": "icon_10005101.png",
+	"chip_clean_cd_lv02": "icon_10005102.png",
+	"chip_clean_cd_lv03": "icon_10005103.png",
+	"chip_clean_cd_lv04": "icon_10005104.png",
+	"chip_clean_cd_lv05": "icon_10005105.png",
+	"chip_clean_cd_lv06": "icon_10005106.png",
+	"chip_clean_cd_lv07": "icon_10005107.png",
+	"chip_clean_cd_lv08": "icon_10005108.png",
+	"chip_clean_cd_lv09": "icon_10005109.png",
+	"chip_clean_cd_lv10": "icon_10005110.png",
 	"ui_bg_top_clean": "bg_top_clean.png",
 	"ui_bar_board": "bar_board.png",
+	"ui_mission_frame_done": "main_menu_frame1.png",
+	"ui_mission_frame_todo": "main_menu_frame2.png",
 	"ui_order_card_bar": "order_card_bar.png",
 	"ui_board_frame": "board_frame.png",
 	"ui_board_plate": "board_plate.png",
@@ -174,6 +199,9 @@ const UI_KEYS := {
 	"gem_bar": "ui_gem_bar",
 	"gem": "ui_gem_icon",
 	"energy": "ui_energy_icon",
+	"mission_frame_done": "ui_mission_frame_done",
+	"mission_frame_todo": "ui_mission_frame_todo",
+	"exclamation": "ui_exclamation",
 	"order_card": "ui_order_card_bar",
 	"char_blonde": "ui_char_blonde",
 	"char_customer": "ui_char_customer",
@@ -219,6 +247,28 @@ const UI_KEYS := {
 
 ## Real pixel sizes of the shipped copies (no scaling anywhere: fit = exact).
 const EXPECTED_SIZE := {
+	"ui_mission_frame_done": Vector2i(40, 40),
+	"ui_mission_frame_todo": Vector2i(40, 40),
+	"chip_clean_cc_lv01": Vector2i(182, 182),
+	"chip_clean_cc_lv02": Vector2i(182, 182),
+	"chip_clean_cc_lv03": Vector2i(182, 182),
+	"chip_clean_cc_lv04": Vector2i(182, 182),
+	"chip_clean_cc_lv05": Vector2i(182, 182),
+	"chip_clean_cc_lv06": Vector2i(182, 182),
+	"chip_clean_cc_lv07": Vector2i(182, 182),
+	"chip_clean_cc_lv08": Vector2i(182, 182),
+	"chip_clean_cc_lv09": Vector2i(182, 182),
+	"chip_clean_cc_lv10": Vector2i(182, 182),
+	"chip_clean_cd_lv01": Vector2i(182, 182),
+	"chip_clean_cd_lv02": Vector2i(182, 182),
+	"chip_clean_cd_lv03": Vector2i(182, 182),
+	"chip_clean_cd_lv04": Vector2i(182, 182),
+	"chip_clean_cd_lv05": Vector2i(182, 182),
+	"chip_clean_cd_lv06": Vector2i(182, 182),
+	"chip_clean_cd_lv07": Vector2i(182, 182),
+	"chip_clean_cd_lv08": Vector2i(182, 182),
+	"chip_clean_cd_lv09": Vector2i(182, 182),
+	"chip_clean_cd_lv10": Vector2i(182, 182),
 	"ui_board_frame": Vector2i(983, 1263),
 	"board_bg": Vector2i(1080, 1536),
 	"ui_items_bar": Vector2i(693, 183),
@@ -323,12 +373,14 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 249, "index = 180 snapshot records + 69 local records")
+	t.eq(guard.index.size(), 251, "index = 180 snapshot records + 71 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
-		t.eq(String(guard.entry(String(id)).get("file_name", "")), String(LOCAL_FILES[id]),
-				"local record %s names its source file" % String(id))
+		var key := String(id)
+		t.ok(LOCAL_FILES.has(key), "LOCAL_FILES has an entry for " + key)
+		t.eq(String(guard.entry(key).get("file_name", "")), String(LOCAL_FILES.get(key, "<missing>")),
+				"local record %s names its source file" % key)
 
 
 func _test_every_local_id_resolves(t) -> void:
@@ -336,8 +388,11 @@ func _test_every_local_id_resolves(t) -> void:
 	for id in LOCAL_IDS:
 		var key := String(id)
 		t.eq(guard.check_ref(key), "", "check_ref clears local PRODUCTION id " + key)
-		t.eq(guard.local_path(key), "res://assets/ui/" + String(LOCAL_FILES[key]),
-				"local_path resolves %s under res://assets/ui/" % key)
+		# 棋子走 assets/chips/，界面切图走 assets/ui/（2026-11-09 新增两个棋子系列）
+		var dir := "res://assets/chips/" if key.begins_with("chip_") else "res://assets/ui/"
+		t.ok(LOCAL_FILES.has(key), "LOCAL_FILES has an entry for " + key)
+		t.eq(guard.local_path(key), dir + String(LOCAL_FILES.get(key, "<missing>")),
+				"local_path resolves %s under %s" % [key, dir])
 		t.ok(FileAccess.file_exists(String(guard.local_path(key))),
 				"the copied file for %s really exists" % key)
 
@@ -528,7 +583,7 @@ func _test_default_theme_ui_block(t) -> void:
 	if ui.has("common_line") and not ui.has("line"):
 		ui["line"] = ui["common_line"]
 		ui.erase("common_line")
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 54 layout keys")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 58 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

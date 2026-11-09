@@ -1130,7 +1130,7 @@
       "actual_size": "52×52",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001101": {
       "usage": "PRODUCTION",

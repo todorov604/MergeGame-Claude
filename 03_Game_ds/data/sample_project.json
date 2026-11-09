@@ -646,55 +646,55 @@
           },
           {
             "x": 4,
-            "y": 7,
+            "y": 5,
             "entity": "CleanSet_Ca",
             "level": 5
           },
           {
             "x": 5,
-            "y": 7,
+            "y": 5,
             "entity": "CleanSet_Cc",
             "level": 5
           },
           {
-            "x": 0,
-            "y": 8,
-            "entity": "CleanSet_Cb",
-            "level": 4
-          },
-          {
             "x": 1,
-            "y": 8,
+            "y": 3,
             "entity": "CleanSet_Cb",
             "level": 4
           },
           {
             "x": 2,
-            "y": 8,
+            "y": 3,
+            "entity": "CleanSet_Cb",
+            "level": 4
+          },
+          {
+            "x": 3,
+            "y": 3,
             "entity": "CleanSet_Cb",
             "level": 5
           },
           {
-            "x": 3,
-            "y": 8,
-            "entity": "CleanSet_Cd",
-            "level": 5
-          },
-          {
             "x": 4,
-            "y": 8,
+            "y": 3,
             "entity": "CleanSet_Cd",
             "level": 5
           },
           {
             "x": 5,
-            "y": 8,
+            "y": 3,
+            "entity": "CleanSet_Cd",
+            "level": 5
+          },
+          {
+            "x": 6,
+            "y": 3,
             "entity": "CleanSet_Ca",
             "level": 4
           },
           {
             "x": 6,
-            "y": 8,
+            "y": 2,
             "entity": "CleanSet_Cb",
             "level": 2
           }
@@ -714,6 +714,104 @@
             0
           ],
           "type": "lock"
+        },
+        {
+          "slot": [
+            0,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            1,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            2,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            3,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            4,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            5,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            6,
+            7
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            0,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            1,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            2,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            3,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            4,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            5,
+            6
+          ],
+          "type": "ice"
+        },
+        {
+          "slot": [
+            6,
+            6
+          ],
+          "type": "ice"
         }
       ],
       "orders": [

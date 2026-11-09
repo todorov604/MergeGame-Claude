@@ -146,6 +146,26 @@
         "label": "WO",
         "hue": "#7FB069"
       }
+    },
+    "CleanSet_Cc": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cc",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#6FB3E0",
+        "label": "Cc"
+      }
+    },
+    "CleanSet_Cd": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cd",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#F2C14E",
+        "label": "Cd"
+      }
     }
   },
   "generators": {
@@ -583,18 +603,6 @@
         "height": 9,
         "slots": [
           {
-            "x": 1,
-            "y": 1,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          },
-          {
-            "x": 2,
-            "y": 1,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          },
-          {
             "x": 4,
             "y": 0,
             "entity": "CleanSet_Ca",
@@ -605,6 +613,18 @@
             "y": 0,
             "entity": "CleanSet_Ca",
             "level": 2
+          },
+          {
+            "x": 1,
+            "y": 1,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
+            "x": 2,
+            "y": 1,
+            "entity": "CleanSet_Ca",
+            "level": 1
           },
           {
             "x": 0,
@@ -623,6 +643,60 @@
             "y": 4,
             "entity": "CleanBox_C",
             "level": 1
+          },
+          {
+            "x": 4,
+            "y": 7,
+            "entity": "CleanSet_Ca",
+            "level": 5
+          },
+          {
+            "x": 5,
+            "y": 7,
+            "entity": "CleanSet_Cc",
+            "level": 5
+          },
+          {
+            "x": 0,
+            "y": 8,
+            "entity": "CleanSet_Cb",
+            "level": 4
+          },
+          {
+            "x": 1,
+            "y": 8,
+            "entity": "CleanSet_Cb",
+            "level": 4
+          },
+          {
+            "x": 2,
+            "y": 8,
+            "entity": "CleanSet_Cb",
+            "level": 5
+          },
+          {
+            "x": 3,
+            "y": 8,
+            "entity": "CleanSet_Cd",
+            "level": 5
+          },
+          {
+            "x": 4,
+            "y": 8,
+            "entity": "CleanSet_Cd",
+            "level": 5
+          },
+          {
+            "x": 5,
+            "y": 8,
+            "entity": "CleanSet_Ca",
+            "level": 4
+          },
+          {
+            "x": 6,
+            "y": 8,
+            "entity": "CleanSet_Cb",
+            "level": 2
           }
         ]
       },
@@ -648,8 +722,20 @@
           "character": "char_waitress",
           "mission": [
             {
+              "entity": "CleanSet_Cb",
+              "level": 4
+            },
+            {
+              "entity": "CleanSet_Cb",
+              "level": 5
+            },
+            {
+              "entity": "CleanSet_Cd",
+              "level": 5
+            },
+            {
               "entity": "CleanSet_Ca",
-              "level": 2
+              "level": 4
             }
           ],
           "coin": 25,
@@ -661,8 +747,16 @@
           "character": "char_blonde",
           "mission": [
             {
+              "entity": "CleanSet_Ca",
+              "level": 1
+            },
+            {
               "entity": "CleanSet_Cb",
               "level": 2
+            },
+            {
+              "entity": "CleanSet_Cb",
+              "level": 1
             }
           ],
           "coin": 22,
@@ -674,12 +768,12 @@
           "character": "char_customer",
           "mission": [
             {
-              "entity": "CleanSet_Ca",
-              "level": 1
+              "entity": "CleanSet_Cd",
+              "level": 5
             },
             {
-              "entity": "CleanSet_Cb",
-              "level": 1
+              "entity": "CleanSet_Ca",
+              "level": 5
             }
           ],
           "coin": 26,
@@ -691,12 +785,8 @@
           "character": "char_racer",
           "mission": [
             {
-              "entity": "CleanSet_Ca",
-              "level": 2
-            },
-            {
               "entity": "CleanSet_Cb",
-              "level": 1
+              "level": 4
             }
           ],
           "coin": 30,
@@ -708,12 +798,8 @@
           "character": "char_worker",
           "mission": [
             {
-              "entity": "CleanSet_Cb",
-              "level": 2
-            },
-            {
-              "entity": "CleanSet_Ca",
-              "level": 1
+              "entity": "CleanSet_Cc",
+              "level": 5
             }
           ],
           "coin": 20,

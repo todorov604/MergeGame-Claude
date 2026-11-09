@@ -21,7 +21,7 @@ const MARGIN := 18.0
 const Layout := preload("res://src/view/layout_shared.gd")
 const MAX_CARD_W := Layout.QUEUE_CARD_W
 const CARD_GAP_X := Layout.CARD_GAP_X
-const VISIBLE_CARDS := 3
+const VISIBLE_CARDS := 2
 ## The queue starts where level 1's single card does (portrait centre 393 - card/2), so
 ## the left side of the band stays free for other UI.
 const QUEUE_ORIGIN_X := Layout.QUEUE_ORIGIN_X
@@ -495,18 +495,11 @@ func _layout() -> void:
 		_target_x[cid1] = start_x + float(i) * (card_w + gap)
 		if not _x_now.has(cid1):
 			_x_now[cid1] = float(_target_x[cid1])
-		var rect := Rect2(float(_x_now[cid1]) + _row_offset,
+		# 2026-11-09：**单卡不再有任何特殊路径**。操作者的口径是"第 1 关和第 2 关的任务栏
+		# 是同一套设计，只是配置了 1 张卡 + 1 个任务"，所以宽/高/位置/间距全部走同一公式；
+		# set_card_anchors 保留 API 但不再参与几何（它只会让第 1 关和别的关长得不一样）。
+		_rects[String(cards[i]["id"])] = Rect2(float(_x_now[cid1]) + _row_offset,
 				start_y, card_w, card_h)
-		if _anchors.size() == n:
-			# WYSIWYG anchor: the card is as wide as its character and bottom-aligned.
-			var a: Dictionary = _anchors[i]
-			var w := maxf(float(a.get("width", card_w)), 200.0)
-			var bottom := float(a.get("bottom", start_y + card_h))
-			var cx := float(a.get("center", rect.get_center().x))
-			# 2026-11-06: the anchored (single card) path must follow the row drag too —
-			# it used to overwrite the offset and killed the rubber band on level 1.
-			rect = Rect2(QUEUE_ORIGIN_X + _row_offset, bottom - card_h, w, card_h)
-		_rects[String(cards[i]["id"])] = rect
 
 
 # --------------------------------------------------------------------- drawing
@@ -559,8 +552,10 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	if portrait != null:
 		var source := portrait.get_size()
 		var w: float = PORTRAIT_H * (source.x / maxf(source.y, 1.0))
+		# 2026-11-09：头顶落在顶栏下沿（卡片上沿往上 PORTRAIT_TOP_ABOVE_CARD），
+		# 下沿压进卡片、被卡面覆盖。别再写死像素。
 		draw_texture_rect(portrait, Rect2(Vector2(r.get_center().x - w * 0.5,
-				r.position.y + 26.0 - PORTRAIT_H), Vector2(w, PORTRAIT_H)), false)
+				r.position.y - Layout.PORTRAIT_TOP_ABOVE_CARD), Vector2(w, PORTRAIT_H)), false)
 	var radius := int(round(float(metrics.get("card_radius", 22.0))))
 	var card_bg: Color = _c("card", Color.WHITE)
 	var card_edge: Color = _c("card_edge", Color("#BACCE0"))
@@ -625,6 +620,10 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 ## 而卡片只有 140 高 —— 图标顶到卡片上下边、左右溢出，看着像贴纸糊上去的。
 ## 现在 96 见方、垂直居中、两枚时按 gap 排开；单测 t_layout_parity 断言不越界。
 const CHIP_SIZE := 96.0
+## 4 枚挤一张卡时的下限（正常只用到 89）。
+const CHIP_MIN_SIZE := 56.0
+## 棋子行两侧的内边距。
+const CHIP_SIDE_PAD := 16.0
 const CHIP_GAP := 14.0
 
 ## 2026-11-09：蓝条比例的唯一来源是 layout_shared（实机/成片共用），这里只做别名。
@@ -698,17 +697,27 @@ static func reward_row_rects(card_rect: Rect2, energy_w: float, gem_w: float) ->
 	return out
 
 
+## 2026-11-09：一张卡最多 4 枚任务棋子。CHIP_SIZE(96) 是**上限**：
+## 4 枚时按卡片宽度自动缩到 ~89px，2~3 枚时仍是 96，看起来和以前一样。
+static func chip_size_for(card_rect: Rect2, count: int) -> float:
+	if count <= 0:
+		return CHIP_SIZE
+	var room := card_rect.size.x - CHIP_SIDE_PAD * 2.0 - CHIP_GAP * float(maxi(count - 1, 0))
+	return clampf(room / float(count), CHIP_MIN_SIZE, CHIP_SIZE)
+
+
 static func mission_chip_rects(card_rect: Rect2, count: int) -> Array:
 	var out: Array = []
 	if count <= 0:
 		return out
-	var row := CHIP_SIZE * float(count) + CHIP_GAP * float(maxi(count - 1, 0))
+	var size := chip_size_for(card_rect, count)
+	var row := size * float(count) + CHIP_GAP * float(maxi(count - 1, 0))
 	var x := (card_rect.size.x - row) * 0.5
 	for i in count:
 		out.append(Rect2(
-				card_rect.position + Vector2(x + (CHIP_SIZE + CHIP_GAP) * float(i),
-						(card_rect.size.y - CHIP_SIZE) * 0.5),
-				Vector2(CHIP_SIZE, CHIP_SIZE)))
+				card_rect.position + Vector2(x + (size + CHIP_GAP) * float(i),
+						(card_rect.size.y - size) * 0.5),
+				Vector2(size, size)))
 	return out
 
 

@@ -29,7 +29,7 @@ const PAYLOAD_USAGES := ["PRODUCTION", "PLACEHOLDER"]
 ## + 21 layout copies (9 files no table carried before + 12 snapshot files that were
 ##   registered but never copied)
 ## + 1 CC0 cursor (ui_cursor_hand, 2026-11-05 free mode)
-const EXPECTED_PAYLOAD_COUNT := 88
+const EXPECTED_PAYLOAD_COUNT := 108
 
 const SNAPSHOT_RESOURCE_COUNT := 180
 
@@ -161,7 +161,7 @@ func _test_asset_allowlist(t) -> void:
 
 	t.ok(all_files.has(PROVENANCE_PATH), "PROVENANCE.md governance document is present")
 	t.eq(payload_files.size(), EXPECTED_PAYLOAD_COUNT,
-			"assets contains exactly eighty-eight payload files")
+			"assets contains exactly one-hundred-eight payload files")
 	t.ok(unexpected.size() == 0,
 			"every payload file under res://assets is registered in the snapshot or in data/assets_local.json",
 			_detail_paths(unexpected))

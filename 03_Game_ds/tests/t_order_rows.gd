@@ -151,7 +151,7 @@ func _done_mirrors_the_sim(t) -> void:
 	t.ok(bool(advanced.get("ok", false)), "the real sim advances to level_2", str(advanced))
 	var queue: Array = OrderRows.build(sim.snapshot(), model)
 	t.eq(queue.size(), 5, "level_2 hands the panel a five-card queue")
-	t.eq(_mission_count(queue), 8, "level_2 totals eight mission rows")
+	t.eq(_mission_count(queue), 11, "level_2 totals eleven mission rows")
 	t.eq(_done_count(queue), 0, "a fresh queue has no claimed card")
 
 

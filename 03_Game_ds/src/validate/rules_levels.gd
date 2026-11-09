@@ -429,8 +429,21 @@ static func _check_orders(ctx) -> void:
 			var mission = (o as Dictionary).get("mission", [])
 			if typeof(mission) != TYPE_ARRAY:
 				continue
-			if (mission as Array).size() < 1 or (mission as Array).size() > 2:
-				ctx.err("ORDER_MISSION_COUNT", base + ".mission", "M0 orders need 1-2 mission items (got %d)" % (mission as Array).size())
+			# 2026-11-09：订单卡改成 4 个任务图标（同卡内不重复），上限跟着放到 4。
+			if (mission as Array).size() < 1 or (mission as Array).size() > 4:
+				ctx.err("ORDER_MISSION_COUNT", base + ".mission", "orders need 1-4 mission items (got %d)" % (mission as Array).size())
+			var seen_mission := {}
+			for raw_m in (mission as Array):
+				if typeof(raw_m) != TYPE_DICTIONARY:
+					continue
+				# 用 str() 而不是 String()：String(int) 在 Godot 4 里会直接崩，
+				# 一崩整段任务校验就静默中断（2026-11-09 踩到）。
+				var sig := "%s@%s" % [str((raw_m as Dictionary).get("entity", "")),
+						str((raw_m as Dictionary).get("level", 1))]
+				if seen_mission.has(sig):
+					ctx.err("ORDER_MISSION_DUP", base + ".mission", "mission item repeated: " + sig)
+					break
+				seen_mission[sig] = true
 			for mi in (mission as Array).size():
 				var m = (mission as Array)[mi]
 				if typeof(m) != TYPE_DICTIONARY:

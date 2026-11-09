@@ -1220,6 +1220,9 @@ func _setup_live_top() -> void:
 	_live_top.font_bold = _font_display_bold
 	_live_top.font_fallback = _font_zh
 	add_child(_live_top)
+	# 2026-11-09：立绘由订单带画，得盖在顶栏药丸**上面**（原来带子在顶栏下面，
+	# 放大后的头顶会被金币/钻石药丸吃掉）。带子和顶栏在画面上不重叠，调顺序没有副作用。
+	move_child(_live_band, _live_top.get_index() + 1)
 	_live_top.set_palette(_colors)
 	_live_top.set_metrics(_metrics)
 	_live_top.set_asset_theme(_theme_loader, _model.project)
@@ -1477,8 +1480,9 @@ func _draw_characters() -> void:
 		var who := String((raw as Dictionary).get("character", ""))
 		var card: Rect2 = cards[i]
 		var w := _portrait_width(who)
+		# 2026-11-09：与实机同一套 —— 头顶落在卡片上沿往上 PORTRAIT_TOP_ABOVE_CARD
 		var rect := Rect2(card.get_center().x - w * 0.5,
-				card.position.y + PORTRAIT_SINK - PORTRAIT_HEIGHT, w, PORTRAIT_HEIGHT)
+				card.position.y - Layout.PORTRAIT_TOP_ABOVE_CARD, w, PORTRAIT_HEIGHT)
 		_draw_ui_fit(_portrait_key(who), rect)
 		i += 1
 

@@ -113,7 +113,7 @@ func _parsing(t) -> void:
 	var r: Dictionary = v.build_from_project(SAMPLE, 0)
 	t.ok(bool(r.get("ok", false)), "level 1 builds", String(r.get("error", "")))
 	t.eq(int(r.get("cells", 0)), 63, "7x9 board = 63 cells")
-	t.eq(int(r.get("items", 0)), 5, "level 1 has 5 items (4 bones + the generator)")
+	t.eq(int(r.get("items", 0)), 5, "level 1 has 5 items (4 chips + the generator)")
 	t.eq(int(r.get("obstacles", 0)), 43, "level 1 has 43 obstacles (outer two rings + the four specials)")
 	t.eq(String(r.get("level_id", "")), "level_1", "level id comes from the project")
 
@@ -128,7 +128,7 @@ func _parsing(t) -> void:
 
 	var r2: Dictionary = v.build_from_project(SAMPLE, 1)
 	t.ok(bool(r2.get("ok", false)), "level 2 builds", String(r2.get("error", "")))
-	t.eq(int(r2.get("items", 0)), 7, "level 2 has 7 items")
+	t.eq(int(r2.get("items", 0)), 16, "level 2 has 16 items (15 chips + the generator)")
 	t.eq(int(r2.get("obstacles", 0)), 2, "level 2 has 2 obstacles")
 	t.eq(String(r2.get("level_id", "")), "level_2", "level 2 id")
 
@@ -246,7 +246,7 @@ func _chip_icons(t) -> void:
 	if v.has_method("set_chip_icons"):
 		v.set_chip_icons(loader, project)
 	var resolved: int = v.chip_icon_count()
-	t.eq(resolved, 4, "level 1 resolves a chip texture for its four bones")
+	t.eq(resolved, 4, "level 1 resolves a chip texture for its four chips")
 	t.ok(v.debug_summary().begins_with("board=7x9 items=5 obstacles=43"),
 			"summary prefix is unchanged with chip icons", v.debug_summary())
 	t.ok(resolved <= v.item_count(), "chip_icon_count never exceeds the item count",

@@ -105,6 +105,16 @@ const EXPECTED_IN_PROJECT := [
 	"chip_clean_cb_lv06",
 	"font_en",
 	"font_zh",
+	"icon_10001101",
+	"icon_10001102",
+	"icon_10001103",
+	"icon_10001104",
+	"icon_10001105",
+	"icon_10001106",
+	"icon_10001107",
+	"icon_10001108",
+	"icon_10001109",
+	"icon_10001110",
 	"icon_10002107",
 	"icon_10002108",
 	"icon_10002109",
@@ -113,6 +123,16 @@ const EXPECTED_IN_PROJECT := [
 	"icon_10002208",
 	"icon_10002209",
 	"icon_10002210",
+	"icon_10005101",
+	"icon_10005102",
+	"icon_10005103",
+	"icon_10005104",
+	"icon_10005105",
+	"icon_10005106",
+	"icon_10005107",
+	"icon_10005108",
+	"icon_10005109",
+	"icon_10005110",
 	"obstacle_bubble",
 	"obstacle_ice",
 	"obstacle_lock",
@@ -128,6 +148,7 @@ const EXPECTED_IN_PROJECT := [
 	"ui_order_card_done",
 	"ui_select_frame",
 	"ui_topbar",
+
 ]
 
 
@@ -262,8 +283,8 @@ func _test_in_project(t, resources: Dictionary) -> void:
 	declared.sort()
 
 	var expected := _sorted_string_array(EXPECTED_IN_PROJECT)
-	t.ok(declared.size() == 42, "exactly 42 records report in_project=true", str(declared.size()))
-	t.ok(declared == expected, "in_project=true ids are the 20 chip icons + 2 fonts + 5 placeholders + 15 layout files", _detail_values(declared))
+	t.ok(declared.size() == 62, "exactly 62 records report in_project=true", str(declared.size()))
+	t.ok(declared == expected, "in_project=true ids are the 40 chip icons + 2 fonts + 5 placeholders + 15 layout files", _detail_values(declared))
 
 	# The flag must describe the disk, not a wish: recompute it from res://assets.
 	var on_disk := _project_basenames()

@@ -17,7 +17,7 @@ func run(t) -> void:
 	# 180 snapshot records + the 9 PRODUCTION ids that data/assets_local.json adds for
 	# the M1 layout art the snapshot does not carry yet (see tests/t_local_assets.gd).
 	# `obstacle_ice` is already a snapshot record, so it is not among them.
-	t.ok(strict_guard.index.size() == 229, "index has 180 snapshot + 49 local records", str(strict_guard.index.size()))
+	t.ok(strict_guard.index.size() == 249, "index has 180 snapshot + 69 local records", str(strict_guard.index.size()))
 
 	var loose_guard = AssetGuard.new()
 	loose_guard.load_from(INDEX, true)
@@ -66,11 +66,11 @@ func _test_alias_layer(t, guard) -> void:
 ## The whole point of keeping the layers distinct: M1 copies 20 of 155 PRODUCTION
 ## files, so "may I use it" and "can I load it here" must not collapse into one answer.
 func _test_layers_stay_distinct(t, guard) -> void:
-	t.eq(guard.check_ref("icon_10001101"), "",
+	t.eq(guard.check_ref("icon_10004201"), "",
 			"governance layer clears PRODUCTION icon_10001101 because its source file exists")
-	t.eq(guard.local_path("icon_10001101"), "",
+	t.eq(guard.local_path("icon_10004201"), "",
 			"presence layer yields no path for PRODUCTION icon_10001101 because it was not copied")
-	t.eq(guard.usage("icon_10001101"), "PRODUCTION", "the not-copied id is still PRODUCTION, not a lower level")
+	t.eq(guard.usage("icon_10004201"), "PRODUCTION", "the not-copied id is still PRODUCTION, not a lower level")
 
 
 ## The v7 manifest has no REFERENCE_ONLY record left, so the red line is probed with an
@@ -134,8 +134,8 @@ func _test_allowed_ids(t, strict_guard, loose_guard) -> void:
 	t.ok(not strict_allowed.has("board_frame"), "allowed_ids excludes placeholder without the flag")
 	t.ok(not strict_allowed.has("audio_bgm"), "allowed_ids excludes TODO")
 	t.ok(not strict_allowed.has("chip_clean_ca_lv07"), "allowed_ids lists canonical ids only, never aliases")
-	t.eq(strict_allowed.size(), 204, "strict allowed_ids is the 155 PRODUCTION snapshot records + 49 local ones")
-	t.eq(loose_allowed.size(), 224, "loose allowed_ids adds the 20 placeholders to the same 203")
+	t.eq(strict_allowed.size(), 224, "strict allowed_ids is the 155 PRODUCTION snapshot records + 69 local ones")
+	t.eq(loose_allowed.size(), 244, "loose allowed_ids adds the 20 placeholders to the same 203")
 
 
 func _test_load_failure(t) -> void:

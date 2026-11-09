@@ -468,6 +468,73 @@ order_5 47 / order_6 84）；`rules_levels` 的奖励校验把 `energy` 一起�
 - 出片：帧 214 三种奖励同时在空中（金币 + 闪电 + 钻石）；帧 260 顶栏体力 **88 → 141**（+53）、金币 9 → 14
 - 代理产物：`output/render/energy_fly2.mp4`（300 帧短跑，`same=YES`）
 
+### 6.15 任务图标扩到 4 个 + 两个新棋子系列（2026-11-09，操作者第四次改界面）
+
+**操作者原话**：「把红框里的任务图标改成4个。随机不重复。相应的底下的任务栏围标也拉宽一些。
+注意要扩展一下，后面的任务栏和小人儿向后靠，但是逻辑不变。类似这样，显示2个小人儿就差不多了。」
+→ 追加：「顺便改一下Json吧。把第2关稍微复杂一点儿，clip再加2个系列，icon应该已经在工程里了，
+你自己找一下。合成难度也提高一点儿。到4，5级随机分布。」
+→ 再追加：「我让你改第2关，没让你改第一关。第一关恢复回去。第2关，分别改成4个任务，3个任务，
+2个任务，1个任务，1个任务。顺便第2个降一降难度。」
+
+**素材**：工程内 `01_icon/HotelManor_icon/棋子icon/` 本来就有 12 个系列 × 10 级，
+项目只引了 `100021` / `100022`。新增两个视觉最不重复的系列：
+`100011`（零食袋）→ `CleanSet_Cc`、`100051`（沙滩球）→ `CleanSet_Cd`，
+各 10 级（182×182）复制进 `assets/chips/`，manifest +20（251 条 / 254 行）、
+assets_local +20（69 条）、PROVENANCE +20 行、LICENSES、`theme.chip_icons` 变 4 个系列。
+
+**任务数据（`sample_project.json`）**：
+- **第 1 关保持原样**（1 个任务 Ca2 + 原棋盘 5 格）—— 操作者明确要求别动
+- 第 2 关 5 单，任务数依次 **4 / 3 / 2 / 1 / 1**，单卡内不重复
+- 难度：`order_3`（第 2 单、3 个任务）用第 **1/2 级**（降难度），其余用第 **4/5 级** × 4 系列
+- 棋盘按"每次交付都付得起"补到 15 枚棋子 + 生成器（take 的 swap 起点/落点全部保留）
+
+**布局**：`Layout.QUEUE_CARD_W 250 → 424`、`QUEUE_ORIGIN_X 250 → 208`、`VISIBLE_CARDS 3 → 2`；
+`mission_chip_rects()` 改为**尺寸自适应**：`CHIP_SIZE(96)` 是上限，4 枚时按卡宽缩到 ~89，
+1~3 枚仍是 96（老观感不变）。新增 `chip_size_for()` / `CHIP_MIN_SIZE` / `CHIP_SIDE_PAD`。
+
+**校验器**：任务上限 2 → 4，并新增同卡内重复检查（`ORDER_MISSION_DUP`）。
+
+**踩到的坑（重要）**：重复检查里写了 `String((raw_m as Dictionary).get("entity", ""))`，
+`String(int)` 在 Godot 4 里直接运行时崩 —— 崩在规则模块里会**静默中断整段任务校验**
+（abort gate 只认最后一行，函数中途崩掉不会再报 INTERNAL_SCRIPT_ERROR）。
+表现是 `t_orders_reach` 的 N1 用例突然"没有 MISSION_ENTITY_TYPE"了。
+改成 `str()` 即可。**记住：GDScript 里把任意值转字符串用 str()，别用 String()。**
+
+**验证**：
+- 探针回放该 take：4 次交付全 ok，`SIM_taken` 依次 1 / 2 / 4 / 1 枚（与任务数一致）
+- 测试 **2721 checks / 0 failures**
+- 出片：两张卡同屏，4 图标卡 = 4 个不同系列/等级，3 图标卡 = 降难度那单
+
+### 6.16 立绘放大 + 第 1 关卡宽统一（2026-11-09，操作者第五次改界面）
+
+**操作者原话**：「目前小人儿是不是下缘卡在任务栏上缘呢。现在任务栏已经变宽了。把小人儿也等比放大。
+下缘和任务栏齐平，然后再被任务栏以及任务栏包含的那些 clip 之类的覆盖。总之，在任务栏下面，背景上面。」
+→ 追加：「第一关的任务栏怎么没加宽呢？不应该是一样的么？」
+
+**操作者第二张红框图才是准的**：立绘要**顶在顶栏下沿、下沿压到卡片底**（不是"下缘与卡顶齐平"）。
+最终几何：
+- `PORTRAIT_GROW = 1.43`（210 → **300**）
+- `PORTRAIT_TOP_ABOVE_CARD = 160`：立绘头顶 = 卡片上沿 - 160（正好在顶栏药丸下面）
+- `PORTRAIT_SINK = PORTRAIT_H - PORTRAIT_TOP_ABOVE_CARD`（= 140，这部分被卡面盖住）
+
+**第 1 关与第 2 关现在**完全是同一套设计**：`order_panel` 只有一个 `_draw_card`、一套常量，
+`_layout()` 里那条"单卡按 anchor 宽度"的特殊路径**已删除**（`set_card_anchors` 保留 API，
+但不再参与几何）。第 1 关只是"配置了 1 张卡 + 1 个任务"。
+
+**层级**：立绘由订单带画，带子现在是**顶栏之上**（`move_child(band, top.get_index()+1)` /
+实机 `move_child(orders, top_bar.get_index()+1)`）——不然放大后的头顶会被金币/钻石药丸吃掉。
+带子和顶栏在画面上不重叠，调顺序无副作用。
+
+**顺带修掉的隐患**：`order_panel._draw_card()` 里立绘的 y 偏移原来写死 `26.0`，
+和 `Layout.PORTRAIT_SINK` 是两份（§8 说的"第二份"）。现在读常量。
+
+**验证**：
+- `t_layout_parity`：单卡塞一个 190 宽的 anchor，卡矩形仍必须等于队列卡矩形（同宽同高同位置）；
+  `PORTRAIT_H == 300.3`、`PORTRAIT_TOP_ABOVE_CARD == 160`
+- 反向验证：把单卡分支改回按 anchor 宽度 → 1 条红；恢复后 2720 / 0
+- 出片：第 1/2 关的卡完全一致；立绘头顶落在药丸下方、下沿被卡面盖住
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
@@ -475,7 +542,7 @@ order_5 47 / order_6 84）；`rules_levels` 的奖励校验把 `energy` 一起�
 ### 7.1 当前锚点
 
 - 分支 `main` @ `2465f32`（tag `录屏内容基本完成` 仍在 4943b0e）：金币落点 §6.10、交付枚数 §6.11、卡面装饰 §6.12（a50ff3c）、**订单卡改版 §6.13 / §6.14（新底图 + 钻石 + 体力奖励，2465f32）** 均已提交；之后的改动按 §7.3-6 等操作者说「提」再提
-- 测试 **2640 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
+- 测试 **2721 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 

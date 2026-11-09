@@ -35,6 +35,26 @@ const PET_SHOP_THEME := "themes/pet_shop"
 const LOCAL_IDS := [
 	"char_part1",
 	"char_part2",
+	"chip_clean_cc_lv01",
+	"chip_clean_cc_lv02",
+	"chip_clean_cc_lv03",
+	"chip_clean_cc_lv04",
+	"chip_clean_cc_lv05",
+	"chip_clean_cc_lv06",
+	"chip_clean_cc_lv07",
+	"chip_clean_cc_lv08",
+	"chip_clean_cc_lv09",
+	"chip_clean_cc_lv10",
+	"chip_clean_cd_lv01",
+	"chip_clean_cd_lv02",
+	"chip_clean_cd_lv03",
+	"chip_clean_cd_lv04",
+	"chip_clean_cd_lv05",
+	"chip_clean_cd_lv06",
+	"chip_clean_cd_lv07",
+	"chip_clean_cd_lv08",
+	"chip_clean_cd_lv09",
+	"chip_clean_cd_lv10",
 	"ui_bar_board",
 	"ui_bg_top",
 	"ui_bg_top_clean",
@@ -303,7 +323,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 229, "index = 180 snapshot records + 49 local records")
+	t.eq(guard.index.size(), 249, "index = 180 snapshot records + 69 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:

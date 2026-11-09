@@ -1446,6 +1446,9 @@ func _top_bar_setup() -> void:
 	top_bar.position = Vector2.ZERO
 	top_bar.size = Vector2(1080.0, 150.0)
 	add_child(top_bar)
+	# 2026-11-09：订单带（含立绘）提到顶栏之上，立绘放大后头顶才不会被药丸挡住。
+	if orders != null:
+		move_child(orders, top_bar.get_index() + 1)
 	top_bar.font_bold = _font_display_bold
 	top_bar.font_fallback = _font
 	if theme_loader != null:

@@ -87,6 +87,30 @@
       "8": "chip_clean_cb_lv08",
       "9": "chip_clean_cb_lv09",
       "10": "chip_clean_cb_lv10"
+    },
+    "CleanSet_Cc": {
+      "1": "chip_clean_cc_lv01",
+      "2": "chip_clean_cc_lv02",
+      "3": "chip_clean_cc_lv03",
+      "4": "chip_clean_cc_lv04",
+      "5": "chip_clean_cc_lv05",
+      "6": "chip_clean_cc_lv06",
+      "7": "chip_clean_cc_lv07",
+      "8": "chip_clean_cc_lv08",
+      "9": "chip_clean_cc_lv09",
+      "10": "chip_clean_cc_lv10"
+    },
+    "CleanSet_Cd": {
+      "1": "chip_clean_cd_lv01",
+      "2": "chip_clean_cd_lv02",
+      "3": "chip_clean_cd_lv03",
+      "4": "chip_clean_cd_lv04",
+      "5": "chip_clean_cd_lv05",
+      "6": "chip_clean_cd_lv06",
+      "7": "chip_clean_cd_lv07",
+      "8": "chip_clean_cd_lv08",
+      "9": "chip_clean_cd_lv09",
+      "10": "chip_clean_cd_lv10"
     }
   }
 }

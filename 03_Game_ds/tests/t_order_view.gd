@@ -65,7 +65,7 @@ func _cards(t) -> void:
 	var level2 := _level(1)
 	var built2: Dictionary = panel.build_from_level(level2)
 	t.eq(int(built2.get("cards", 0)), 5, "level_2 builds a five-card queue")
-	t.eq(int(built2.get("missions", 0)), 8, "level_2 queue totals eight mission rows")
+	t.eq(int(built2.get("missions", 0)), 11, "level_2 queue totals eleven mission rows")
 	var summary2: String = panel.debug_summary()
 	t.ok(summary2.contains("CleanSet_Cb@2 0/1"), "level_2 mission list is complete", summary2)
 

@@ -23,12 +23,12 @@ func run(t) -> void:
 
 
 func _shared_constants(t) -> void:
-	t.eq(Layout.QUEUE_ORIGIN_X, 250.0, "队列起点 250")
-	t.eq(Layout.QUEUE_CARD_W, 250.0, "卡宽 250")
+	t.eq(Layout.QUEUE_ORIGIN_X, 208.0, "队列起点 208（两张 424 宽的卡都完整落在 1080 内）")
+	t.eq(Layout.QUEUE_CARD_W, 424.0, "卡宽 424（容纳 4 枚任务图标）")
 	t.eq(Layout.CARD_GAP_X, 18.0, "卡间距 18")
 	t.eq(Layout.CARD_H, 140.0, "卡高 140")
-	t.eq(Layout.PORTRAIT_H, 210.0, "立绘高 210")
-	t.eq(Layout.PORTRAIT_SINK, 26.0, "立绘压卡片 26")
+	t.eq(Layout.PORTRAIT_H, 300.3, "立绘高 210")
+	t.eq(Layout.PORTRAIT_TOP_ABOVE_CARD, 160.0, "立绘压卡片 26")
 	t.eq(Layout.BAND_Y, 210.0, "订单带 y=210")
 	t.eq(Layout.CARD_LOCAL_Y, 55.0, "卡在带内 y=55")
 
@@ -202,6 +202,26 @@ func _card_decor_matches(t) -> void:
 				str(chips_in_area[k]))
 
 	# 2026-11-09：蓝条里是**两组**奖励 —— 闪电在前、钻石在后，各组一个数字，两组一起居中
+	# 2026-11-09：单卡（第 1 关）必须和队列里其它卡**同宽**。
+	# 原来单卡走 anchor 分支按"跟角色一样宽"算，导致第 1 关的卡比第 2 关窄一截。
+	var solo = OrderPanel.new()
+	solo.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	solo.build_from_level({"id": "solo_lv", "orders": [
+		{"id": "solo_1", "character": "char_blonde", "mission": [{"entity": "CleanSet_Ca", "level": 1}],
+			"coin": 5, "star": 0, "gem": 1, "energy": 10}]})
+	solo.size = Vector2(1080.0, 250.0)
+	# 单卡和第 2 关的卡必须是**同一套几何**（操作者：只是配置了 1 张卡 + 1 个任务）。
+	# 就算调用方塞了 anchor，也不再影响宽高和位置。
+	solo.set_card_anchors([{"width": 190.0, "bottom": 195.0, "center": 420.0}])
+	var solo_rect: Rect2 = solo.card_rect("solo_1")
+	# 面板内部是局部坐标：y 就是 CARD_LOCAL_Y，页面坐标要 +BAND_Y（与队列一致）
+	t.eq(solo_rect, Rect2(Layout.QUEUE_ORIGIN_X, Layout.CARD_LOCAL_Y,
+			Layout.QUEUE_CARD_W, Layout.CARD_H),
+			"单卡矩形 == 队列卡矩形（同宽同高同位置）")
+	t.eq(Layout.PORTRAIT_TOP_ABOVE_CARD, 160.0, "立绘下缘与卡片上沿齐平")
+	t.eq(Layout.PORTRAIT_H, 300.3, "立绘随卡宽放大到 1.25 倍")
+	solo.free()
+
 	t.eq(OrderPanel.REWARD_ICON_H, 32.0, "两种奖励图标统一按高 32 画")
 	var origin := OrderPanel.reward_row_rects(card, 50.0, 20.0)
 	var e_icon: Rect2 = origin["energy_icon"]

@@ -360,7 +360,7 @@ func _test_model(t) -> void:
 	t.ok(m.entity("nope").is_empty(), "unknown entity -> empty dict")
 	t.eq(int(m.generator("CleanBox_C").get("charges", -1)), 10, "generator charges are readable")
 	t.ok(m.generator("CleanSet_Ca").is_empty(), "a chip has no generator behaviour")
-	t.eq(m.entity_ids().size(), 15, "entity_ids lists 15 sample entities (6 base + 9 characters)")
+	t.eq(m.entity_ids().size(), 17, "entity_ids lists 17 sample entities (8 chips + 9 characters)")
 	var hud: Dictionary = m.hud_initial()
 	for key in ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star", "gem", "exp"]:
 		t.ok(hud.has(key), "hud_initial carries " + key)
@@ -742,8 +742,8 @@ func _test_sample_run(t) -> void:
 	t.ok(not s.board_full_pending, "the sample never fills the board")
 	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 138,
 			"level_2 stock mirrors the energy bar at level load (88 - 3 taps + 53)")
-	t.eq(int(s.board.item_count()), 4, "4 items left on the level_2 board (the box no longer pays out)")
-	t.ok(s.board.item_count() < 7, "claimed mission items were consumed")
+	t.eq(int(s.board.item_count()), 10, "10 items left on the level_2 board (3 claims eat 7 chips)")
+	t.ok(s.board.item_count() < 16, "claimed mission items were consumed")
 
 	var before: String = s.digest()
 	var r: Dictionary = s.apply({"type": "level_next", "payload": {}})

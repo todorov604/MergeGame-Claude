@@ -379,13 +379,15 @@ func _chip_icons_default_theme(t) -> void:
 			str(loaded.get("errors", [])))
 
 	var block: Dictionary = _dict(loaded.get("chip_icons", {}))
-	t.eq(block.size(), 2, "themes/default maps both chip entities")
+	t.eq(block.size(), 4, "themes/default maps the four chip entities")
 	t.ok(block.has("CleanSet_Ca"), "themes/default maps CleanSet_Ca")
 	t.ok(block.has("CleanSet_Cb"), "themes/default maps CleanSet_Cb")
+	t.ok(block.has("CleanSet_Cc"), "themes/default maps CleanSet_Cc")
+	t.ok(block.has("CleanSet_Cd"), "themes/default maps CleanSet_Cd")
 
-	var chains := {"CleanSet_Ca": "ca", "CleanSet_Cb": "cb"}
+	var chains := {"CleanSet_Ca": "ca", "CleanSet_Cb": "cb", "CleanSet_Cc": "cc", "CleanSet_Cd": "cd"}
 	var expected_ids: Array = []
-	for entity_id in ["CleanSet_Ca", "CleanSet_Cb"]:
+	for entity_id in ["CleanSet_Ca", "CleanSet_Cb", "CleanSet_Cc", "CleanSet_Cd"]:
 		var levels: Dictionary = _dict(block.get(entity_id, {}))
 		t.eq(levels.size(), 10, "themes/default maps 10 levels for " + String(entity_id))
 		for level in range(1, 11):
@@ -404,7 +406,7 @@ func _chip_icons_default_theme(t) -> void:
 
 	expected_ids.sort()
 	var refs: Array = loader.chip_refs()
-	t.eq(refs.size(), 20, "chip_refs() lists exactly 20 chip ids")
+	t.eq(refs.size(), 40, "chip_refs() lists exactly 40 chip ids")
 	t.eq(refs, expected_ids, "chip_refs() is the sorted unique leaf id set")
 	var unique := {}
 	for id in refs:
@@ -417,7 +419,7 @@ func _chip_icons_pet_shop(t) -> void:
 	var loader = _loader(false)
 	var base: Dictionary = loader.load_theme(DEFAULT_THEME, project)
 	t.ok(bool(base.get("ok", false)), "default theme loads before the switch", str(base.get("errors", [])))
-	t.eq(loader.chip_refs().size(), 20, "default theme exposes the chip icon set")
+	t.eq(loader.chip_refs().size(), 40, "default theme exposes the chip icon set")
 	# Prime the per-"entity@level" cache before the switch. Without this the post-switch
 	# "no texture" assertion would also pass if load_theme() forgot to clear the cache,
 	# because the cache was never filled.

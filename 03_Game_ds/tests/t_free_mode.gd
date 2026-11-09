@@ -413,6 +413,7 @@ func _test_swap_command(t) -> void:
 	# 所见即所得: the green cell + finish badge are derived from the snapshot, so the
 	# completed marker travels with the chip after a swap.
 	var done_before: Array = CompletedCells.from_snapshot(sim.snapshot())
+	# 第 1 关保持原样：任务要 lv2，开局棋盘只有 lv1，得先合并
 	t.eq(done_before.size(), 0, "level 1 starts with no completed cell (its mission needs a merge)")
 	if done_before.size() >= 1:
 		var done_cell := Vector2i(int(done_before[0][0]), int(done_before[0][1]))

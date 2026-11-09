@@ -5,7 +5,7 @@ extends RefCounted
 ## 一次，两边就不会各写一份后漂移。
 ##
 ## 行形状：
-##   {"id": String, "character": String, "coin": int, "star": int, "done": bool,
+##   {"id": String, "character": String, "coin": int, "star": int, "gem": int, "done": bool,
 ##    "mission": [{"entity": String, "level": int, "have": int, "need": int,
 ##                 "ready": bool, "hue": Color, "label": String}]}
 ##
@@ -61,6 +61,9 @@ static func build(snap: Dictionary, model) -> Array:
 			"character": String(order.get("character", "")),
 			"coin": int(order.get("coin", 0)),
 			"star": int(order.get("star", 0)),
+			# 2026-11-09：钻石奖励跟着一起转，实机与成片的卡片蓝条读的是这一份。
+			"gem": int(order.get("gem", 0)),
+			"energy": int(order.get("energy", 0)),
 			"done": bool(order.get("done", false)),
 			"mission": mission,
 		})

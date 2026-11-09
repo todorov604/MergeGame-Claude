@@ -12,6 +12,7 @@ extends RefCounted
 const ProjectModel := preload("res://src/core/project_model.gd")
 const EventEvaluator := preload("res://src/core/event_evaluator.gd")
 const MovieScene := preload("res://src/render/movie_scene.gd")
+const FlyAnim := preload("res://src/view/fly_anim.gd")
 
 
 func run(t) -> void:
@@ -19,6 +20,7 @@ func run(t) -> void:
 	_clicked_cell_comes_first(t)
 	_single_row_claim_reports_one(t)
 	_no_sim_block_means_no_flight(t)
+	_gem_spiral_runs_the_other_way(t)
 
 
 ## 2 行任务的订单：两枚棋子各被消耗一次 → 成片必须拿到两个格子。
@@ -64,6 +66,25 @@ func _no_sim_block_means_no_flight(t) -> void:
 	t.eq(MovieScene.claim_taken({"ok": true, "sim": {}}), [], "sim 块空 → 不飞")
 	t.eq(MovieScene.claim_taken({"ok": false, "taken": [[1, 1]]}), [],
 			"只把 taken 放在顶层不算数（旧写法读的就是这里）")
+
+
+## 2026-11-09：钻石与金币同屏时会重叠，所以钻石走**反向**阿基米德螺旋。
+## spin = -1 时角度取负：同一个 t 上，沿线上分量一致、垂直分量取反。
+func _gem_spiral_runs_the_other_way(t) -> void:
+	var fly = FlyAnim.new()
+	var a := Vector2(100.0, 400.0)
+	var b := Vector2(500.0, 100.0)
+	var cw: Vector2 = fly._spiral_point(a, b, 0.3, 1.0)
+	var ccw: Vector2 = fly._spiral_point(a, b, 0.3, -1.0)
+	var base := a.lerp(b, 0.3)
+	t.ok(absf(cw.x - base.x - (ccw.x - base.x)) < 0.01, "正反两向的横向偏移相同",
+			"%f vs %f" % [cw.x - base.x, ccw.x - base.x])
+	t.ok(absf(absf(cw.y - base.y) - absf(ccw.y - base.y)) < 0.01, "纵向偏移大小相同",
+			"%f vs %f" % [cw.y - base.y, ccw.y - base.y])
+	t.ok((cw.y - base.y) * (ccw.y - base.y) <= 0.0, "纵向偏移方向相反（镜像）")
+	t.ok(absf(cw.y - ccw.y) > 1.0, "两条螺旋在同一个 t 上不重合")
+	t.eq(fly._spiral_point(a, b, 0.3, 1.0), cw, "默认 spin=+1 保持金币原样")
+	fly.free()
 
 
 # ------------------------------------------------------------------ fixtures

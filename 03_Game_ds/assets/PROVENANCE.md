@@ -14,6 +14,14 @@
 | `assets/ui/box_safe_x.png` | `box_safe_x` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_safe_x.png` | `17887bb0dce23afcccda98a51a7fe517d4a365dfc60dd197857774b162f93113` |
 | `assets/ui/box_energe_w.png` | `box_energe_w` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_energe_w.png` | `81f7ff348baaa02b8db2ab68c7a8f820404dfe81b893271c0d877336dff5af61` |
 | `assets/ui/box_treasure_y.png` | `box_treasure_y` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_treasure_y.png` | `314d61a47dbd5ddb626dfe3e269c1ed09279e96d49fbf097d789a2677119ae0c` |
+| `assets/ui/order_card_bar.png` | `ui_order_card_bar` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/order_card_bar.png` | `ef645e40577fdbd0ea5b397200d5453cf7af6a775d4c0285b8e7d60ca09bb966` |
+| `assets/ui/gem_icon.png` | `ui_gem_icon` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/gem_icon.png` | `b431b533aa033f06b848e22500466491fc1e7f30f337a599d49da5440ab14072` |
+| `assets/ui/energy_icon.png` | `ui_energy_icon` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/energy_icon.png` | `47a024fc3cb6f5b791077b47e9b1d70d5aa400fcff68cef52b097544b4bd9f98` |
+
+> 2026-11-09 新增两张（操作者给的 `棋盘界面拆解` 切图目录）：
+> `order_card_bar.png`（388×178，订单卡九宫格底图，贴图自带上浅下蓝两条）、
+> `gem_icon.png`（39×32，订单卡底部钻石奖励图标）、`energy_icon.png`（39×53，订单卡底部体力奖励图标）。
+> 都是 **1:1 复制**（未裁切/未缩放/未重编码），所以同目录没有 `_source.png` 旁车。
 
 ## M1 真实图标（20 张，PRODUCTION）
 

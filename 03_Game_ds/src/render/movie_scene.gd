@@ -146,6 +146,7 @@ const UI_KEYS := [
 	"lock", "web", "exit", "bag", "items", "part1", "part2", "plus", "shop",
 	"char_waitress", "char_technician", "char_customer", "char_police", "char_blonde", "char_racer", "char_manager", "char_glasses", "char_worker",
 	"task_reward", "safe_unknown", "confirm", "energy_bar", "coin_bar", "gem_bar",
+	"gem", "energy",
 ]
 ## Same 9-slice corner as board_view.PLATE_CORNER: the board base is one 167px rounded
 ## tile stretched over 983x1263, and its corners must not scale with the board.
@@ -217,6 +218,14 @@ var _live_fly = null
 var _coin_ticks: Array = []
 var _coin_display: float = -1.0
 var _coin_pop_at: float = -1000.0
+## 2026-11-09：钻石数字与金币同一套（订单卡蓝条的钻石奖励飞上顶栏后分批涨 + 弹跳）。
+var _gem_ticks: Array = []
+var _gem_display: float = -1.0
+var _gem_pop_at: float = -1000.0
+## 体力数字（2026-11-09）：和金币/钻石同一套 tick + lerp + 弹跳。
+var _energy_ticks: Array = []
+var _energy_display: float = -1.0
+var _energy_pop_at: float = -1000.0
 var _board_level := -1
 var _band_level := -1
 var _guard_blocked: Array = []
@@ -840,6 +849,12 @@ func _advance_to(t: float) -> void:
 					gained = maxi(coin_after - int(round(_coin_display)), 0)
 				_coin_display = minf(_coin_display, float(coin_after - gained))
 				_queue_coin_ticks(gained, float(r.get("at", t)))
+				var gem_gain := _order_gem(ord)
+				if gem_gain > 0:
+					_queue_gem_ticks(gem_gain, float(r.get("at", t)))
+				var stamina_gain := _order_energy(ord)
+				if stamina_gain > 0:
+					_queue_energy_ticks(stamina_gain, float(r.get("at", t)))
 				if _live_band != null:
 					# 与实机同一时序：芯片 0.55s + 金币起飞后 1s，卡片才缩。
 					_live_band.hold_done(ord, 1.55)
@@ -975,6 +990,35 @@ func _queue_coin_ticks(amount: int, at: float) -> void:
 				"amount": base + (1 if i < rest else 0)})
 
 
+## 2026-11-09：体力数字 tick —— 30~100 的量级，每 ~10 一跳（3~10 跳），与金币同规则。
+func _queue_energy_ticks(amount: int, at: float) -> void:
+	if amount <= 0:
+		return
+	var n: int = clampi(int(round(float(amount) / 10.0)), 3, 10)
+	var start := at + 0.61
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		_energy_ticks.append({"at": start + gap * float(i),
+				"amount": base + (1 if i < rest else 0)})
+
+
+## 2026-11-09：钻石数字 tick —— 与金币同规则（0.85s 内发完，每颗一跳）。
+## 数量小（1-5），所以 n = 数量本身，一跳一颗。
+func _queue_gem_ticks(amount: int, at: float) -> void:
+	if amount <= 0:
+		return
+	var n: int = clampi(amount, 1, 5)
+	var start := at + 0.67
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		_gem_ticks.append({"at": start + gap * float(i),
+				"amount": base + (1 if i < rest else 0)})
+
+
 func _play_claim_effects(order_id: String, cell: Vector2i, at: float, taken: Array = []) -> void:
 	if _live_fly == null:
 		return
@@ -1017,6 +1061,29 @@ func _play_claim_effects(order_id: String, cell: Vector2i, at: float, taken: Arr
 		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.55, "payload": {
 			"from_point": [centre.x, centre.y], "amount": amount,
 			"count": clampi(amount / 5, 3, 8), "texture": _ui("coin_big")}})
+	# 2026-11-09：体力奖励 —— 和金币同一个方向（正螺旋），落点是顶栏体力条。
+	var stamina := _order_energy(order_id)
+	if stamina > 0:
+		var s_card := _claim_card_rect(order_id)
+		var s_from := Vector2(s_card.get_center().x - s_card.size.x * 0.18,
+		
+				s_card.position.y + s_card.size.y * (1.0 - Layout.GEM_STRIP_RATIO * 0.5))
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.61, "payload": {
+			"from_point": [s_from.x, s_from.y], "amount": stamina,
+			"count": clampi(int(round(float(stamina) / 10.0)), 3, 10),
+			"texture": _ui("energy"), "anchor": "energy", "spin": 1.0}})
+
+	# 2026-11-09：钻石奖励 —— 起点是卡片底部蓝条中心，落点是顶栏钻石条（fly_anim 的 gem 锚点）。
+	var gems := _order_gem(order_id)
+	if gems > 0:
+		var strip := orders_anchor(order_id)
+		var card_rect := _claim_card_rect(order_id)
+		strip = Vector2(strip.x, card_rect.position.y
+				+ card_rect.size.y * (1.0 - Layout.GEM_STRIP_RATIO * 0.5))
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.67, "payload": {
+			"from_point": [strip.x, strip.y], "amount": gems,
+			"count": clampi(gems, 1, 5), "texture": _ui("gem"),
+			"anchor": "gem", "spin": -1.0}})
 
 
 
@@ -1058,6 +1125,22 @@ func _order_coin(order_id: String) -> int:
 	for raw in _snap.get("orders", []):
 		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
 			return int((raw as Dictionary).get("coin", 0))
+	return 0
+
+
+## 2026-11-09：订单卡的体力（闪电）奖励数。
+func _order_energy(order_id: String) -> int:
+	for raw in _snap.get("orders", []):
+		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
+			return int((raw as Dictionary).get("energy", 0))
+	return 0
+
+
+## 2026-11-09：订单卡的钻石奖励数（快照里的 orders[].gem）。
+func _order_gem(order_id: String) -> int:
+	for raw in _snap.get("orders", []):
+		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
+			return int((raw as Dictionary).get("gem", 0))
 	return 0
 
 
@@ -1187,6 +1270,50 @@ func _push_live_top() -> void:
 	var since := _t - _coin_pop_at
 	if since >= 0.0 and since < 0.35:
 		pop = 0.38 * sin(PI * since / 0.35)
+	# 2026-11-09：钻石数字同一套 tick + lerp + 弹跳
+	var gem_now := int(hud.get("gem", 0))
+	if _gem_display < 0.0:
+		_gem_display = float(gem_now)
+	if not _gem_ticks.is_empty():
+		var gem_keep: Array = []
+		for row in _gem_ticks:
+			if _t >= float((row as Dictionary).get("at", 0.0)):
+				_gem_display = minf(_gem_display + float((row as Dictionary).get("amount", 0)),
+						float(gem_now))
+				_gem_pop_at = _t
+			else:
+				gem_keep.append(row)
+		_gem_ticks = gem_keep
+	elif absf(_gem_display - float(gem_now)) > 0.01:
+		_gem_display = lerpf(_gem_display, float(gem_now), 0.25)
+		if absf(_gem_display - float(gem_now)) < 0.5:
+			_gem_display = float(gem_now)
+	var gem_pop := 0.0
+	var gem_since := _t - _gem_pop_at
+	if gem_since >= 0.0 and gem_since < 0.35:
+		gem_pop = 0.38 * sin(PI * gem_since / 0.35)
+	# 2026-11-09：体力数字同一套 tick + lerp + 弹跳
+	var energy_now := int(hud.get("energy", 0))
+	if _energy_display < 0.0:
+		_energy_display = float(energy_now)
+	if not _energy_ticks.is_empty():
+		var energy_keep: Array = []
+		for row in _energy_ticks:
+			if _t >= float((row as Dictionary).get("at", 0.0)):
+				_energy_display = minf(_energy_display + float((row as Dictionary).get("amount", 0)),
+						float(energy_now))
+				_energy_pop_at = _t
+			else:
+				energy_keep.append(row)
+		_energy_ticks = energy_keep
+	elif absf(_energy_display - float(energy_now)) > 0.01:
+		_energy_display = lerpf(_energy_display, float(energy_now), 0.25)
+		if absf(_energy_display - float(energy_now)) < 0.5:
+			_energy_display = float(energy_now)
+	var energy_pop := 0.0
+	var energy_since := _t - _energy_pop_at
+	if energy_since >= 0.0 and energy_since < 0.35:
+		energy_pop = 0.38 * sin(PI * energy_since / 0.35)
 	_live_top.set_state({
 		"level": int(hud.get("level", 1)),
 		"energy": int(hud.get("energy", 0)),
@@ -1195,6 +1322,10 @@ func _push_live_top() -> void:
 		"clock": _mmss(_energy_countdown()),
 		"coin_display": _coin_display,
 		"pop": pop,
+		"gem_display": _gem_display,
+		"gem_pop": gem_pop,
+		"energy_display": _energy_display,
+		"energy_pop": energy_pop,
 	})
 
 
@@ -1208,6 +1339,8 @@ func _refresh_flight_anchors() -> void:
 		for x in 7:
 			table["cell:%d,%d" % [x, y]] = _live_board.cell_rect(x, y).get_center()
 	table["hud:coin"] = _hud_coin_anchor()
+	table["hud:gem"] = _hud_gem_anchor()
+	table["hud:energy"] = _hud_energy_anchor()
 	table["order:default"] = Vector2(540.0, 320.0)
 	if _live_band != null:
 		for card in _live_band.cards:
@@ -1223,6 +1356,20 @@ func _refresh_flight_anchors() -> void:
 ## 金币螺旋的落点：顶栏组件里那枚金币图标的中心。
 ## 与实机调**同一个函数**（top_bar.counter_center），成片不许自己猜坐标。
 ## 2026-11-09 之前这里是写死的 (473.6,49.6)，来自已退役 hud_view 的公式。
+## 体力落点同理：问顶栏组件要（与实机同一个函数）。
+func _hud_energy_anchor() -> Vector2:
+	if _live_top == null:
+		return Vector2.ZERO
+	return _live_top.counter_center("energy")
+
+
+## 钻石落点同理：问顶栏组件要（与实机同一个函数）。
+func _hud_gem_anchor() -> Vector2:
+	if _live_top == null:
+		return Vector2.ZERO
+	return _live_top.counter_center("gem")
+
+
 func _hud_coin_anchor() -> Vector2:
 	if _live_top == null:
 		# 走不到：_refresh_flight_anchors() 已经把 _live_top 判空了。

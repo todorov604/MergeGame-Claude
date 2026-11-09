@@ -95,6 +95,8 @@ const UI_KEYS := [
 	"exit", "bag", "shop", "energy_bar", "coin_bar", "gem_bar",
 	"char_waitress", "char_technician", "char_customer", "char_police", "char_blonde", "char_racer", "char_manager", "char_glasses", "char_worker",
 	"stockpile_frame", "stockpile_arrows", "red_dot",
+	"gem",  # 2026-11-09：钻石奖励飞行用的贴图
+	"energy",  # 2026-11-09：体力（闪电）奖励飞行用的贴图
 ]
 const DEFAULT_SEED := 7
 ## §7 item 4 inbox prompt window; kept in sync with BoardView.TOAST_SECONDS.
@@ -692,6 +694,14 @@ var _preview_pending: float = 0.0
 ## 顶栏金币显示值：交付时按飞出的金币数量分批上涨，而不是一次跳到目标。
 var _coin_display: float = -1.0
 var _coin_ticks: Array = []
+## 顶栏钻石显示值（2026-11-09）：和金币同一套 —— 交付后钻石飞上去，数字分批涨 + 弹跳。
+var _gem_display: float = -1.0
+var _gem_ticks: Array = []
+var _gem_pop_at: float = -1000.0
+## 顶栏体力显示值（2026-11-09）：和金币/钻石同一套 tick + lerp + 弹跳。
+var _energy_display: float = -1.0
+var _energy_ticks: Array = []
+var _energy_pop_at: float = -1000.0
 ## Double-click bookkeeping on a green (completed) cell: second tap claims the order.
 const DOUBLE_CLICK := 0.35
 var _last_cell := Vector2i(-1, -1)
@@ -1220,7 +1230,8 @@ func _refresh_anchors() -> void:
 	# anchors reach page space through the same scale.
 	table["hud:coin"] = _coin_anchor(hud.counter_center("coin"))
 	table["hud:star"] = star_local * hud.scale + hud.position
-	table["hud:gem"] = gem_local * hud.scale + hud.position
+	table["hud:gem"] = _gem_anchor(gem_local)
+	table["hud:energy"] = _energy_anchor(hud.counter_center("energy"))
 	fly.set_anchors(table)
 	fly.set_clock(_clock)
 	_tick_level_next()
@@ -1324,6 +1335,58 @@ func _schedule_coin(order_id: String) -> void:
 	var amount := _order_coin_amount(order_id)
 	if amount > 0:
 		_queue_coin_ticks(amount, clampi(amount / 5, 3, 8))
+	var gems := _order_gem_amount(order_id)
+	if gems > 0:
+		_queue_gem_ticks(gems)
+	var stamina := _order_energy_amount(order_id)
+	if stamina > 0:
+		_queue_energy_ticks(stamina)
+
+
+## 订单卡底部蓝条上写的钻石数（卡片数据来自 OrderRows，实机与成片同一份）。
+func _order_gem_amount(order_id: String) -> int:
+	if orders == null:
+		return 0
+	for card in orders.cards:
+		if String((card as Dictionary).get("id", "")) == order_id:
+			return int((card as Dictionary).get("gem", 0))
+	return 0
+
+
+## 订单卡蓝条上的体力（闪电）数。
+func _order_energy_amount(order_id: String) -> int:
+	if orders == null:
+		return 0
+	for card in orders.cards:
+		if String((card as Dictionary).get("id", "")) == order_id:
+			return int((card as Dictionary).get("energy", 0))
+	return 0
+
+
+## 体力是 30~100 的量级：按每 ~10 一跳拆，最多 10 跳，和金币同一个手感。
+func _queue_energy_ticks(amount: int) -> void:
+	if amount <= 0:
+		return
+	var n: int = clampi(int(round(float(amount) / 10.0)), 3, 10)
+	var start := _clock + CLAIM_CHIP_SECONDS
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		_energy_ticks.append({"at": start + gap * float(i), "amount": base + (1 if i < rest else 0)})
+
+
+## 钻石数量小（1-5），按"每颗一跳"拆；跳完弹一下，和金币一个手感。
+func _queue_gem_ticks(amount: int) -> void:
+	if amount <= 0:
+		return
+	var n: int = clampi(amount, 1, 5)
+	var start := _clock + CLAIM_CHIP_SECONDS
+	var gap := 0.85 / float(n)
+	var base := amount / n
+	var rest := amount - base * n
+	for i in n:
+		_gem_ticks.append({"at": start + gap * float(i), "amount": base + (1 if i < rest else 0)})
 
 
 func _order_coin_amount(order_id: String) -> int:
@@ -1409,6 +1472,14 @@ func _push_top_bar() -> void:
 	var pop := 0.0
 	if since >= 0.0 and since < 0.35:
 		pop = 0.38 * sin(PI * since / 0.35)
+	var gem_since: float = _clock - _gem_pop_at
+	var gem_pop := 0.0
+	if gem_since >= 0.0 and gem_since < 0.35:
+		gem_pop = 0.38 * sin(PI * gem_since / 0.35)
+	var energy_since: float = _clock - _energy_pop_at
+	var _energy_pop := 0.0
+	if energy_since >= 0.0 and energy_since < 0.35:
+		_energy_pop = 0.38 * sin(PI * energy_since / 0.35)
 	top_bar.set_state({
 		"level": int(hud.get("level", 1)),
 		"energy": int(hud.get("energy", 0)),
@@ -1417,6 +1488,12 @@ func _push_top_bar() -> void:
 		"clock": _mmss(_energy_countdown()),
 		"coin_display": _coin_display,
 		"pop": pop,
+		# 2026-11-09：钻石与金币同款 —— 显示值 + 弹跳（订单奖励落上去时用）
+		"gem_display": _gem_display,
+		"gem_pop": gem_pop,
+		# 2026-11-09：体力同样有显示值与弹跳
+		"energy_display": _energy_display,
+		"energy_pop": _energy_pop,
 	})
 
 
@@ -1426,6 +1503,24 @@ func _push_top_bar() -> void:
 func _coin_anchor(hud_local: Vector2) -> Vector2:
 	if top_bar != null and top_bar.has_method("counter_center"):
 		return top_bar.counter_center("coin")
+	if hud == null:
+		return hud_local
+	return hud_local * hud.scale + hud.position
+
+
+## 体力落点同理：问顶栏组件要。
+func _energy_anchor(hud_local: Vector2) -> Vector2:
+	if top_bar != null and top_bar.has_method("counter_center"):
+		return top_bar.counter_center("energy")
+	if hud == null:
+		return hud_local
+	return hud_local * hud.scale + hud.position
+
+
+## 钻石落点同理（2026-11-09）：问了顶栏组件要，别再读那个隐藏的 hud_view。
+func _gem_anchor(hud_local: Vector2) -> Vector2:
+	if top_bar != null and top_bar.has_method("counter_center"):
+		return top_bar.counter_center("gem")
 	if hud == null:
 		return hud_local
 	return hud_local * hud.scale + hud.position
@@ -1458,6 +1553,7 @@ func _push_stockpile() -> void:
 
 
 ## Advance the displayed coin number by one tick at a time; snap when ticks run dry.
+## 顶栏数值跳动：金币与钻石同一套（分批 tick + 末段 lerp 追赶 + 弹一下）。
 func _tick_coin_display() -> void:
 	var hud_coin := int(evaluator.sim.hud.get("coin", 0)) if evaluator != null else 0
 	if _coin_display < 0.0:
@@ -1482,6 +1578,52 @@ func _tick_coin_display() -> void:
 			_coin_display = float(hud_coin)
 		if chrome != null:
 			chrome.queue_redraw()
+	_tick_energy_display()
+	_tick_gem_display()
+
+
+## 体力数字：同一套 tick + 追赶 lerp。
+func _tick_energy_display() -> void:
+	var hud_energy := int(evaluator.sim.hud.get("energy", 0)) if evaluator != null else 0
+	if _energy_display < 0.0:
+		_energy_display = float(hud_energy)
+		return
+	if not _energy_ticks.is_empty():
+		var keep: Array = []
+		for row in _energy_ticks:
+			if _clock >= float((row as Dictionary).get("at", 0.0)):
+				_energy_display = minf(_energy_display + float((row as Dictionary).get("amount", 0)),
+						float(hud_energy))
+				_energy_pop_at = _clock
+			else:
+				keep.append(row)
+		_energy_ticks = keep
+	elif absf(_energy_display - float(hud_energy)) > 0.01:
+		_energy_display = lerpf(_energy_display, float(hud_energy), 0.25)
+		if absf(_energy_display - float(hud_energy)) < 0.5:
+			_energy_display = float(hud_energy)
+
+
+## 钻石数字：和金币逐字对齐的实现（tick 逐个跳 + 追赶 lerp）。
+func _tick_gem_display() -> void:
+	var hud_gem := int(evaluator.sim.hud.get("gem", 0)) if evaluator != null else 0
+	if _gem_display < 0.0:
+		_gem_display = float(hud_gem)
+		return
+	if not _gem_ticks.is_empty():
+		var keep: Array = []
+		for row in _gem_ticks:
+			if _clock >= float((row as Dictionary).get("at", 0.0)):
+				_gem_display = minf(_gem_display + float((row as Dictionary).get("amount", 0)),
+						float(hud_gem))
+				_gem_pop_at = _clock
+			else:
+				keep.append(row)
+		_gem_ticks = keep
+	elif absf(_gem_display - float(hud_gem)) > 0.01:
+		_gem_display = lerpf(_gem_display, float(hud_gem), 0.25)
+		if absf(_gem_display - float(hud_gem)) < 0.5:
+			_gem_display = float(hud_gem)
 
 
 ## Reward coins: spiral from the card up to the coin bar, then pop the number.
@@ -1509,6 +1651,61 @@ func _play_coin_reward(order_id: String) -> void:
 		},
 	})
 	_coin_pop_at = _clock + 0.55
+	_play_energy_reward(order_id)
+	_play_gem_reward(order_id)
+
+
+## 2026-11-09：订单卡的体力（闪电）奖励 —— 和金币同一个方向（正螺旋），飞向顶栏体力条。
+func _play_energy_reward(order_id: String) -> void:
+	if fly == null or orders == null:
+		return
+	var amount := _order_energy_amount(order_id)
+	if amount <= 0:
+		return
+	var local: Rect2 = orders.card_rect(order_id)
+	var strip := local
+	strip.position += orders.position + Vector2(0.0, local.size.y * (1.0 - OrderPanel.GEM_STRIP_RATIO))
+	strip.size = Vector2(local.size.x, local.size.y * OrderPanel.GEM_STRIP_RATIO)
+	fly.play_event({
+		"type": "coin_spiral",
+		"at": _clock + 0.06,
+		"payload": {
+			"from_point": [strip.get_center().x - strip.size.x * 0.18, strip.get_center().y],
+			"amount": amount,
+			"count": clampi(int(round(float(amount) / 10.0)), 3, 10),
+			"texture": _ui("energy"),
+			"anchor": "energy",
+			"spin": 1.0,
+		},
+	})
+	_energy_pop_at = _clock + 0.06 + 0.55
+
+
+## 2026-11-09：订单卡的钻石奖励 —— 同一套螺旋，只是贴着钻石图标、飞向顶栏钻石条。
+## 起点用卡片蓝条的中心（不是整张卡中心），落点由 fly_anim 的 "gem" 锚点决定。
+func _play_gem_reward(order_id: String) -> void:
+	if fly == null or orders == null:
+		return
+	var amount := _order_gem_amount(order_id)
+	if amount <= 0:
+		return
+	var local: Rect2 = orders.card_rect(order_id)
+	var strip := local
+	strip.position += orders.position + Vector2(0.0, local.size.y * (1.0 - OrderPanel.GEM_STRIP_RATIO))
+	strip.size = Vector2(local.size.x, local.size.y * OrderPanel.GEM_STRIP_RATIO)
+	fly.play_event({
+		"type": "coin_spiral",
+		"at": _clock + 0.12,
+		"payload": {
+			"from_point": [strip.get_center().x, strip.get_center().y],
+			"amount": amount,
+			"count": clampi(amount, 1, 5),
+			"texture": _ui("gem"),
+			"anchor": "gem",
+			"spin": -1.0,   # 逆时针，和金币的顺时针岔开
+		},
+	})
+	_gem_pop_at = _clock + 0.12 + 0.55
 
 
 ## The claimed chip arcs from its board cell to the order card, growing to 2.5x and

@@ -230,7 +230,8 @@ func _board_claim_project() -> Dictionary:
 				"board": {"width": 3, "height": 1, "slots": [{"x": 2, "y": 0, "entity": "A", "level": 2}]},
 				"obstacles": [],
 				"orders": [
-					{"id": "o1", "character": "CH", "mission": [{"entity": "A", "level": 2}], "star": 1, "coin": 4},
+					{"id": "o1", "character": "CH", "mission": [{"entity": "A", "level": 2}],
+						"star": 1, "coin": 4, "gem": 3, "energy": 40},
 				],
 			},
 		],
@@ -568,6 +569,14 @@ func _test_claim(t) -> void:
 	t.ok(not board_path.board.has_item(Vector2i(2, 0)), "the consumed board item is gone")
 	t.eq(int(board_path.hud["coin"]), 4, "board-claim pays the order coin")
 	t.eq(int(board_path.hud["star"]), 1, "board-claim pays the order star")
+	# 2026-11-09：订单的钻石奖励（卡片蓝条上那个数字）在同一个时刻入账
+	t.eq(int(board_path.hud["gem"]), 3, "board-claim pays the order gems")
+	t.eq(int(board_path.snapshot()["orders"][0].get("gem", -1)), 3,
+			"snapshot carries the order gem reward for the card strip")
+	# 2026-11-09：订单的体力（闪电）奖励同一刻入账
+	t.eq(int(board_path.hud["energy"]), 50, "board-claim pays the order energy (10 + 40)")
+	t.eq(int(board_path.snapshot()["orders"][0].get("energy", -1)), 40,
+			"snapshot carries the order energy reward for the card strip")
 
 	var junk = _new_sim(_deliver_project(), 3)
 	var r4: Dictionary = junk.apply({"type": "order_claim", "payload": {"order": "nope"}})
@@ -727,10 +736,12 @@ func _test_sample_run(t) -> void:
 	t.eq(s.current_level_id(), "level_2", "final level is level_2")
 	t.eq(int(s.hud["coin"]), 39, "coin = 9 + 5 + 8 + the other satisfied queued orders")
 	t.eq(int(s.hud["star"]), 0, "star = 0 + 0 + 0 (no star rewards configured)")
-	t.eq(int(s.hud["energy"]), 85, "energy = 88 - 3 taps (every spawn costs 1 energy)")
+	t.eq(int(s.hud["energy"]), 174,
+			"energy = 88 - 3 taps + 两次交付的体力奖励（order_1 53 + order_2 36）")
 	t.ok(not s.level_complete_pending, "level_2 keeps running while queued orders remain")
 	t.ok(not s.board_full_pending, "the sample never fills the board")
-	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 85, "level_2 stock mirrors the energy bar (88 - 3 taps)")
+	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 138,
+			"level_2 stock mirrors the energy bar at level load (88 - 3 taps + 53)")
 	t.eq(int(s.board.item_count()), 4, "4 items left on the level_2 board (the box no longer pays out)")
 	t.ok(s.board.item_count() < 7, "claimed mission items were consumed")
 

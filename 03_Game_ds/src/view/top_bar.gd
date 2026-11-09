@@ -16,7 +16,11 @@ const BAR_ART := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
 ## 交叉验证：成片 frame 00040.png 顶栏里那枚金币的实测中心 (459.0,56.5)，
 ## 本比例映射出来的页面坐标 (458.79,54.84)，差 1.7px（贴图带投影）。
 const COIN_ICON_RATIO := Vector2(37.5 / 255.0, 37.5 / 82.0)
-const ICON_RATIOS := {"coin": COIN_ICON_RATIO}
+## 钻石图标在 gem_bar.png 里的相对位置：粉钻本体 bbox=(2,2)-(73,60)，中心 (37.5,31) / 246x67。
+const GEM_ICON_RATIO := Vector2(37.5 / 246.0, 31.0 / 67.0)
+## 体力条里那道闪电的相对位置：亮黄 bbox=(3,3)-(57,81)，中心 (30,42) / 243x90。
+const ENERGY_ICON_RATIO := Vector2(30.0 / 243.0, 42.0 / 90.0)
+const ICON_RATIOS := {"coin": COIN_ICON_RATIO, "gem": GEM_ICON_RATIO, "energy": ENERGY_ICON_RATIO}
 const BAR_CENTER_X := 540.0
 const BAR_CENTER_Y := 58.0
 const LEVEL_BADGE := Rect2(16.0, 16.0, 96.0, 67.2)
@@ -190,7 +194,20 @@ func _draw() -> void:
 	var num_color := Color("#3B5C8F")
 	var energy_rect: Rect2 = rects["energy"]
 	var digit_px := _size_for(energy_rect)
-	_text(energy_rect, str(int(_state.get("energy", 0))), digit_px, num_color)
+	# 2026-11-09：体力数字和金币/钻石一样有"显示值 + 弹跳"（订单奖励飞上来时逐格涨）
+	var energy_shown := int(_state.get("energy", 0))
+	var energy_pop := 0.0
+	if float(_state.get("energy_display", -1.0)) >= 0.0:
+		energy_shown = int(round(float(_state.get("energy_display", 0.0))))
+		energy_pop = float(_state.get("energy_pop", 0.0))
+	if energy_pop > 0.001:
+		draw_set_transform(energy_rect.get_center(), 0.0,
+				Vector2(1.0 + energy_pop, 1.0 + energy_pop))
+		_text(Rect2(-energy_rect.size * 0.5, energy_rect.size), str(energy_shown), digit_px,
+				num_color)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		_text(energy_rect, str(energy_shown), digit_px, num_color)
 	var clock := String(_state.get("clock", ""))
 	var clock_rect := Rect2(energy_rect.position.x, energy_rect.position.y - 8.0,
 			energy_rect.size.x, 26.0)
@@ -202,11 +219,16 @@ func _draw() -> void:
 		var rect: Rect2 = rects[key]
 		var shown := int(_state.get(key, 0))
 		var pop := 1.0
-		if key == "coin" and float(_state.get("coin_display", -1.0)) >= 0.0:
-			shown = int(round(float(_state.get("coin_display", 0.0))))
-			pop = float(_state.get("pop", 0.0))
-		# 宝石条盘面比另外两根矮：数字统一缩到 0.62 档（36 -> 22），避免顶到盘面上下边
-		var px := digit_px if key == "coin" else maxi(int(round(float(digit_px) * 0.56)), 20)
+		# 2026-11-09：钻石和金币一样有"显示值 + 弹跳"（订单奖励飞上来时逐格涨）。
+		# 键名分别 coin_display/pop 与 gem_display/gem_pop，没值就退回快照数字。
+		var disp_key := "coin_display" if key == "coin" else "gem_display"
+		var pop_key := "pop" if key == "coin" else "gem_pop"
+		if float(_state.get(disp_key, -1.0)) >= 0.0:
+			shown = int(round(float(_state.get(disp_key, 0.0))))
+			pop = float(_state.get(pop_key, 0.0))
+		# 2026-11-09 操作者：钻石数字要和闪电/金币**同一个字号**（原来单独缩到 0.56 档，
+		# 看着像"宝石条上的小字"）。三根条现在共用 digit_px。
+		var px := digit_px
 		if key == "gem":
 			rect = Rect2(rect.position + Vector2(rect.size.x * 0.10, 0.0),
 					Vector2(rect.size.x * 0.86, rect.size.y))

@@ -59,13 +59,16 @@ const LOCAL_IDS := [
 	"ui_confirm",
 	"ui_cursor_hand",
 	"ui_energy_bar",
+	"ui_energy_icon",
 	"ui_exit_button",
 	"ui_gem_bar",
+	"ui_gem_icon",
 	"ui_generator_icon",
 	"ui_icon_finish",
 	"ui_items_bar",
 	"ui_level_badge_bg",
 	"ui_level_paw",
+	"ui_order_card_bar",
 	"ui_red_dot",
 	"ui_reminder",
 	"ui_safe_1x7",
@@ -87,6 +90,7 @@ const LOCAL_FILES := {
 	"ui_bg_top": "main_bg_01_top.png",
 	"ui_bg_top_clean": "bg_top_clean.png",
 	"ui_bar_board": "bar_board.png",
+	"ui_order_card_bar": "order_card_bar.png",
 	"ui_board_frame": "board_frame.png",
 	"ui_board_plate": "board_plate.png",
 	"ui_cell_light": "cell_light.png",
@@ -94,6 +98,8 @@ const LOCAL_FILES := {
 	"ui_coin_big": "coin_big.png",
 	"ui_energy_bar": "energy_bar.png",
 	"ui_gem_bar": "gem_bar.png",
+	"ui_energy_icon": "energy_icon.png",
+	"ui_gem_icon": "gem_icon.png",
 	"ui_confirm": "confirm.png",
 	"ui_task_reward": "task_reward.png",
 	"ui_char_blonde": "char_blonde.png",
@@ -146,6 +152,9 @@ const UI_KEYS := {
 	"coin_big": "ui_coin_big",
 	"energy_bar": "ui_energy_bar",
 	"gem_bar": "ui_gem_bar",
+	"gem": "ui_gem_icon",
+	"energy": "ui_energy_icon",
+	"order_card": "ui_order_card_bar",
 	"char_blonde": "ui_char_blonde",
 	"char_customer": "ui_char_customer",
 	"char_glasses": "ui_char_glasses",
@@ -211,12 +220,15 @@ const EXPECTED_SIZE := {
 	"ui_btn_plus": Vector2i(48, 48),
 	"ui_button_shop": Vector2i(142, 132),
 	"ui_bar_board": Vector2i(388, 178),
+	"ui_order_card_bar": Vector2i(388, 178),
 	"ui_board_plate": Vector2i(167, 167),
 	"ui_cell_light": Vector2i(256, 256),
 	"ui_coin_bar": Vector2i(255, 82),
 	"ui_coin_big": Vector2i(81, 82),
 	"ui_energy_bar": Vector2i(243, 90),
 	"ui_gem_bar": Vector2i(246, 67),
+	"ui_energy_icon": Vector2i(39, 53),
+	"ui_gem_icon": Vector2i(39, 32),
 	"ui_confirm": Vector2i(166, 97),
 	"ui_task_reward": Vector2i(110, 41),
 	"ui_char_blonde": Vector2i(330, 454),
@@ -291,7 +303,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 226, "index = 180 snapshot records + 46 local records")
+	t.eq(guard.index.size(), 229, "index = 180 snapshot records + 49 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -325,8 +337,12 @@ func _test_records_are_complete(t) -> void:
 				"local record %s ships at target size (no rescale)" % key)
 		# The bar divider is the one record that ships as a 10x4 slice stretched
 		# to 420x4 at draw time, so its fit is honestly "stretch".
+		# 2026-11-09: 订单卡底图 388x178 用九宫格（角 24 不缩放）铺到 250x140，fit 记 nine_slice。
 		if key == "ui_common_line":
 			t.eq(String(e.get("fit", "")), "stretch", "local record ui_common_line is fit=stretch")
+		elif key == "ui_order_card_bar":
+			t.eq(String(e.get("fit", "")), "nine_slice",
+					"local record ui_order_card_bar is fit=nine_slice")
 		else:
 			t.eq(String(e.get("fit", "")), "exact", "local record %s is fit=exact" % key)
 		# no absolute path may leak into the register: it must survive relocation
@@ -492,7 +508,7 @@ func _test_default_theme_ui_block(t) -> void:
 	if ui.has("common_line") and not ui.has("line"):
 		ui["line"] = ui["common_line"]
 		ui.erase("common_line")
-	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 51 layout keys")
+	t.eq(_sorted_keys(ui), _sorted_keys(UI_KEYS), "theme icons.ui carries exactly the 54 layout keys")
 
 	for key in UI_KEYS.keys():
 		var want := String(UI_KEYS[key])

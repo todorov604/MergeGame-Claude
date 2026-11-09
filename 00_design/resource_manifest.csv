@@ -1,4 +1,4 @@
-id,category,use,priority,status,usage,license,file,target_size,actual_size,fit,nine_slice,animation,notes
+﻿id,category,use,priority,status,usage,license,file,target_size,actual_size,fit,nine_slice,animation,notes
 chip_clean_ca_lv01,芯片图标,Clean 家族 Ca 链 1 级,P0,可用,PRODUCTION,公司自有/自研,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002101.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考；2026-11-04 用户确认：01_icon 素材可用（公司自有/自研）
 chip_clean_ca_lv02,芯片图标,Clean 家族 Ca 链 2 级,P0,可用,PRODUCTION,公司自有/自研,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002102.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考；2026-11-04 用户确认：01_icon 素材可用（公司自有/自研）
 chip_clean_ca_lv03,芯片图标,Clean 家族 Ca 链 3 级,P0,可用,PRODUCTION,公司自有/自研,E:\MergeGame-Claude\01_icon\HotelManor_icon\棋子icon\icon_10002103.png,256×256,182×182,scale,n/a,static,占位映射：实际为 10002 家族（狗粮）图标，仅作构图参考；2026-11-04 用户确认：01_icon 素材可用（公司自有/自研）
@@ -227,3 +227,6 @@ ui_coin_big,界面,奖励金币飞行图标,81×82,PNG,自研,可用,P1,ui/coin_
 ui_stockpile_frame,界面,库存/补给面板底板,156×156,PNG,自研,可用,P1,ui/stockpile_frame.png,,E:\MergeGame-Claude\01_icon\HotelManor_icon\界面切图\main_frame_stockpile.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,156×156,exact,n/a,static
 ui_stockpile_arrows,界面,库存面板右下角绿色箭头,42×48,PNG,自研,可用,P1,ui/stockpile_arrows.png,,E:\MergeGame-Claude\01_icon\HotelManor_icon\界面切图\common_icon_arroes.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,42×48,exact,n/a,static
 ui_red_dot,界面,红点计数底图（库存剩余次数）,50×51,PNG,自研,可用,P1,ui/red_dot_bg.png,,E:\北京Icon\常用资产汇总\棋盘界面拆解\红点纯背景.png,,PRODUCTION,公司自有（北京Icon / HotelManor）,50×51,exact,n/a,static
+ui_order_card_bar,订单卡片底图,订单卡（任务栏）九宫格底图,P0,可用,PRODUCTION,公司自有（来源 Icon / HotelManor）,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0007_任务栏完整.png,388×178,388×178,nine_slice,24,static,2026-11-09 操作者给的新切图；1:1 复制（未裁切/未缩放/未重编码），sha256 ef645e40577fdbd0…
+ui_gem_icon,货币图标,订单卡底部钻石奖励图标,P1,可用,PRODUCTION,公司自有（来源 Icon / HotelManor）,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0006_钻石.png,39×32,39×32,scale,n/a,static,2026-11-09 操作者给的新切图；1:1 复制（未裁切/未缩放/未重编码），sha256 b431b533aa033f06…
+ui_energy_icon,货币图标,订单卡底部体力（闪电）奖励图标,P1,可用,PRODUCTION,公司自有（来源 Icon / HotelManor）,E:\北京Icon\常用资产汇总\棋盘界面拆解\棋盘拆解_0000s_0005_体力.png,39×53,39×53,scale,n/a,static,2026-11-09 操作者给的新切图；1:1 复制（未裁切/未缩放/未重编码），sha256 47a024fc3cb6f5b7…

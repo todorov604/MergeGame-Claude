@@ -57,7 +57,10 @@
       "part1": "char_part1",
       "part2": "char_part2",
       "plus": "ui_btn_plus",
-      "shop": "ui_button_shop"
+      "shop": "ui_button_shop",
+      "order_card": "ui_order_card_bar",
+      "gem": "ui_gem_icon",
+      "energy": "ui_energy_icon"
     }
   },
   "chip_icons": {

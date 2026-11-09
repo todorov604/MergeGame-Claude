@@ -121,10 +121,15 @@ func play_event(ev: Dictionary) -> bool:
 				"start": at,
 				"dur": dur if dur > 0.0 else 0.85,
 				"from": spiral_from,
-				"to": _hud_anchor("coin"),
+				# 2026-11-09：落点锚点名可以指定（金币 "coin" / 钻石 "gem"），
+				# 动画本身完全一样，只是贴图和终点不同。
+				"to": _hud_anchor(String(payload.get("anchor", "coin"))),
 				"count": int(payload.get("count", 5)),
 				"amount": int(payload.get("amount", 0)),
 				"texture": payload.get("texture", null),
+				# 2026-11-09：螺旋方向。金币 +1（顺时针），钻石 -1（逆时针），
+				# 两者同屏时轨迹反向散开，不会叠在一起。
+				"spin": float(payload.get("spin", 1.0)),
 			})
 		"deliver_chip":
 			var chip_from := _cell_anchor(payload.get("from", null))
@@ -335,13 +340,14 @@ func _draw_coin_spiral(m: Dictionary, p: float) -> void:
 	var from: Vector2 = m.get("from", Vector2.ZERO)
 	var to: Vector2 = m.get("to", Vector2.ZERO)
 	var count: int = maxi(int(m.get("count", 5)), 1)
+	var spin: float = float(m.get("spin", 1.0))
 	for i in count:
 		var local := clampf((p - float(i) * 0.07) / 0.68, 0.0, 1.0)
 		if local <= 0.0 or local >= 1.0:
 			continue
 		for ghost in 3:
 			var gt := clampf(local - float(ghost) * 0.07, 0.0, 1.0)
-			var pos := _spiral_point(from, to, gt)
+			var pos := _spiral_point(from, to, gt, spin)
 			var alpha := (1.0 if ghost == 0 else 0.34 / float(ghost))
 			var side := 44.0 if ghost == 0 else 38.0 - 6.0 * float(ghost)
 			var texture = m.get("texture", null)
@@ -352,15 +358,16 @@ func _draw_coin_spiral(m: Dictionary, p: float) -> void:
 				_coin_dot(pos, side * 0.36, alpha)
 		# the head coin carries the "+N/count" hint
 		if i == 0:
-			var head := _spiral_point(from, to, local)
+			var head := _spiral_point(from, to, local, spin)
 			_text(head + Vector2(18.0, -18.0), "+%d" % int(m.get("amount", 0)),
 					26, Color(1.0, 0.95, 0.7, 1.0 - local))
 
 
-func _spiral_point(from: Vector2, to: Vector2, t: float) -> Vector2:
-	# Archimedean spiral around the straight line: radius shrinks as the coin travels
+func _spiral_point(from: Vector2, to: Vector2, t: float, spin: float = 1.0) -> Vector2:
+	# Archimedean spiral around the straight line: radius shrinks as the reward travels.
+	# spin = +1 顺时针（金币），-1 逆时针（钻石）—— 反向时角度取负，半径不变。
 	var base := from.lerp(to, t)
-	var angle := t * TAU * 1.6
+	var angle := spin * t * TAU * 1.6
 	var radius := (1.0 - t) * 110.0
 	return base + Vector2(cos(angle), sin(angle)) * radius
 

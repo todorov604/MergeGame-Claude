@@ -155,6 +155,11 @@ func _make_order(raw: Dictionary) -> Dictionary:
 		"mission": mission,
 		"star": int(raw.get("star", 0)),
 		"coin": int(raw.get("coin", 0)),
+		# 2026-11-09：订单的钻石奖励（订单卡底部那颗）。缺省 0 = 这单不给钻石，
+		# 老数据/老 take 不加字段也能照旧跑。
+		"gem": int(raw.get("gem", 0)),
+		# 2026-11-09：订单卡的体力（闪电）奖励。缺省 0 = 这单不给体力。
+		"energy": int(raw.get("energy", 0)),
 		"done": false,
 	}
 
@@ -725,6 +730,10 @@ func _do_order_claim(payload: Dictionary) -> Dictionary:
 	order["done"] = true
 	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
 	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
+	# 2026-11-09：钻石奖励与金币同一时刻入账（视图层据此播一次钻石飞行 + 数字跳）。
+	hud["gem"] = int(hud.get("gem", 0)) + int(order.get("gem", 0))
+	# 2026-11-09：体力奖励同一刻入账（视图层据此播一次闪电飞行 + 数字跳）。
+	hud["energy"] = int(hud.get("energy", 0)) + int(order.get("energy", 0))
 	if _all_orders_done():
 		level_complete_pending = true
 	var out := _ok("claimed \"" + order_id + "\"")
@@ -797,6 +806,8 @@ func snapshot() -> Dictionary:
 			"mission": mission_rows,
 			"star": int(o["star"]),
 			"coin": int(o["coin"]),
+			"gem": int(o.get("gem", 0)),
+			"energy": int(o.get("energy", 0)),
 			"done": bool(o["done"]),
 		})
 

@@ -49,7 +49,7 @@ func _test_sample_stats(t) -> void:
 	# M1: data/themes/default ships chip_icons for CleanSet_Ca and CleanSet_Cb, ten
 	# levels each (20 refs), plus the icons.ui layout block (21 refs) the visual
 	# fidelity goal added, so the usage rule must see 41 theme asset refs.
-	t.eq(int(r.stats.get("asset_refs", -1)), 74, "default theme references its 20 chip icons + 54 layout icons")
+	t.eq(int(r.stats.get("asset_refs", -1)), 77, "default theme references its 20 chip icons + 57 layout icons")
 
 
 func _test_broken_fixtures(t) -> void:

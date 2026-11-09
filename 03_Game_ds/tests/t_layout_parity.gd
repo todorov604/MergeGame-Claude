@@ -131,6 +131,20 @@ func _coin_anchor_matches(t) -> void:
 	t.eq(screen._coin_anchor(Vector2(592.0, 62.0)), coin, "实机落点来自顶栏组件")
 	screen.top_bar = null
 	t.eq(screen._coin_anchor(Vector2(592.0, 62.0)), Vector2(592.0, 62.0), "无顶栏时退回原坐标")
+
+	# 2026-11-09：钻石落点同样问顶栏组件（gem_bar 里那颗粉钻的中心）
+	var gem_pt: Vector2 = bar.counter_center("gem")
+	var gem_rect: Rect2 = bar.bar_rects()["gem"]
+	t.ok(gem_rect.has_point(gem_pt), "钻石落点在钻石条内", str(gem_pt))
+	t.ok(gem_pt.x < gem_rect.get_center().x, "钻石落点在数字左侧", str(gem_pt))
+	t.ok(gem_pt.distance_to(bar.counter_center("coin")) > 100.0, "钻石与金币落点不重叠", str(gem_pt))
+	screen.top_bar = bar   # 上一步为了测兜底把它置空了，这里放回来
+	t.eq(screen._gem_anchor(Vector2(700.0, 62.0)), gem_pt, "实机钻石落点来自顶栏组件")
+	var film2 = MovieScene.new()
+	film2._live_top = bar
+	t.eq(film2._hud_gem_anchor(), gem_pt, "成片钻石落点来自顶栏组件")
+	film2._live_top = null
+	film2.free()
 	screen.free()
 	bar.free()
 
@@ -167,3 +181,56 @@ func _card_decor_matches(t) -> void:
 			card.get_center().x * 2.0, "两枚整体居中")
 
 	t.eq(OrderPanel.mission_chip_rects(card, 0), [], "没有任务行就没有棋子")
+
+	# 2026-11-09：新任务栏底图底部蓝条 = 钻石奖励行（操作者要求"蓝条居中放钻石 + 数字"）
+	# 0.279 是九宫格铺到 250x140 后**实测**的蓝条比例（贴图分界 124/178，角 26 不缩放）。
+	t.eq(Layout.GEM_STRIP_RATIO, 0.279, "蓝条占卡高 27.9%（实测，贴图分界 124/178）")
+	t.eq(OrderPanel.GEM_STRIP_RATIO, Layout.GEM_STRIP_RATIO, "面板的蓝条比例来自共享布局")
+
+	var strip: Rect2 = OrderPanel.gem_strip_rect(card)
+	t.ok(absf(strip.size.y - card.size.y * 0.279) < 0.01, "蓝条高度 = 卡高 × 0.279",
+			str(strip.size.y))
+	t.eq(strip.end.y, card.end.y, "蓝条贴卡片底边")
+	t.eq(strip.size.x, card.size.x, "蓝条横跨整张卡片")
+
+	var area: Rect2 = OrderPanel.mission_area_rect(card)
+	t.ok(absf(area.size.y + strip.size.y - card.size.y) < 0.01, "蓝条之上正好是任务区",
+			"%.3f" % (area.size.y + strip.size.y))
+	var chips_in_area: Array = OrderPanel.mission_chip_rects(area, 2)
+	for k in chips_in_area.size():
+		t.ok(area.encloses(chips_in_area[k]), "第 %d 枚棋子不越出任务区（不进蓝条）" % k,
+				str(chips_in_area[k]))
+
+	# 2026-11-09：蓝条里是**两组**奖励 —— 闪电在前、钻石在后，各组一个数字，两组一起居中
+	t.eq(OrderPanel.REWARD_ICON_H, 32.0, "两种奖励图标统一按高 32 画")
+	var origin := OrderPanel.reward_row_rects(card, 50.0, 20.0)
+	var e_icon: Rect2 = origin["energy_icon"]
+	var e_label: Rect2 = origin["energy_label"]
+	var g_icon: Rect2 = origin["gem_icon"]
+	var g_label: Rect2 = origin["gem_label"]
+	t.eq(e_icon.size.y, OrderPanel.REWARD_ICON_H, "闪电图标高 32")
+	t.eq(g_icon.size.y, OrderPanel.REWARD_ICON_H, "钻石图标高 32")
+	t.ok(absf(g_icon.size.x - OrderPanel.REWARD_ICON_H * 39.0 / 32.0) < 0.01,
+			"钻石图标按贴图比例 39:32", str(g_icon.size))
+	t.ok(absf(e_icon.size.x - OrderPanel.REWARD_ICON_H * 39.0 / 53.0) < 0.01,
+			"闪电图标按贴图比例 39:53", str(e_icon.size))
+	t.ok(e_icon.end.x <= e_label.position.x, "闪电图标在它的数字左边")
+	t.ok(e_label.end.x <= g_icon.position.x, "闪电这一组在钻石这一组左边（闪电在前）")
+	t.ok(g_icon.end.x <= g_label.position.x, "钻石图标在它的数字左边")
+	for pair in [["闪电图标", e_icon], ["闪电数字", e_label], ["钻石图标", g_icon], ["钻石数字", g_label]]:
+		t.ok(card.encloses(pair[1]), "%s 不越出卡片" % String(pair[0]), str(pair[1]))
+		t.ok(card.end.y - (pair[1] as Rect2).end.y >= 5.0,
+				"%s 底边留白 >= 5px" % String(pair[0]),
+				"%.1f" % (card.end.y - (pair[1] as Rect2).end.y))
+	var row_mid := (e_icon.position.x + g_label.end.x) * 0.5
+	t.ok(absf(row_mid - strip.get_center().x) < 0.5, "闪电+钻石**两组一起**水平居中",
+			"%.2f vs %.2f" % [row_mid, strip.get_center().x])
+	t.eq(OrderPanel.REWARD_ROW_RISE, 4.0, "整组上抬 4px（操作者：往上挪几个像素）")
+	t.ok(absf(e_icon.get_center().y - (strip.get_center().y - OrderPanel.REWARD_ROW_RISE)) < 0.5,
+			"图标中心 = 蓝条中心 - 上抬量")
+
+	var only_gem: Dictionary = OrderPanel.reward_row_rects(card, 0.0, 20.0)
+	t.eq((only_gem["energy_icon"] as Rect2), Rect2(), "没有体力奖励就不排闪电")
+	t.ok(absf(((only_gem["gem_icon"] as Rect2).position.x
+			+ (only_gem["gem_label"] as Rect2).end.x) * 0.5 - strip.get_center().x) < 0.5,
+			"只有钻石时它自己居中")

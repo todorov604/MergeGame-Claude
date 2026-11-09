@@ -269,6 +269,9 @@ func sync_orders(rows: Array) -> void:
 			claim = false  # the flight is still in the air
 			card["claim_pending"] = true
 		card["done"] = claim
+		# 钻石奖励跟着行数据走（实机与成片同一份快照；老行没有这个键就保留原值）。
+		card["gem"] = int(row.get("gem", card.get("gem", 0)))
+		card["energy"] = int(row.get("energy", card.get("energy", 0)))
 		if card["done"] and not was_done and not _done_at.has(String(card.get("id", ""))):
 			_done_at[String(card.get("id", ""))] = _clock_now
 		var mission_rows = row.get("mission", [])
@@ -565,7 +568,11 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	var dim: Color = _c("ink_dim", Color("#5C6B7D"))
 
 	# 2026-11-05: the card plate is 任务背景板 (九宫格) instead of the flat white box.
-	var plate := _ui_texture("bar_board")
+	# 2026-11-09: 换成操作者给的 `order_card_bar`（任务栏完整）：贴上浅下蓝，蓝条放钻石奖励。
+	# 老主题没有这张图时退回 bar_board，再没有就画程序化白卡 —— 三级兜底。
+	var plate := _ui_texture("order_card")
+	if plate == null:
+		plate = _ui_texture("bar_board")
 	if plate != null:
 		_draw_nine(plate, r, 26.0)
 	else:
@@ -574,8 +581,9 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 
 	# 2026-11-05: the avatar circle, the display name and the character id are gone —
 	# the card is just the mission slot plus the reward column.
+	# 2026-11-09: 任务棋子排在**蓝条以上**的区域里（蓝条归钻石奖励）。
 	var items: Array = card.get("mission", [])
-	var chips := mission_chip_rects(r, items.size())
+	var chips := mission_chip_rects(mission_area_rect(r), items.size())
 	for i in range(items.size()):
 		var item: Dictionary = items[i]
 		var chip: Rect2 = chips[i]
@@ -595,6 +603,7 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	_draw_reward_row(r, int(card.get("coin", 0)), 0.0)
 	if int(card.get("star", 0)) > 0:
 		_draw_star_row(r, int(card.get("star", 0)))
+	_draw_reward_strip(r, card)
 
 	# 2026-11-06: the badge stays put once shown — it rides the shrink instead of
 	# blinking out on click and popping back during the animation.
@@ -614,9 +623,79 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 ## 任务行里棋子贴图的位置（卡片局部坐标，返回页面坐标）。
 ## 2026-11-09 操作者要求"缩小到正常尺寸"：原来 125 + grow(6) = 137 高，
 ## 而卡片只有 140 高 —— 图标顶到卡片上下边、左右溢出，看着像贴纸糊上去的。
-## 现在 84 见方、垂直居中、两枚时按 gap 排开；单测 t_layout_parity 断言不越界。
+## 现在 96 见方、垂直居中、两枚时按 gap 排开；单测 t_layout_parity 断言不越界。
 const CHIP_SIZE := 96.0
 const CHIP_GAP := 14.0
+
+## 2026-11-09：蓝条比例的唯一来源是 layout_shared（实机/成片共用），这里只做别名。
+const GEM_STRIP_RATIO := Layout.GEM_STRIP_RATIO
+## 2026-11-09：蓝条里放**两组奖励** —— 闪电在前、钻石在后，各自跟一个数字。
+## 两个图标统一按高度 32 画（钻石贴图 39×32 正好 1:1；闪电贴图 39×53 等比缩到 24×32）。
+const REWARD_ICON_H := 32.0
+const ENERGY_ICON_ASPECT := 39.0 / 53.0
+const GEM_ICON_ASPECT := 39.0 / 32.0
+const REWARD_LABEL_PX := 28
+## 两个数字**同一套字**（2026-11-09 操作者：闪电后面的数字也要和钻石一样，别带黄）：
+## 白字 + 深蓝描边。描边色 #304870 是从操作者给的参考图上采样出来的主色。
+const REWARD_LABEL_COLOR := Color(1.0, 1.0, 1.0, 1.0)
+const REWARD_LABEL_STROKE := Color("#304870")
+const REWARD_LABEL_STROKE_PX := 2.0
+const REWARD_ICON_TEXT_GAP := 6.0
+## 两组之间的间距（比组内的图标-数字间距大，读起来才是两组）
+const REWARD_PAIR_GAP := 16.0
+## 整组上抬量：蓝条下沿就是卡片底边，居中时图标离底只有 3~4px，看着像被裁
+## （2026-11-09 操作者反馈"卡住下面了"）。上抬 4px 后底边留白 ~7px，顶部刚好贴齐蓝条。
+const REWARD_ROW_RISE := 4.0
+
+
+## 卡片放任务棋子的区域 = 卡片去掉底部蓝条。
+static func mission_area_rect(card_rect: Rect2) -> Rect2:
+	var strip := card_rect.size.y * GEM_STRIP_RATIO
+	return Rect2(card_rect.position, Vector2(card_rect.size.x, card_rect.size.y - strip))
+
+
+## 卡片底部蓝条（钻石奖励行）。
+static func gem_strip_rect(card_rect: Rect2) -> Rect2:
+	var strip := card_rect.size.y * GEM_STRIP_RATIO
+	return Rect2(card_rect.position + Vector2(0.0, card_rect.size.y - strip),
+			Vector2(card_rect.size.x, strip))
+
+
+## 奖励行的几何：["闪电" 数字] ["钻石" 数字]，整组在蓝条里水平居中、上抬 REWARD_ROW_RISE。
+## text 宽度由调用方按字体量（视图层自己量字宽是既有做法，见 _text_center_font）。
+## 返回 {"strip", "energy_icon", "energy_label", "gem_icon", "gem_label"}；
+## 某一组数值为 0 时它的矩形是空的 Rect2（不画）。
+static func reward_row_rects(card_rect: Rect2, energy_w: float, gem_w: float) -> Dictionary:
+	var strip := gem_strip_rect(card_rect)
+	var out := {
+		"strip": strip,
+		"energy_icon": Rect2(), "energy_label": Rect2(),
+		"gem_icon": Rect2(), "gem_label": Rect2(),
+	}
+	var pairs: Array = []
+	if energy_w > 0.0:
+		pairs.append(["energy", REWARD_ICON_H * ENERGY_ICON_ASPECT, energy_w])
+	if gem_w > 0.0:
+		pairs.append(["gem", REWARD_ICON_H * GEM_ICON_ASPECT, gem_w])
+	if pairs.is_empty():
+		return out
+	var total := 0.0
+	for i in pairs.size():
+		total += float(pairs[i][1]) + REWARD_ICON_TEXT_GAP + float(pairs[i][2])
+		if i < pairs.size() - 1:
+			total += REWARD_PAIR_GAP
+	# 闪电 + 钻石**两组一起**在蓝条里居中：total 不含最后一组后面的间距
+	var x := strip.position.x + (strip.size.x - total) * 0.5
+	var y := strip.position.y + (strip.size.y - REWARD_ICON_H) * 0.5 - REWARD_ROW_RISE
+	for pair in pairs:
+		var kind := String(pair[0])
+		var icon_w := float(pair[1])
+		var text_w := float(pair[2])
+		out[kind + "_icon"] = Rect2(Vector2(x, y), Vector2(icon_w, REWARD_ICON_H))
+		x += icon_w + REWARD_ICON_TEXT_GAP
+		out[kind + "_label"] = Rect2(Vector2(x, y), Vector2(maxf(text_w, 1.0), REWARD_ICON_H))
+		x += text_w + REWARD_PAIR_GAP
+	return out
 
 
 static func mission_chip_rects(card_rect: Rect2, count: int) -> Array:
@@ -843,6 +922,9 @@ func _make_card(raw: Dictionary) -> Dictionary:
 		"mission": items,
 		"star": int(raw.get("star", 0)),
 		"coin": int(raw.get("coin", 0)),
+		# 2026-11-09：订单的钻石奖励（卡片底部蓝条里的图标 + 数字）。
+		"gem": int(raw.get("gem", 0)),
+		"energy": int(raw.get("energy", 0)),
 		"done": bool(raw.get("done", false)),
 	}
 
@@ -859,6 +941,70 @@ func _c(key: String, fallback: Color) -> Color:
 	if value is Color:
 		return value
 	return fallback
+
+
+## 2026-11-09：卡片底部蓝条里的奖励 —— 闪电（体力）在前、钻石在后，各自一个数字。
+## 数字来自订单数据（sample_project.json 的 orders[].energy / orders[].gem），实机与成片读同一份快照。
+## 某一项 <= 0 就只画另一项；两项都没有就整个不画（老数据保持原样）。
+func _draw_reward_strip(r: Rect2, card: Dictionary) -> void:
+	var energy := int(card.get("energy", 0))
+	var gems := int(card.get("gem", 0))
+	if energy <= 0 and gems <= 0:
+		return
+	var font: Font = _font_display()
+	if font == null:
+		font = _font
+	var energy_w := _text_width(font, str(energy), REWARD_LABEL_PX) if energy > 0 else 0.0
+	var gem_w := _text_width(font, str(gems), REWARD_LABEL_PX) if gems > 0 else 0.0
+	var rects := reward_row_rects(r, energy_w, gem_w)
+	if energy > 0:
+		_draw_reward_pair(rects, "energy", str(energy), font)
+	if gems > 0:
+		_draw_reward_pair(rects, "gem", str(gems), font)
+
+
+## 一组 [图标 + 数字]：图标取主题槽位（energy / gem），没贴图就画程序化形状，位置不变。
+func _draw_reward_pair(rects: Dictionary, kind: String, text: String, font: Font) -> void:
+	var icon_rect: Rect2 = rects[kind + "_icon"]
+	var label_rect: Rect2 = rects[kind + "_label"]
+	var icon := _ui_texture(kind)
+	if icon != null:
+		draw_texture_rect(icon, icon_rect, false)
+	elif kind == "gem":
+		var pts := PackedVector2Array([
+			icon_rect.position + Vector2(icon_rect.size.x * 0.5, 0.0),
+			icon_rect.position + Vector2(icon_rect.size.x, icon_rect.size.y * 0.42),
+			icon_rect.position + Vector2(icon_rect.size.x * 0.5, icon_rect.size.y),
+			icon_rect.position + Vector2(0.0, icon_rect.size.y * 0.42),
+		])
+		draw_colored_polygon(pts, Color("#E85FD8"))
+	else:
+		var mid := icon_rect.get_center()
+		var bolt := PackedVector2Array([
+			mid + Vector2(2.0, -icon_rect.size.y * 0.5),
+			mid + Vector2(-icon_rect.size.x * 0.38, icon_rect.size.y * 0.08),
+			mid + Vector2(0.0, icon_rect.size.y * 0.08),
+			mid + Vector2(-2.0, icon_rect.size.y * 0.5),
+			mid + Vector2(icon_rect.size.x * 0.38, -icon_rect.size.y * 0.08),
+			mid + Vector2(0.0, -icon_rect.size.y * 0.08),
+		])
+		draw_colored_polygon(bolt, Color("#FFC53D"))
+	if font != null:
+		# 先铺描边（同一段字偏移画一圈），再压白字，得到参考图那种"白字深蓝边"
+		var r := REWARD_LABEL_STROKE_PX
+		var ring: Array = []
+		for i in 8:
+			var a := TAU * float(i) / 8.0
+			ring.append(Vector2(cos(a), sin(a)) * r)
+		var d := r * 0.7071
+		ring.append(Vector2(d, d))
+		ring.append(Vector2(-d, d))
+		ring.append(Vector2(d, -d))
+		ring.append(Vector2(-d, -d))
+		for off in ring:
+			_text_center_font(font, Rect2(label_rect.position + off, label_rect.size), text,
+					REWARD_LABEL_PX, REWARD_LABEL_STROKE)
+		_text_center_font(font, label_rect, text, REWARD_LABEL_PX, REWARD_LABEL_COLOR)
 
 
 func _rounded(rect: Rect2, radius: int, color: Color) -> void:
@@ -893,6 +1039,13 @@ func _text_at(pos: Vector2, text: String, size_px: int, color: Color) -> void:
 		return
 	draw_string(_font, pos + Vector2(0.0, float(size_px)), text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			size_px, color)
+
+
+## 量一段文字在当前显示字体下的宽度（布局要先知道宽度才好居中）。
+func _text_width(font: Font, text: String, size_px: int) -> float:
+	if font == null:
+		return 0.0
+	return font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
 
 
 func _text_center(rect: Rect2, text: String, size_px: int, color: Color) -> void:

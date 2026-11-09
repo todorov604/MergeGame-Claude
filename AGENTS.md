@@ -372,14 +372,110 @@ sim 在 taken 里带 `entity/level`，属于改数据结构，别顺手改。
   `draw_confirm_badge` 默认改回 true → 1 条红（`卡片绿对号默认隐藏`）；恢复后 2549 / 0。
 - 两侧出图：实机 `output/orders_panel.png` 与成片 `frames/00400.png` 的任务带同形同尺寸。
 
+### 6.13 订单卡改版：新任务栏底图 + 钻石奖励（2026-11-09，操作者第二次改界面）
+
+**操作者原话**：「任务栏换成这个 icon（任务栏完整.png），记得归档。钻石.png 在新的任务栏底下
+蓝色的地方，先居中加上钻石的 icon 和一个数字 Label。数字 Label 要活的，设在 Json 里。
+扩展开，所有的任务栏都要这么改。并且默认数值是 1-5 左右，在 Json 里先随机一下。
+任务完成后，钻石飞到最上面，数字跳动加上对应的数字。和任务栏飞金币一样。
+要 lerp，要和金币一样的动画。」
+
+**素材归档（§0 全流程）**：
+`order_card_bar.png`（388×178，订单卡九宫格底图，贴图自带"上浅下蓝"两条）、
+`gem_icon.png`（39×32，钻石图标）。1:1 复制（无裁切 → 无 `_source` 旁车），
+登记了 manifest json/csv/xlsx（+2 条，230 / 233 行）、`assets_local.json`（+2，48 条）、
+`PROVENANCE.md`、`LICENSES.md`、`data/themes/default/theme.json`（`order_card` / `gem` 两个槽位）。
+
+**几何（唯一来源 → `layout_shared.gd`）**：
+- `GEM_STRIP_RATIO = 0.279`（贴图上分界 124/178，九宫格角 26 不缩放铺到 250x140 后实测 39/140）
+- `order_panel.mission_area_rect()` = 卡片去掉蓝条；`gem_strip_rect()` = 底部蓝条；
+  `gem_icon_rect(card, text_w)` / `gem_label_rect(card, text_w)` = 图标+数字整组居中
+- 成片**不许再写一份**：`game_screen` 与 `movie_scene` 都读 `Layout.GEM_STRIP_RATIO`
+  （一开始试过在 movie_scene preload order_panel，直接踩到循环 preload，已改成共享常量）
+
+**数据（可复现的随机）**：`sample_project.json` 每个订单加 `"gem"`，用固定种子 20261109
+随机 1–5（order_1=2 / order_2=1 / order_3=4 / order_4=3 / order_5=5 / order_6=2）。
+`rules_levels` 的奖励校验把 `gem` 一起纳入（必须 ≥0）。
+
+**链路**：`sim._do_order_claim()` 与 coin/star 同一刻 `hud.gem += order.gem` →
+`snapshot().orders[].gem` → `OrderRows.build()` 透传 → `order_panel` 卡片蓝条画数字；
+交付后 `game_screen._play_gem_reward()` / `movie_scene._play_claim_effects()` 各播一次
+`coin_spiral`（`anchor: "gem"`、贴图 = gem 图标），落点 `top_bar.counter_center("gem")`
+（粉钻本体 bbox (2,2)-(73,60) → 比例 (37.5/246, 31/67)）；顶栏 `gem_display` + `gem_pop`
+按金币那套 tick + lerp + 弹跳跳数字。
+
+**踩到的两个坑**：
+1. `movie_scene._ui("gem")` 返回 null —— `UI_KEYS` 白名单没有 `gem`，螺旋退化成金色圆点
+   （看着像"钻石没飞"）。实机 `game_screen.UI_KEYS` 同样要加。
+2. `order_panel._make_card()` 是字段白名单，`gem` 不加进去卡片就拿不到数（蓝条一片空白）。
+
+**验证**：
+- `t_sim`：`board-claim pays the order gems` + 快照带 `gem`（反证：关掉入账 → 1 条红）
+- `t_layout_parity`：蓝条 0.30、贴底边、跨满宽、棋子不压蓝条、图标+数字整组居中；
+  钻石落点实机 == 成片 == 顶栏组件给的坐标（反证：`_hud_gem_anchor` 写死 → 1 条红）
+- 出片：帧 215 / 240 顶栏钻石 **99 → 100 → 101**（+2，与 order_1 的 gem 一致）；
+  帧 208~216 画面里同时有金币螺旋和**粉色钻石螺旋**（3 枚带拖尾）
+- 代理产物：`output/render/gem_fly2.mp4`（300 帧短跑，`same=YES`）
+**三轮反馈修正（同日）**：
+1. **钻石行"卡住下面"**：蓝条实测只有 39px（比例 0.279，不是最初估的 0.30），图标 1:1 居中时底边只剩 1~2px。
+   修法：`GEM_STRIP_RATIO` 改 0.279、图标保持 **1:1（39×32，操作者明确不让缩）**、整组 `GEM_ROW_RISE = 4px` 上抬 →
+   图标底边留白 4px、数字底边留白 7px。断言改成"不越出卡片 / 最多越过蓝条上沿 1px / 底边留白 ≥5px"。
+2. **顶栏钻石数字字号**：`top_bar` 原来给宝石单独缩到 `digit_px * 0.56`（**改动前就在**，不是本轮加的），
+   操作者要求"和闪电、金币保持一致"→ 三根条统一用 `digit_px`（实测 88 / 9 / 99 同高）。
+3. **钻石螺旋反向**：与金币同屏时轨迹重叠。`fly_anim._spiral_point()` 增加 `spin`（+1 顺时针 / −1 逆时针），
+   `_draw_coin_spiral` 透传；钻石事件带 `"spin": -1.0`。断言：同一 t 上横偏移相同、纵偏移镜像、两向不重合
+   （反证：忽略 spin → 2 条红）。
+
+### 6.14 订单卡再加体力奖励（2026-11-09，操作者第三次改界面）
+
+**操作者原话**：「任务栏下面我还想加上闪电，跟钻石是一个逻辑。闪电在前，后面跟着一个数字。
+钻石在后，后面也跟着一个数字。任务完成各自飞向上面对应的位置。闪电飞正螺旋和金币一样就行了。
+数字也是要关联上涨。闪电的 icon 用这个（体力.png），记得归档。记得写成活的关联 Json，记得 lerp。
+闪电先随机一下 30-100 之间。」→ 后续追加：「闪电和钻石加一起居中」「label 数字白底描边，
+参考这个描边色」→「闪电后面的数字带颜色了，和钻石一样就行」。
+
+**素材**：`energy_icon.png`（39×53，竖长）→ 归档目录 + manifest（+1，231 条 / 234 行）+ assets_local（49 条）
++ PROVENANCE + LICENSES + 主题槽位 `energy`。**payload 88**、guard 索引 229、主题 ui 键 57。
+
+**几何（`order_panel.reward_row_rects(card, energy_w, gem_w)`）**：
+两个图标统一按**高 32** 画（钻石 39×32 正好 1:1；闪电按 39:53 等比缩到 24×32），
+组内图标-数字间距 6、两组间距 16，**两组一起**在蓝条里居中（total 不含最后一组后面的间距），
+整组上抬 4px。返回 `{strip, energy_icon, energy_label, gem_icon, gem_label}`，某项为 0 时矩形为空、不画。
+
+**数字样式**：白字 + 深蓝描边 `#304870`（**从操作者给的参考图上采样**），描边半径 2px，
+画法 = 同一段字按 8 方向 + 4 对角偏移先铺描边色，再压白字（和顶栏倒计时同一手法）。
+两个数字共用 `REWARD_LABEL_COLOR` / `REWARD_LABEL_STROKE`，`_draw_reward_pair()` 不再收颜色参数——
+颜色只有一处，不会再出现"闪电那个是黄的"。
+
+**数据**：`orders[].energy` 固定种子随机 30–100（order_1 53 / order_2 36 / order_3 92 / order_4 67 /
+order_5 47 / order_6 84）；`rules_levels` 的奖励校验把 `energy` 一起纳入。
+
+**链路**：`sim._do_order_claim()` 同一刻 `hud.energy += order.energy` → 快照 `orders[].energy` →
+`OrderRows` → 卡片蓝条；交付后实机 `_play_energy_reward()` / 成片 `_play_claim_effects()` 各播一次
+`coin_spiral`（`anchor: "energy"`、`spin: +1`、贴图 = 闪电），落点 `top_bar.counter_center("energy")`
+（闪电 bbox (3,3)-(57,81) → 比例 (30/243, 42/90)）；顶栏 `energy_display` / `energy_pop` 逐格 tick + lerp + 弹跳。
+
+**三个坑**：
+1. `_make_card()` 白名单 + `sync_orders` 都要加 `energy`，否则卡片拿不到数（和 §6.13 的 gem 同一个坑）。
+2. **`UI_KEYS` 两处都要加 `energy`**（实机 `game_screen` + 成片 `movie_scene`），否则 `_ui("energy")` 返回 null，
+   螺旋退化成金色圆点——看上去像"闪电没飞"。
+3. 体力奖励进账后 `t_sim` 的基线变了：`run_all` 结束 energy 85 → **174**、level_2 `charges` 85 → **138**
+   （= 关卡切换时按当时体力初始化）。
+
+**验证**：
+- `t_sim`：`board-claim pays the order energy (10 + 40)` + 快照带 energy（反证：关掉入账 → 3 条红）
+- `t_layout_parity`：两组奖励尺寸/顺序（闪电在前）/不越出卡片/底边留白/两组一起居中/只配钻石时自己居中/上抬 4px
+- 出片：帧 214 三种奖励同时在空中（金币 + 闪电 + 钻石）；帧 260 顶栏体力 **88 → 141**（+53）、金币 9 → 14
+- 代理产物：`output/render/energy_fly2.mp4`（300 帧短跑，`same=YES`）
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
 
 ### 7.1 当前锚点
 
-- 分支 `main` @ `2773a5d`（tag `录屏内容基本完成`）；2026-11-09 下午的两处修复（金币落点 §6.10、交付枚数 §6.11）**尚未提交**（等审）
-- 测试 **2549 checks / 0 failures**（`t_sim.gd` 216、`t_layout_parity` 74、`t_claim_flight` 12）；`check_portability.ps1` blocking = none
+- 分支 `main` @ `a50ff3c`（tag `录屏内容基本完成` 仍在 4943b0e）：金币落点 §6.10、交付枚数 §6.11、卡面装饰 §6.12 已提交（a50ff3c）；**订单卡改版 §6.13 / §6.14（新底图 + 钻石 + 体力奖励）未提交**，按 §7.3-6 等操作者说「提」
+- 测试 **2640 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 
@@ -412,6 +508,8 @@ sim 在 taken 里带 `entity/level`，属于改数据结构，别顺手改。
 3. **短跑不进成品目录**；完整出片才写 `output/mov/<stamp>/film.mp4`。
 4. **先打数据再改代码**：涉及"从哪飞到哪"，先打印起点/落点/来源格子三个数。
 5. **一次只改一个行为**：改完 编译 → 测试 → 一张图，再进下一个。
+6. **不要自动提交**（2026-11-09 操作者定）：改完把代码**注释写清楚**、测试与出片跑完就停；
+   `git commit` / `git push` 等操作者说「提」再执行。工作区留脏是常态，别自作主张清理。
 
 ## 8. 双画面同步（2026-11-09 操作者亲自定的硬规矩，优先级最高）
 

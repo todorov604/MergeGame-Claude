@@ -15,6 +15,12 @@
 - board_frame.png、char_order_*_idle/done.png：来自 `E:\HotelManor_icon\棋盘.psd` 导出/合成
 - 这些素材版权归项目方所有。
 
+
+### 2026-11-09 棋盘界面拆解新增
+- order_card_bar.png（订单卡九宫格底图，388×178）、gem_icon.png（钻石图标，39×32）、
+  energy_icon.png（体力闪电图标，39×53）：
+  来自 `E:\北京Icon\常用资产汇总\棋盘界面拆解\`，公司自有素材，1:1 复制未重编码。
+
 ## 生成占位
 - ui_level_complete / ui_level_intro / ui_coin_reward_popup / ui_board_full_toast / fx_level_transition / cta_*：由 PIL 用 Twemoji + Noto 字体生成，仅作占位。
 

@@ -9,6 +9,10 @@ const CARD_GAP_X := 18.0
 const CARD_H := 140.0
 const PORTRAIT_H := 210.0
 const PORTRAIT_SINK := 26.0
+## 2026-11-09：订单卡底部蓝条占卡高的比例。贴图上分界在 124/178 = 0.697，
+## 九宫格（角 26 不缩放）铺到 250x140 后实测蓝条 = 39px / 140 = 0.279（见 AGENTS §6.13）。
+## 蓝条放钻石奖励（图标 + 数字），棋子排在蓝条以上。实机与成片都读这里。
+const GEM_STRIP_RATIO := 0.279
 ## 库存面板矩形（任务带左侧红框区）。
 const STOCKPILE_RECT := Rect2(40.0, 248.0, 156.0, 156.0)
 

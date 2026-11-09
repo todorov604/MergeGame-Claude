@@ -33,7 +33,8 @@ HEIGHT=1920
 SCENE="res://src/render/movie_scene.tscn"
 
 FRAMES_ARG=""
-OUT="output/render.mp4"
+STAMP="$(date +%Y%m%d_%H%M%S)"
+OUT="output/mov/$STAMP/film.mp4"
 PROJECT="res://data/sample_project.json"
 THEME=""
 TAKE=""
@@ -298,6 +299,18 @@ AUDIO_STREAMS=$("$FFPROBE_BIN" -v error -select_streams a -show_entries stream=i
 [ "$AUDIO_STREAMS" -eq 0 ] || fail "mp4 carries $AUDIO_STREAMS audio stream(s); M0 renders silent video only"
 MP4_BYTES=$(wc -c < "$OUT" | tr -d ' ')
 echo "[render] mp4 bytes=$MP4_BYTES"
+
+# ------------------------------------------------------------- png sequence
+# 交付要求：同一时间戳目录下再存一份 1080x1920 的 PNG 序列，方便对拍与二次剪辑。
+OUT_DIR="$(dirname "$OUT")"
+FRAMES_DIR="$OUT_DIR/frames"
+mkdir -p "$FRAMES_DIR" || fail "cannot create frames dir: $FRAMES_DIR"
+"$FFMPEG_BIN" -y -hide_banner -loglevel error -i "$OUT" \
+	-vf "scale=${WIDTH}:${HEIGHT}:flags=lanczos" "$FRAMES_DIR/%05d.png" \
+	|| fail "png extraction failed"
+PNG_COUNT=$(ls -1 "$FRAMES_DIR"/*.png 2>/dev/null | wc -l | tr -d ' ')
+[ "$PNG_COUNT" -gt 0 ] || fail "no png frames written to $FRAMES_DIR"
+echo "[render] png frames=$PNG_COUNT dir=$FRAMES_DIR"
 
 # -------------------------------------------------------------- determinism
 MD5_LINE="skipped"

@@ -16,6 +16,9 @@ const BoardScene := preload("res://src/view/board_view.tscn")
 const BoardView := preload("res://src/view/board_view.gd")
 const HudView := preload("res://src/view/hud_view.gd")
 const OrderPanel := preload("res://src/view/order_panel.gd")
+const OrderRows := preload("res://src/view/order_rows.gd")
+const TopBarScene := preload("res://src/view/top_bar.gd")
+const BottomBarScene := preload("res://src/view/bottom_bar.gd")
 const FlyAnim := preload("res://src/view/fly_anim.gd")
 const ProjectModel := preload("res://src/core/project_model.gd")
 const EventEvaluator := preload("res://src/core/event_evaluator.gd")
@@ -77,7 +80,8 @@ const LAYOUT_GEM := FilmLayout.LAYOUT_GEM
 ## 466 container top and below the y≈0..120 money bar.
 const ORDER_RECT := Rect2(0.0, 210.0, 1080.0, 250.0)
 ## 任务带左侧的库存面板（红框那块）：底板 156、只吃自己的点击。
-const STOCKPILE_RECT := Rect2(40.0, 248.0, 156.0, 156.0)
+const Layout := preload("res://src/view/layout_shared.gd")
+const STOCKPILE_RECT := Layout.STOCKPILE_RECT
 ## hud_view.gd draws a 1080x185 layout with hardcoded local pill rects. Scaling the
 ## control 0.8 keeps that view untouched while making the bar 864x148, which leaves
 ## the top-right corner free for the §20.5 shop button at x=930.
@@ -233,9 +237,8 @@ class Chrome extends Control:
 		# 2026-11-06: portraits are drawn by the order panel now (they must shrink with
 		# their card), so the chrome no longer paints them.
 		_sync_card_anchors(used)
-		_draw_stockpile()
 		_draw_topbar(snap)
-		_draw_bottom_bar(snap)
+
 
 	## Card anchors in order-band local space (the panel sits at ORDER_BAND_Y).
 	func _sync_card_anchors(used: Dictionary) -> void:
@@ -322,42 +325,6 @@ class Chrome extends Control:
 			var w := h * (texture.get_width() / maxf(texture.get_height(), 1.0))
 			var rect := Rect2(page.get_center().x - w * 0.5, page.position.y + 26.0 - h, w, h)
 			draw_ui_fit(key, rect)
-
-
-	## 任务带左侧的库存面板：底板 + 内部棋子 + 红点次数 + 右下箭头。
-	func _draw_stockpile() -> void:
-		if host.evaluator == null or host.evaluator.sim == null:
-			return
-		# 2026-11-06: 次数归零也挂在原位，只有关卡没启用库存时才不画。
-		var cfg: Dictionary = host.evaluator.sim.stockpile_config()
-		if cfg.is_empty() or not bool(cfg.get("enabled", false)):
-			return
-		var left: int = int(host.evaluator.sim.stockpile_remaining())
-		var rect: Rect2 = host.STOCKPILE_RECT
-		if host._ui("stockpile_frame") != null:
-			draw_ui_fit("stockpile_frame", rect)
-		else:
-			draw_rect(rect, Color("#DCE6F2"), true)
-		var preview: Dictionary = host.evaluator.sim.stockpile_preview()
-		if not preview.is_empty() and host.board != null:
-			var chip: Texture2D = host.board.chip_texture(String(preview.get("entity", "")),
-					int(preview.get("level", 1)))
-			if chip != null:
-				draw_texture_rect(chip, rect.grow(-10.0), false)
-		# 2026-11-06: 参照设计图放大绿箭头（46×56）和红点（62×62），并把红点往内收
-		var arrows: Texture2D = host._ui("stockpile_arrows")
-		if arrows != null:
-			draw_texture_rect(arrows, Rect2(
-					rect.position + Vector2(rect.size.x - 54.0, rect.size.y - 48.0),
-					Vector2(46.0, 56.0)), false)
-		var dot: Texture2D = host._ui("red_dot")
-		var drect := Rect2(rect.position + Vector2(rect.size.x - 54.0, -8.0), Vector2(62.0, 62.0))
-		if dot != null:
-			draw_texture_rect(dot, drect, false)
-		var num_font: Font = host._font_display_bold
-		if num_font == null:
-			num_font = host._font
-		text_center_font(num_font, drect.grow(-4.0), str(left), 36, Color.WHITE)
 
 
 	func _draw_topbar(snap: Dictionary) -> void:
@@ -687,6 +654,9 @@ var _cursor_layer = null
 var _last_click_at: float = -1000.0
 ## Coin-bar number pop after a reward lands.
 var _coin_pop_at: float = -1000.0
+## 顶栏组件（与成片共用同一实现）。
+var top_bar = null
+var bottom_bar = null
 ## 启动参数 --preview=<scale>：工程里的 window_*_override 会盖掉 --resolution，
 ## 所以 100% 预览必须由代码在启动后自己改窗口尺寸。
 var _preview_pending: float = 0.0
@@ -802,6 +772,8 @@ func _ready() -> void:
 		board.show_debug_labels = false
 
 	orders = OrderPanel.new()
+	_top_bar_setup()
+	_bottom_bar_setup()
 	orders.position = ORDER_RECT.position
 	orders.size = ORDER_RECT.size
 	# order_panel paints an opaque page-coloured strip behind its cards; the §20.5
@@ -1129,39 +1101,14 @@ func _sync_from_sim() -> void:
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
-	orders.sync_orders(_order_rows_with_ready(_as_array(snap.get("orders", [])), snap))
+	# 2026-11-06: one row builder, shared with the film (src/view/order_rows.gd).
+	orders.sync_orders(OrderRows.build(snap, model))
 	# 2026-11-05: the chrome draws the character portraits from the order list, so it
 	# must repaint whenever the snapshot changes — otherwise the old level's character
 	# stays on screen after a level switch.
 	if chrome != null:
 		chrome.queue_redraw()
 	_refresh_anchors()
-
-
-## Mission rows carry "is a matching chip on the board right now": the card then shows
-## the green check before the player claims anything.
-func _order_rows_with_ready(rows: Array, snap: Dictionary) -> Array:
-	var on_board := {}
-	for raw_cell in _completed_cells(snap):
-		var cell := _to_cell(raw_cell)
-		if not evaluator.sim.board.in_bounds(cell) or not evaluator.sim.board.has_item(cell):
-			continue
-		var item: Dictionary = evaluator.sim.board.item(cell)
-		on_board["%s@%d" % [String(item.get("entity", "")), int(item.get("level", 1))]] = true
-	var out: Array = []
-	for raw in rows:
-		if typeof(raw) != TYPE_DICTIONARY:
-			continue
-		var row: Dictionary = (raw as Dictionary).duplicate(true)
-		var mission: Array = []
-		for m in _as_array(row.get("mission", [])):
-			if typeof(m) != TYPE_ARRAY or (m as Array).size() < 3:
-				continue
-			var key := "%s@%d" % [String((m as Array)[0]), int((m as Array)[1])]
-			mission.append([(m as Array)[0], (m as Array)[1], (m as Array)[2], on_board.has(key)])
-		row["mission"] = mission
-		out.append(row)
-	return out
 
 
 func _level_from_snapshot(snap: Dictionary) -> Dictionary:
@@ -1248,7 +1195,9 @@ func _refresh_anchors() -> void:
 	_tick_level_next()
 	_tick_coin_pending()
 	_refresh_order_ready()
+	_push_stockpile()
 	_tick_coin_display()
+	_push_top_bar()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)
 	if orders != null and orders.has_method("is_animating") and orders.is_animating():
@@ -1397,13 +1346,73 @@ func _play_unlocks() -> void:
 
 ## The ready badge must follow the board, not a stale snapshot: after a claim eats the
 ## shared chip, the other cards have to lose their green check immediately.
+func _top_bar_setup() -> void:
+	top_bar = TopBarScene.new()
+	top_bar.name = "TopBar"
+	top_bar.position = Vector2.ZERO
+	top_bar.size = Vector2(1080.0, 150.0)
+	add_child(top_bar)
+	top_bar.font_bold = _font_display_bold
+	top_bar.font_fallback = _font
+	if theme_loader != null:
+		top_bar.set_asset_theme(theme_loader, model.project if model != null else {})
+
+
+func _bottom_bar_setup() -> void:
+	bottom_bar = BottomBarScene.new()
+	bottom_bar.name = "BottomBar"
+	add_child(bottom_bar)
+	bottom_bar.font_bold = _font_display_bold
+	bottom_bar.font_regular = _font_display_regular
+	bottom_bar.font_num = _font_display_num
+	if theme_loader != null:
+		bottom_bar.set_asset_theme(theme_loader, model.project if model != null else {})
+
+
+func _push_top_bar() -> void:
+	if top_bar == null or evaluator == null or evaluator.sim == null:
+		return
+	var snap: Dictionary = evaluator.sim.snapshot()
+	var hud: Dictionary = snap.get("hud", {})
+	var since: float = _clock - _coin_pop_at
+	var pop := 0.0
+	if since >= 0.0 and since < 0.35:
+		pop = 0.38 * sin(PI * since / 0.35)
+	top_bar.set_state({
+		"level": int(hud.get("level", 1)),
+		"energy": int(hud.get("energy", 0)),
+		"coin": int(hud.get("coin", 0)),
+		"gem": int(hud.get("gem", 0)),
+		"clock": _mmss(_energy_countdown()),
+		"coin_display": _coin_display,
+		"pop": pop,
+	})
+
+
 func _refresh_order_ready() -> void:
 	if orders == null or evaluator == null or evaluator.sim == null:
 		return
 	if not orders.has_method("sync_orders"):
 		return
-	orders.sync_orders(_order_rows_with_ready(
-			_as_array(evaluator.sim.snapshot().get("orders", [])), evaluator.sim.snapshot()))
+	var snap: Dictionary = evaluator.sim.snapshot()
+	orders.sync_orders(OrderRows.build(snap, model))
+
+
+## 库存面板的数据管道。2026-11-06：绘制搬到 order_panel 了（成片实例化同一控件即自带），
+## 这里只负责把 sim 的状态推下去 —— 启用库存就画（次数归零也画），没启用才收起来。
+func _push_stockpile() -> void:
+	if orders == null or evaluator == null or evaluator.sim == null:
+		return
+	if not orders.has_method("set_stockpile"):
+		return
+	var cfg: Dictionary = evaluator.sim.stockpile_config()
+	if cfg.is_empty() or not bool(cfg.get("enabled", false)):
+		if orders.has_method("clear_stockpile"):
+			orders.clear_stockpile()
+		return
+	var preview: Dictionary = evaluator.sim.stockpile_preview()
+	orders.set_stockpile(int(evaluator.sim.stockpile_remaining()),
+			String(preview.get("entity", "")), int(preview.get("level", 0)))
 
 
 ## Advance the displayed coin number by one tick at a time; snap when ticks run dry.
@@ -1535,7 +1544,9 @@ func _process(delta: float) -> void:
 	_tick_level_next()
 	_tick_coin_pending()
 	_refresh_order_ready()
+	_push_stockpile()
 	_tick_coin_display()
+	_push_top_bar()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)
 	if orders != null and orders.has_method("is_animating") and orders.is_animating():
@@ -2135,6 +2146,7 @@ func _reset_run() -> void:
 	_tick_coin_pending()
 	_refresh_order_ready()
 	_tick_coin_display()
+	_push_top_bar()
 	if orders != null and orders.has_method("set_clock"):
 		orders.set_clock(_clock)
 	if orders != null and orders.has_method("is_animating") and orders.is_animating():

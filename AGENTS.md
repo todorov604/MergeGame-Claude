@@ -74,3 +74,67 @@ Get-CimInstance Win32_Process -Filter "Name LIKE '%Godot%'" |
 - 5 个订单样例（任务不重复、≤2 任务、金币 20–30）：
   Ca2 / Cb2 / Ca1+Cb1 / Ca2+Cb1 / Cb2+Ca1，金币 25/22/26/30/20，人物 char_01/char_02 交替。
 - 待做：每张卡带自己的小人头像；完成时小人一起缩放消失（目前只缩卡片）。
+
+## 6. 渲染收口（C/A 完成，B 待做）2026-11-06
+
+- **出片目录**：每次渲染一个时间戳目录 `output/mov/<YYYYmmdd_HHMMSS>/`，里面放
+  `film.mp4`、`film.manifest.json`、`frames/%05d.png`（1080x1920 PNG 序列）。
+  `tools/render.sh` 默认输出即此结构；`tools/render_take.gd` 同样会补 PNG 序列。
+- **窗口尺寸坑**：`window/size/window_width_override` 会盖掉命令行 `--resolution`，
+  出片会被压成 540 宽。已改成普通 `window/size/window_width=540/height=960`，
+  这样 F5 仍是 540x960，而 `--resolution 1080x1920` 生效。
+- **C（对拍护栏）已完成**：`tests/t_layout_parity.gd`，断言实机/成片/库存面板
+  三方几何常量与 `Layout.card_rects()` 逐张矩形一致，共 40 checks。
+- **A（共享布局）已完成**：`src/view/layout_shared.gd` 是唯一几何来源
+  （QUEUE_ORIGIN_X 250 / QUEUE_CARD_W 250 / CARD_GAP_X 18 / CARD_H 140 /
+  PORTRAIT_H 210 / PORTRAIT_SINK 26 / STOCKPILE_RECT），
+  `order_panel.gd`、`movie_scene.gd`、`game_screen.gd` 均改为引用它。
+- **B（成片直接跑实机界面）未开始**：可行方案已探明——`order_panel.gd` 的
+  对外 API（`set_asset_theme/set_palette/set_metrics/set_clock/build_from_level/sync_orders`）
+  足够让成片把订单带交给实机组件渲染，位置 `ORDER_RECT.position=(0,210)`、尺寸 1080x250。
+  需要一并解决：snapshot.orders 到 sync_orders 行格式的转换（实机是
+  `_order_rows_with_ready`），以及去掉成片自己的 `_draw_characters/_draw_orders`。
+  验收方式：`bash tools/render.sh --frames 60` 出片 + PNG 逐帧对比。
+
+### 6.1 B 第一增量（已完成，2026-11-06）
+
+成片不再自己画订单带 —— `movie_scene` 里实例化实机的 `order_panel.gd`：
+`_live_band.position=(0,210)`、`size=(1080,250)`、`set_palette/_metrics/set_asset_theme`，
+每帧 `set_clock(_t)` + `sync_orders(OrderRows.build(_snap, _model))` + `set_stockpile(...)`。
+
+- `src/view/order_rows.gd` 是 **snapshot → sync_orders 行的唯一转换处**（字典行，
+  `mission:[{entity,level,have,need,ready,hue,label}]`），实机与成片共用；新增 `tests/t_order_rows.gd`。
+- `order_panel` 新增两个开关：`draw_portraits`（成片关掉，立绘仍由成片画，保持"顶栏压在头发上"的层级）、
+  `draw_page_strip`（成片关掉，成片自己画背景；开着的实机底条会盖住立绘下半身）。
+- `layout_shared` 的矩形改为**页面坐标**语义：`BAND_Y=210`、`CARD_LOCAL_Y=55`，
+  `card_rect(i)` 返回页面坐标；面板是局部坐标，比对时 +BAND_Y（`t_layout_parity` 已断言）。
+- 验收：`bash tools/render.sh --take ... --frames 60` → 1080x1920、md5 双跑一致、
+  `output/mov/<stamp>/frames/*.png` 与实机 `band_live.png` 逐元素一致
+  （立绘位置/卡片 250 宽 x=250/库存面板 9+箭头）。
+
+**尚未收口**：顶栏、底栏、棋盘仍由成片自绘（与实机有细微差异，例如倒计时位置）；
+库存面板在成片里显示的是关卡配置次数，不跟随 take 里的点击（take 未记录 stockpile_tap 回放）。
+
+### 6.2 B 全部收口（2026-11-09）
+
+成片的四层界面全部改成托管实机组件，`movie_scene` 只负责：取快照、推进时钟、画光标/飞行/提示。
+
+| 层 | 组件 | 挂载位置 |
+|---|---|---|
+| 顶栏 | `src/view/top_bar.gd`（新建） | (0,0)，1080x150 |
+| 订单带 | `src/view/order_panel.gd`（复用） | (0,210)，1080x250 |
+| 棋盘 | `src/view/board_view.tscn`（复用） | (0,0) |
+| 底栏 | `src/view/bottom_bar.gd`（新建） | (0,0)，1080x1920 |
+
+关键开关/坑：
+- 子节点绘制在父 `_draw()` 之后，所以棋盘会盖住父层画的立绘 —— 立绘改由**订单面板**画
+  （`draw_portraits=true`），面板在棋盘之上、顶栏之下，正好复现实机层级。
+- 面板的 `draw_page_strip` 在成片里必须 false（实机那条不透明底条会盖住立绘下半身），
+  背景由成片的 band/背景层提供。
+- `board_view.show_debug_labels = false`，否则成片会露出 "LEVEL 1 / level_1" 调试字样。
+- 顶栏倒计时算法两边一致：`1800 - (floor(时钟) % 1800)`。
+- 底栏文案/几何常量来自 `FilmLayout`（= `movie_scene.gd` 的布局表），`bottom_bar.gd` 直接 preload。
+
+验收：`bash tools/render.sh --take ... --frames 60` → 1080x1920、md5 双跑一致；
+`output/mov/<stamp>/frames/00040.png` 与实机截图逐区域对比一致（顶栏/订单带/棋盘/底栏）。
+测试：2500 checks / 0 failures（新增 `t_layout_parity` 顶栏黄金值断言）。

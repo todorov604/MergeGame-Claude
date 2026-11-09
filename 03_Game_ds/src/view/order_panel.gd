@@ -18,12 +18,13 @@ const WIDTH := 1080.0
 const HEIGHT := 250.0
 const MAX_CARDS := 6
 const MARGIN := 18.0
-const MAX_CARD_W := 250.0
-const CARD_GAP_X := 18.0
+const Layout := preload("res://src/view/layout_shared.gd")
+const MAX_CARD_W := Layout.QUEUE_CARD_W
+const CARD_GAP_X := Layout.CARD_GAP_X
 const VISIBLE_CARDS := 3
 ## The queue starts where level 1's single card does (portrait centre 393 - card/2), so
 ## the left side of the band stays free for other UI.
-const QUEUE_ORIGIN_X := 250.0
+const QUEUE_ORIGIN_X := Layout.QUEUE_ORIGIN_X
 
 var cards: Array = []
 var palette: Dictionary = {}
@@ -58,6 +59,11 @@ var _font_bold: Font = null
 var _anchors: Array = []
 ## Horizontal offset of the whole queue while the player drags it (rubber band).
 var _row_offset: float = 0.0
+## 立绘是否由本组件绘制（成片端关掉，改由成片自己画，好保持"顶栏压在立绘上"的层级）。
+var draw_portraits: bool = true
+## 是否铺不透明底条：实机需要（盖住棋盘标题行），成片不用（成片自己画背景）。
+var draw_page_strip: bool = true
+## 任务带左侧的库存面板状态（-1 表示本关没有库存）。
 ## 队列重排：每张卡的目标 x 和当前 x（换位时用 0.25s 缓动滑过去）。
 var _target_x: Dictionary = {}
 var _x_now: Dictionary = {}
@@ -67,6 +73,12 @@ var _clock_now: float = 0.0
 var _done_at: Dictionary = {}
 ## Claimed orders stay visible until their chip lands: id -> time the done state shows.
 var _hold: Dictionary = {}
+## 库存面板（任务带左侧那块）的运行时状态：实机每帧推进来，画由本面板负责。
+## 2026-11-06: 从 game_screen 的 Chrome 搬进来，成片端实例化本面板就自动带上。
+var _stockpile_on: bool = false
+var _stockpile_count: int = 0
+var _stockpile_entity: String = ""
+var _stockpile_level: int = 0
 
 
 func set_asset_theme(loader, project: Dictionary) -> void:
@@ -187,6 +199,8 @@ func is_animating() -> bool:
 	return false
 
 
+
+
 func set_row_offset(dx: float) -> void:
 	_row_offset = dx
 	_layout()
@@ -231,8 +245,11 @@ func build_from_level(level: Dictionary) -> Dictionary:
 	return {"ok": true, "cards": cards.size(), "missions": missions, "level_id": _level_id}
 
 
-## Live progress from a sim snapshot: [{id, mission:[[entity, level, have],...],
-## star, coin, done}]. Unknown fields are ignored, so a partial row is safe.
+## Live progress from a sim snapshot. Rows come from src/view/order_rows.gd, the one
+## builder the live screen and the film share: a mission entry is
+## {entity, level, have, need, ready, hue, label}. The legacy array form
+## [entity, level, have, ready] still reads the same way, so probes and older callers
+## keep working; unknown fields are ignored, so a partial row is safe.
 func sync_orders(rows: Array) -> void:
 	if typeof(rows) != TYPE_ARRAY:
 		return
@@ -262,12 +279,30 @@ func sync_orders(rows: Array) -> void:
 				continue
 			if typeof(mission_rows) != TYPE_ARRAY or i >= (mission_rows as Array).size():
 				continue
-			var m = (mission_rows as Array)[i]
-			if typeof(m) == TYPE_ARRAY and (m as Array).size() >= 3:
-				items[i]["have"] = int((m as Array)[2])
-				items[i]["ready"] = bool((m as Array)[3]) if (m as Array).size() >= 4 else false
+			var item: Dictionary = items[i]
+			_sync_mission_item(item, (mission_rows as Array)[i])
 	if is_inside_tree():
 		queue_redraw()
+
+
+## One mission entry of the snapshot -> the card's item (dicts carry the shared row
+## shape from OrderRows; the array form [entity, level, have, ready] still works).
+func _sync_mission_item(item: Dictionary, m) -> void:
+	if typeof(m) == TYPE_DICTIONARY:
+		var row: Dictionary = m
+		item["have"] = int(row.get("have", item.get("have", 0)))
+		item["need"] = maxi(int(row.get("need", item.get("need", 1))), 1)
+		item["ready"] = bool(row.get("ready", false))
+		var hue = row.get("hue", null)
+		if hue is Color:
+			item["hue"] = hue
+		var label = row.get("label", null)
+		if label is String and not (label as String).is_empty():
+			item["label"] = String(label)
+		return
+	if typeof(m) == TYPE_ARRAY and (m as Array).size() >= 3:
+		item["have"] = int((m as Array)[2])
+		item["ready"] = bool((m as Array)[3]) if (m as Array).size() >= 4 else false
 
 
 func set_order_done(order_id: String, done: bool) -> bool:
@@ -295,6 +330,30 @@ func set_mission_have(order_id: String, index: int, have: int) -> bool:
 	if is_inside_tree():
 		queue_redraw()
 	return true
+
+
+## 库存面板的实时状态（次数 + 面板里那枚棋子）。启用库存就画，次数为 0 也照画。
+func set_stockpile(count: int, entity: String, level: int) -> void:
+	var changed := (not _stockpile_on) or _stockpile_count != count \
+			or _stockpile_entity != entity or _stockpile_level != level
+	_stockpile_on = true
+	_stockpile_count = count
+	_stockpile_entity = entity
+	_stockpile_level = level
+	if changed and is_inside_tree():
+		queue_redraw()
+
+
+## 本关没有启用库存：整块控件收起来（和"次数归零"不是一回事）。
+func clear_stockpile() -> void:
+	if not _stockpile_on:
+		return
+	_stockpile_on = false
+	_stockpile_count = 0
+	_stockpile_entity = ""
+	_stockpile_level = 0
+	if is_inside_tree():
+		queue_redraw()
 
 
 ## 每帧按“能交的排前面”做稳定分区：不插队、不改变各自相对顺序；
@@ -410,7 +469,7 @@ func _layout() -> void:
 	var start_x := QUEUE_ORIGIN_X
 	# 2026-11-05: compact card — content only (mission + rewards), centred in the band.
 	var card_h := minf(total_h - 8.0, 140.0)
-	var start_y := maxf((total_h - card_h) * 0.5, 4.0)
+	var start_y := Layout.CARD_LOCAL_Y
 	if n > 1:
 		# 2026-11-06: queue layout — equal gaps in one row, only the first three cards
 		# are on screen; the row itself slides with _row_offset.
@@ -451,8 +510,9 @@ func _draw() -> void:
 		_layout()
 	# Opaque page strip: the panel sits on top of the board's own caption row, and
 	# the sim owns the playfield below it, so the panel paints its own background.
-	draw_rect(Rect2(Vector2.ZERO, Vector2(maxf(size.x, WIDTH), maxf(size.y, HEIGHT))),
-			_c("page", Color("#E6EDF6")), true)
+	if draw_page_strip:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(maxf(size.x, WIDTH), maxf(size.y, HEIGHT))),
+				_c("page", Color("#E6EDF6")), true)
 	var shown := 0
 	var keep: Array = []
 	for card in cards:
@@ -478,9 +538,10 @@ func _draw() -> void:
 	if keep.size() != cards.size():
 		cards = keep
 		_layout()
+	_draw_stockpile()
 
 
-const PORTRAIT_H := 210.0
+const PORTRAIT_H := Layout.PORTRAIT_H
 
 
 func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
@@ -488,7 +549,7 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 		return
 	# 2026-11-06: the portrait belongs to the card now, so a retiring card takes its
 	# character with it instead of the art blinking out first.
-	var portrait := _portrait_texture(String(card.get("character", "")))
+	var portrait := _portrait_texture(String(card.get("character", ""))) if draw_portraits else null
 	if portrait != null:
 		var source := portrait.get_size()
 		var w: float = PORTRAIT_H * (source.x / maxf(source.y, 1.0))
@@ -571,6 +632,60 @@ func _card_ready(card: Dictionary) -> bool:
 func _as_mission(card: Dictionary) -> Array:
 	var items = card.get("mission", [])
 	return items if typeof(items) == TYPE_ARRAY else []
+
+
+const STOCKPILE_RECT := Layout.STOCKPILE_RECT
+
+
+## 任务带左侧的库存面板：底板 + 内部棋子 + 红点次数 + 右下箭头。
+## 2026-11-06: 从 game_screen 的 Chrome 搬过来 —— 实例化本面板的界面（含成片）自带
+## 这块控件。几何仍然只有 Layout 一个来源（页面坐标），画之前换成局部坐标。
+func _draw_stockpile() -> void:
+	if not _stockpile_on:
+		return
+	# 次数归零也挂在原位，只有整关没启用库存时才收起来。
+	var rect := _stockpile_local_rect()
+	if not _draw_ui_fit("stockpile_frame", rect):
+		draw_rect(rect, Color("#DCE6F2"), true)
+	var chip := _chip_texture(_stockpile_entity, _stockpile_level)
+	if chip != null:
+		draw_texture_rect(chip, rect.grow(-10.0), false)
+	# 参照设计图：绿箭头 46×56 贴右下，红点 62×62 压在面板上沿并往内收。
+	var arrows := _ui_texture("stockpile_arrows")
+	if arrows != null:
+		draw_texture_rect(arrows, Rect2(
+				rect.position + Vector2(rect.size.x - 54.0, rect.size.y - 48.0),
+				Vector2(46.0, 56.0)), false)
+	var dot := _ui_texture("red_dot")
+	var drect := Rect2(rect.position + Vector2(rect.size.x - 54.0, -8.0), Vector2(62.0, 62.0))
+	if dot != null:
+		draw_texture_rect(dot, drect, false)
+	var num_font := _font_display()
+	if num_font == null:
+		num_font = _font
+	_text_center_font(num_font, drect.grow(-4.0), str(_stockpile_count), 36, Color.WHITE)
+
+
+## 页面坐标 -> 本控件局部坐标。页面左上角就是画布原点，面板自己的页内偏移
+## （实机是订单带 (0,210)，成片放哪儿算哪儿）由画布变换给出，不写死数字。
+func _stockpile_local_rect() -> Rect2:
+	var page: Rect2 = STOCKPILE_RECT
+	var origin := get_global_transform_with_canvas().origin
+	return Rect2(page.position - origin, page.size)
+
+
+## 保持比例放进矩形（和实机 chrome 的 draw_ui_fit 同一口径，含留白居中）。
+func _draw_ui_fit(key: String, r: Rect2) -> bool:
+	var texture := _ui_texture(key)
+	if texture == null:
+		return false
+	var source := texture.get_size()
+	if source.x <= 0.0 or source.y <= 0.0:
+		return false
+	var used := minf(r.size.x / source.x, r.size.y / source.y)
+	var drawn := source * used
+	draw_texture_rect(texture, Rect2(r.position + (r.size - drawn) * 0.5, drawn), false)
+	return true
 
 
 ## Coin reward above the card: task_reward icon + "+N", right-aligned with the card.
@@ -768,6 +883,17 @@ func _text_center(rect: Rect2, text: String, size_px: int, color: Color) -> void
 		rect.position.y + (rect.size.y - (ascent + descent)) * 0.5 + ascent
 	)
 	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
+
+
+## 指定字体的居中标签：基线和实机 chrome 的 text_center_font 同一套算式，
+## 所以库存红点里的数字搬过来以后位置一像素都不动。
+func _text_center_font(font: Font, r: Rect2, text: String, size_px: int, color: Color) -> void:
+	if font == null or text.is_empty():
+		return
+	var width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
+	var baseline := r.position + Vector2((r.size.x - width) * 0.5,
+			r.size.y * 0.5 + float(size_px) * 0.36)
+	draw_string(font, baseline, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px, color)
 
 
 func _dict(value) -> Dictionary:

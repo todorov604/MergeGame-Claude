@@ -57,6 +57,12 @@ func _initialize() -> void:
 		return
 
 	var out_abs := _abs(_out_path)
+	# 2026-11-06: 每次渲染一个时间戳目录，PNG 序列放子目录 frames/，
+	# mp4 / manifest / log 直接放在该目录下。
+	var out_dir := out_abs.get_base_dir()
+	var frames_dir := out_dir.path_join("frames")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	DirAccess.make_dir_recursive_absolute(frames_dir)
 	var base := out_abs.get_basename()
 	var avi := base + ".avi"
 	var manifest_path := base + ".manifest.json"
@@ -114,8 +120,25 @@ func _initialize() -> void:
 		print("[take] FAIL ffmpeg exit=%d (see %s)" % [ff_code, log_path])
 		_finish(1)
 		return
+	# 1080x1920 PNG 序列（交付与对拍都用它）
+	var png_args := PackedStringArray([
+		"-y", "-hide_banner", "-loglevel", "error",
+		"-i", avi,
+		"-vf", "scale=%d:%d:flags=lanczos,fps=%d" % [WIDTH, HEIGHT, FPS],
+		frames_dir.path_join("%05d.png"),
+	])
+	var png_out: Array = []
+	var png_code := OS.execute("ffmpeg", png_args, png_out, true)
+	for raw in png_out:
+		lines.append(String(raw).strip_edges())
+	lines.append("[take] png exit=%d dir=%s" % [png_code, frames_dir])
+	_write_log(log_path, lines)
+	if png_code != 0:
+		print("[take] FAIL png sequence exit=%d (see %s)" % [png_code, log_path])
+		_finish(1)
+		return
 	DirAccess.remove_absolute(avi)
-	print("[take] ok %s %s" % [_out_path, TakeIo.summary(take)])
+	print("[take] ok %s %s frames=%s" % [_out_path, TakeIo.summary(take), frames_dir])
 	_finish(0)
 
 

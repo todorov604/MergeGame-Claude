@@ -206,6 +206,13 @@ var _model = null
 var _evaluator = null
 var _guard = null
 var _theme_loader = null
+## 2026-11-06：成片的订单带直接托管实机组件（卡片/库存），几何与行为不再另写一份。
+var _live_band = null
+var _live_top = null
+var _live_bottom = null
+var _live_board = null
+var _board_level := -1
+var _band_level := -1
 var _guard_blocked: Array = []
 var _rejected: Array = []
 var _colors: Dictionary = {}
@@ -330,6 +337,10 @@ func _ready() -> void:
 	# §20.5: every layout texture is resolved here, once, before the first frame.
 	# _draw() only reads the cache, so no frame ever touches the filesystem.
 	_resolve_ui_art()
+	_setup_live_board()
+	_setup_live_band()
+	_setup_live_top()
+	_setup_live_bottom()
 	if not _take.is_empty() and not no_cursor:
 		_cursor_tex = _load_cursor()
 
@@ -868,11 +879,9 @@ func _draw() -> void:
 	_draw_background()
 	if _snap.is_empty():
 		return
-	_draw_characters()
-	_draw_topbar(_snap)
-	_draw_orders(_snap)
-	_draw_board(_snap)
-	_draw_bottom_bar(_snap)
+	_sync_live_band()
+
+
 	_draw_view_layer()
 	_draw_toast()
 	_draw_cursor()
@@ -883,6 +892,135 @@ func _draw() -> void:
 ## clamped to start at the board's bottom edge, so the band never paints on the
 ## §20.5 board container; with the two background textures present it sits
 ## underneath them and is only visible in the no-asset fallback.
+## 建面板：与实机同一位置/尺寸/主题，唯一差异是立绘交给成片自己画（层级）。
+## 棋盘也托管实机组件（board_view）：进关建一次，之后每帧只推状态与时钟。
+func _setup_live_board() -> void:
+	if not is_instance_valid(_model):
+		return
+	_live_board = BoardScene.instantiate()
+	_live_board.name = "LiveBoard"
+	_live_board.position = Vector2.ZERO
+	add_child(_live_board)
+	_live_board.set_chip_icons(_theme_loader, _model.project)
+	_live_board.show_debug_labels = false
+
+
+func _sync_live_board() -> void:
+	if _live_board == null or _snap.is_empty():
+		return
+	var idx := int(_snap.get("level_index", 0))
+	if idx != _board_level:
+		_board_level = idx
+		var level: Dictionary = _model.level(idx)
+		if not level.is_empty():
+			_live_board.build_from_level_data(level, _model.project.get("entities", {}), {})
+	_live_board.set_clock(_t)
+	_live_board.apply_state({"selected": [-1, -1],
+			"completed": CompletedCells.from_snapshot(_snap)})
+
+
+func _setup_live_band() -> void:
+	_live_band = OrderPanel.new()
+	_live_band.name = "LiveOrderBand"
+	_live_band.position = Vector2(0.0, 210.0)
+	_live_band.size = Vector2(1080.0, 250.0)
+	_live_band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_live_band.draw_portraits = true
+	_live_band.draw_page_strip = false
+	add_child(_live_band)
+	_live_band.set_palette(_colors)
+	_live_band.set_metrics(_metrics)
+	_live_band.set_asset_theme(_theme_loader, _model.project)
+
+
+## 顶栏也用实机组件，位置/尺寸/字体与实机一致。
+func _setup_live_top() -> void:
+	_live_top = TopBarScene.new()
+	_live_top.name = "LiveTopBar"
+	_live_top.position = Vector2.ZERO
+	_live_top.size = Vector2(1080.0, 150.0)
+	_live_top.font_bold = _font_display_bold
+	_live_top.font_fallback = _font_zh
+	add_child(_live_top)
+	_live_top.set_palette(_colors)
+	_live_top.set_metrics(_metrics)
+	_live_top.set_asset_theme(_theme_loader, _model.project)
+
+
+## 与实机同一算式：1800 - (秒数 % 1800)。
+func _energy_countdown() -> int:
+	var elapsed := int(floor(_t)) % 1800
+	return 1800 - elapsed
+
+
+func _push_live_top() -> void:
+	if _live_top == null or _snap.is_empty():
+		return
+	var hud: Dictionary = _snap.get("hud", {})
+	_live_top.set_state({
+		"level": int(hud.get("level", 1)),
+		"energy": int(hud.get("energy", 0)),
+		"coin": int(hud.get("coin", 0)),
+		"gem": int(hud.get("gem", 0)),
+		"clock": _mmss(_energy_countdown()),
+		"coin_display": float(hud.get("coin", 0)),
+		"pop": 0.0,
+	})
+
+
+## 底栏同样托管实机组件。
+func _setup_live_bottom() -> void:
+	_live_bottom = BottomBarScene.new()
+	_live_bottom.name = "LiveBottomBar"
+	add_child(_live_bottom)
+	_live_bottom.font_bold = _font_display_bold
+	_live_bottom.font_regular = _font_display_regular
+	_live_bottom.font_num = _font_display_num
+	_live_bottom.set_asset_theme(_theme_loader, _model.project)
+
+
+func _sync_live_band() -> void:
+	if _live_band == null or _snap.is_empty():
+		return
+	var idx := int(_snap.get("level_index", 0))
+	if idx != _band_level:
+		_band_level = idx
+		var level: Dictionary = _model.level(idx)
+		if not level.is_empty():
+			_live_band.build_from_level(level)
+	_sync_live_board()
+	_push_live_top()
+	_live_band.set_clock(_t)
+	_live_band.sync_orders(OrderRows.build(_snap, _model))
+	var cfg = _model.level(idx).get("stockpile", {})
+	if typeof(cfg) == TYPE_DICTIONARY and bool((cfg as Dictionary).get("enabled", false)):
+		var entity := String((cfg as Dictionary).get("entity", ""))
+		var level_num := int((cfg as Dictionary).get("level", 0))
+		if entity.is_empty() or level_num <= 0:
+			var preview := _stockpile_preview_from_snap()
+			entity = String(preview.get("entity", ""))
+			level_num = int(preview.get("level", 1))
+		_live_band.set_stockpile(int((cfg as Dictionary).get("count", 0)), entity, level_num)
+	else:
+		_live_band.clear_stockpile()
+
+
+## 成片没有点击回放时，库存展示按第一张未完成订单的低一级（与实机进关规则一致）。
+func _stockpile_preview_from_snap() -> Dictionary:
+	var orders: Array = _snap.get("orders", [])
+	for raw in orders:
+		if typeof(raw) != TYPE_DICTIONARY or bool((raw as Dictionary).get("done", false)):
+			continue
+		var mission = (raw as Dictionary).get("mission", [])
+		if typeof(mission) != TYPE_ARRAY:
+			continue
+		for m in mission:
+			if typeof(m) == TYPE_ARRAY and (m as Array).size() >= 2:
+				return {"entity": String((m as Array)[0]),
+						"level": maxi(int((m as Array)[1]) - 1, 1)}
+	return {}
+
+
 func _draw_band() -> void:
 	var height := _metric("band_height", 0.0)
 	if height <= 0.0:
@@ -1012,15 +1150,21 @@ func _plus_slot(r: Rect2) -> void:
 ## WYSIWYG order cards: identical geometry to OrderPanel — 286 wide, 124 tall,
 ## centred in the band, mission icons 96px in the middle, reward pill above the card
 ## right-aligned with a "+N" label. The film must show exactly what the live screen shows.
-const CARD_H := 140.0
-const CARD_GAP := 18.0
+const Layout := preload("res://src/view/layout_shared.gd")
+const OrderPanel := preload("res://src/view/order_panel.gd")
+const OrderRows := preload("res://src/view/order_rows.gd")
+const TopBarScene := preload("res://src/view/top_bar.gd")
+const BottomBarScene := preload("res://src/view/bottom_bar.gd")
+const BoardScene := preload("res://src/view/board_view.tscn")
+const CARD_H := Layout.CARD_H
+const CARD_GAP := Layout.CARD_GAP_X
 ## 2026-11-06: 队列几何与实机 OrderPanel 对齐（左起点 250 / 卡宽 250 / 间距 18）。
-const QUEUE_ORIGIN_X := 250.0
-const QUEUE_CARD_W := 250.0
+const QUEUE_ORIGIN_X := Layout.QUEUE_ORIGIN_X
+const QUEUE_CARD_W := Layout.QUEUE_CARD_W
 const PORTRAIT_TOP := 18.0
-const PORTRAIT_HEIGHT := 210.0
+const PORTRAIT_HEIGHT := Layout.PORTRAIT_H
 ## 立绘底边压卡片上沿的距离（实机 ORDER_PANEL 的 26px）。
-const PORTRAIT_SINK := 26.0
+const PORTRAIT_SINK := Layout.PORTRAIT_SINK
 const PORTRAIT_CENTER_LEFT := 393.0
 const PORTRAIT_CENTER_RIGHT := 800.0
 const MISSION_ICON := 125.0
@@ -1048,6 +1192,7 @@ func _portrait_center(character: String) -> float:
 
 ## Card = as wide as its character, centred under it, bottom-aligned with the portrait.
 func _order_cards(snap: Dictionary) -> Array:
+	# 2026-11-06：几何只认 layout_shared（页面坐标），成片不再自己算一遍。
 	var orders: Array = snap.get("orders", [])
 	var out: Array = []
 	var index := 0
@@ -1056,9 +1201,7 @@ func _order_cards(snap: Dictionary) -> Array:
 			continue
 		if bool((raw as Dictionary).get("done", false)):
 			continue
-		var bottom := PORTRAIT_TOP + PORTRAIT_HEIGHT
-		out.append(Rect2(QUEUE_ORIGIN_X + float(index) * (QUEUE_CARD_W + CARD_GAP),
-				bottom - PORTRAIT_SINK - CARD_H, QUEUE_CARD_W, CARD_H))
+		out.append(Layout.card_rect(index))
 		index += 1
 	return out
 

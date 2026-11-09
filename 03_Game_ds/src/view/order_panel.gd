@@ -63,6 +63,9 @@ var _row_offset: float = 0.0
 var draw_portraits: bool = true
 ## 是否铺不透明底条：实机需要（盖住棋盘标题行），成片不用（成片自己画背景）。
 var draw_page_strip: bool = true
+## 卡片上的绿色对号（可交付/已完成确认标）。2026-11-09 操作者要求**先隐藏**；
+## 留成开关而不是删代码，随时能开回来。顶层开关，实机与成片共用同一份。
+var draw_confirm_badge: bool = false
 ## 任务带左侧的库存面板状态（-1 表示本关没有库存）。
 ## 队列重排：每张卡的目标 x 和当前 x（换位时用 0.25s 缓动滑过去）。
 var _target_x: Dictionary = {}
@@ -572,21 +575,17 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	# 2026-11-05: the avatar circle, the display name and the character id are gone —
 	# the card is just the mission slot plus the reward column.
 	var items: Array = card.get("mission", [])
-	var chip_size := 125.0
-	var gap := 14.0
-	var row := chip_size * float(items.size()) + gap * float(maxi(items.size() - 1, 0))
-	var chip_x := (r.size.x - row) * 0.5
+	var chips := mission_chip_rects(r, items.size())
 	for i in range(items.size()):
 		var item: Dictionary = items[i]
-		var chip := Rect2(r.position + Vector2(chip_x + (chip_size + gap) * float(i),
-				(r.size.y - chip_size) * 0.5), Vector2(chip_size, chip_size))
+		var chip: Rect2 = chips[i]
 		var hue: Color = item.get("hue", Color("#94A3B8"))
 		var ready := int(item.get("have", 0)) >= int(item.get("need", 1))
 		# 2026-11-05: the mission slot shows the real chip icon when the loader can
 		# resolve it; the procedural tile stays as the no-asset fallback.
 		var icon := _chip_texture(String(item.get("entity", "")), int(item.get("level", 1)))
 		if icon != null:
-			draw_texture_rect(icon, chip.grow(6.0), false)
+			draw_texture_rect(icon, chip, false)
 		else:
 			_rounded(chip, 14, hue if ready else hue.lerp(Color(1.0, 1.0, 1.0), 0.28))
 			_rounded_outline(chip, 14, hue.darkened(0.22), 2)
@@ -599,7 +598,9 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 
 	# 2026-11-06: the badge stays put once shown — it rides the shrink instead of
 	# blinking out on click and popping back during the animation.
-	if bool(card.get("done", false)) or bool(card.get("claim_pending", false)) or _card_ready(card):
+	# 2026-11-09: 操作者要求先隐藏（draw_confirm_badge=false）；开关在文件顶部。
+	if draw_confirm_badge and (bool(card.get("done", false)) \
+			or bool(card.get("claim_pending", false)) or _card_ready(card)):
 		# 2026-11-05: no green rim, no small check — one confirm badge centred on the card.
 		var confirm := _ui_texture("confirm")
 		var size := Vector2(126.0, 74.0)
@@ -608,6 +609,28 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 			draw_texture_rect(confirm, at, false)
 		else:
 			_rounded(at, 20, _c("done", COLOR_DONE))
+
+
+## 任务行里棋子贴图的位置（卡片局部坐标，返回页面坐标）。
+## 2026-11-09 操作者要求"缩小到正常尺寸"：原来 125 + grow(6) = 137 高，
+## 而卡片只有 140 高 —— 图标顶到卡片上下边、左右溢出，看着像贴纸糊上去的。
+## 现在 84 见方、垂直居中、两枚时按 gap 排开；单测 t_layout_parity 断言不越界。
+const CHIP_SIZE := 96.0
+const CHIP_GAP := 14.0
+
+
+static func mission_chip_rects(card_rect: Rect2, count: int) -> Array:
+	var out: Array = []
+	if count <= 0:
+		return out
+	var row := CHIP_SIZE * float(count) + CHIP_GAP * float(maxi(count - 1, 0))
+	var x := (card_rect.size.x - row) * 0.5
+	for i in count:
+		out.append(Rect2(
+				card_rect.position + Vector2(x + (CHIP_SIZE + CHIP_GAP) * float(i),
+						(card_rect.size.y - CHIP_SIZE) * 0.5),
+				Vector2(CHIP_SIZE, CHIP_SIZE)))
+	return out
 
 
 ## Ready = the board already holds a chip that satisfies this card (or it was claimed).

@@ -1439,8 +1439,8 @@ const PORTRAIT_HEIGHT := Layout.PORTRAIT_H
 const PORTRAIT_SINK := Layout.PORTRAIT_SINK
 const PORTRAIT_CENTER_LEFT := 393.0
 const PORTRAIT_CENTER_RIGHT := 800.0
-const MISSION_ICON := 125.0
-const REWARD_ICON := Vector2(132.0, 49.0)
+## 2026-11-09: MISSION_ICON / REWARD_ICON 随 _draw_orders 一起删了 —— 成片不再自己画卡片，
+## 任务图标与奖励行都由托管的 order_panel 画（AGENTS §8 双画面同步）。
 
 
 func _portrait_key(character: String) -> String:
@@ -1540,69 +1540,6 @@ func _paint_claim_flys(target: CanvasItem) -> void:
 		target.draw_texture_rect(texture, Rect2(-size * 0.5, size), false, Color(1, 1, 1, alpha))
 		target.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_claim_flys = alive
-
-
-func _draw_orders(snap: Dictionary) -> void:
-	var orders: Array = snap.get("orders", [])
-	var cards := _order_cards(snap)
-	for i in range(cards.size()):
-		var o: Dictionary = orders[i]
-		var r: Rect2 = cards[i]
-		var done := bool(o.get("done", false))
-		var plate := _ui("bar_board")
-		if plate != null:
-			_draw_plate(plate, r, 26.0)
-		else:
-			_hud_pill(r, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _card_radius())
-		if done:
-			# 2026-11-05: one confirm badge centred on the card, nothing else.
-			var confirm_size := Vector2(126.0, 74.0)
-			var confirm_rect := Rect2(r.get_center() - confirm_size * 0.5, confirm_size)
-			if not _draw_ui_fit("confirm", confirm_rect):
-				_rounded(confirm_rect, 20, _palette("done", COLOR_DONE))
-		var mission: Array = o.get("mission", [])
-		var row := MISSION_ICON * float(mission.size()) + CARD_GAP * float(maxi(mission.size() - 1, 0))
-		var chip_x := (r.size.x - row) * 0.5
-		for m in mission:
-			var ent := String((m as Array)[0]) if typeof(m) == TYPE_ARRAY else ""
-			var lvl := int((m as Array)[1]) if typeof(m) == TYPE_ARRAY else 1
-			var have := int((m as Array)[2]) if typeof(m) == TYPE_ARRAY else 0
-			var chip := Rect2(r.position + Vector2(chip_x, (r.size.y - MISSION_ICON) * 0.5),
-					Vector2(MISSION_ICON, MISSION_ICON))
-			var texture := _chip_texture(ent, lvl)
-			if texture != null:
-				draw_texture_rect(texture, chip.grow(6.0), false)
-			else:
-				_hud_pill(chip, _palette("card_edge", COLOR_PILL_EDGE).lightened(0.2),
-						Color(0, 0, 0, 0), 18)
-				_text_in(chip, ent.substr(0, 2), 28, _palette("ink", COLOR_INK))
-
-			chip_x += MISSION_ICON + CARD_GAP
-		var amount := int(o.get("coin", 0))
-		var icon := _ui("task_reward")
-		var icon_rect := Rect2(Vector2(r.end.x - REWARD_ICON.x, r.position.y - 54.0), REWARD_ICON)
-		if icon != null:
-			draw_texture_rect(icon, icon_rect, false)
-			var label := "+%d" % amount
-			var font := _font_display_bold if _font_display_bold != null else _font_zh
-			if font != null:
-				var width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x
-				var at := Vector2(icon_rect.end.x - 14.0 - width,
-						icon_rect.get_center().y + 34.0 * 0.36)
-				draw_string(font, at + Vector2(1.5, 1.5), label, HORIZONTAL_ALIGNMENT_LEFT, -1,
-						34, Color(0.24, 0.14, 0.02, 0.55))
-				draw_string(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34,
-						Color(1.0, 0.97, 0.86))
-		else:
-			_text_left_font(_font_display_bold,
-					Rect2(r.end.x - 90.0, r.position.y - 44.0, 80.0, 34.0), "+%d" % amount, 30,
-					_palette("ink", COLOR_INK))
-		var stars := int(o.get("star", 0))
-		if stars > 0:
-			_star_icon(Vector2(r.end.x - 18.0, r.position.y - 106.0), 15.0)
-			_text_left_font(_font_display_bold,
-					Rect2(r.end.x - 96.0, r.position.y - 124.0, 70.0, 30.0), "+%d" % stars, 26,
-					Color(1.0, 0.97, 0.86))
 
 
 func _star_icon(c: Vector2, radius: float) -> void:

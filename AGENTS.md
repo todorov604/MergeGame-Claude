@@ -351,6 +351,27 @@ FAIL t_claim_flight.gd :: 只把 taken 放在顶层不算数 [expected=[] actual
 这批 take 里都取到了真实棋子；真遇到取不到的情况会退回订单图标 —— 要更稳就得让
 sim 在 taken 里带 `entity/level`，属于改数据结构，别顺手改。
 
+### 6.12 卡面装饰：绿对号与任务棋子（2026-11-09，操作者第一次改界面）
+
+**操作者原话**：「这个红框的绿对号，先暂时给隐藏掉。然后把任务栏上的 clip 给缩小到正常尺寸。」
+
+两条都在 `src/view/order_panel.gd` 里，成片托管同一组件 → **一次改两边都变**（§8 的正面例子）。
+
+| 项 | 旧 | 新 |
+|---|---|---|
+| 绿色对号 | 无条件画（`confirm` 贴图 126×74 居中，或程序化绿胶囊） | `var draw_confirm_badge := false`，开关保留，随时能开回来 |
+| 任务棋子 | `chip_size 125` + `draw_texture_rect(icon, chip.grow(6))` = **137 高**，卡片只有 140 → 顶边溢出 | `CHIP_SIZE 96` + `CHIP_GAP 14`，`mission_chip_rects()` 纯函数算出、垂直居中 |
+
+**顺带清掉的重复实现**：`movie_scene._draw_orders()`（成片自己画卡片的旧代码，63 行）从未被调用，
+但它里面也有一份绿对号和 125 的棋子图标 —— 正是 §8 说的"第二份"。连同 `MISSION_ICON` / `REWARD_ICON` 一起删掉。
+
+**验证**：
+- `t_layout_parity._card_decor_matches`：对号默认关（且开关能开）、`CHIP_SIZE == 96`、
+  棋子矩形 96×96、单枚/两枚都不越出卡片、两枚不重叠、整体居中。
+- 反向验证：`CHIP_SIZE` 改回 125 → 4 条红（`任务棋子 96 见方` / `留够留白` / `棋子矩形` / `两枚都不越出卡片`）；
+  `draw_confirm_badge` 默认改回 true → 1 条红（`卡片绿对号默认隐藏`）；恢复后 2549 / 0。
+- 两侧出图：实机 `output/orders_panel.png` 与成片 `frames/00400.png` 的任务带同形同尺寸。
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
@@ -358,7 +379,7 @@ sim 在 taken 里带 `entity/level`，属于改数据结构，别顺手改。
 ### 7.1 当前锚点
 
 - 分支 `main` @ `2773a5d`（tag `录屏内容基本完成`）；2026-11-09 下午的两处修复（金币落点 §6.10、交付枚数 §6.11）**尚未提交**（等审）
-- 测试 **2535 checks / 0 failures**（`t_sim.gd` 216、`t_layout_parity` 60、`t_claim_flight` 12）；`check_portability.ps1` blocking = none
+- 测试 **2549 checks / 0 failures**（`t_sim.gd` 216、`t_layout_parity` 74、`t_claim_flight` 12）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 

@@ -19,6 +19,7 @@ func run(t) -> void:
 	_stockpile_matches(t)
 	_top_bar_matches(t)
 	_coin_anchor_matches(t)
+	_card_decor_matches(t)
 
 
 func _shared_constants(t) -> void:
@@ -132,3 +133,37 @@ func _coin_anchor_matches(t) -> void:
 	t.eq(screen._coin_anchor(Vector2(592.0, 62.0)), Vector2(592.0, 62.0), "无顶栏时退回原坐标")
 	screen.free()
 	bar.free()
+
+
+## 卡面装饰（2026-11-09 操作者要求）：绿对号先隐藏、任务棋子缩到正常尺寸。
+## 两条都在 order_panel 里 -> 实机与成片一起吃（§8 双画面同步）。
+func _card_decor_matches(t) -> void:
+	# 绿对号：默认隐藏，但开关还在（随时能开回来）
+	var panel = OrderPanel.new()
+	t.eq(panel.draw_confirm_badge, false, "卡片绿对号默认隐藏")
+	panel.draw_confirm_badge = true
+	t.eq(panel.draw_confirm_badge, true, "开关可以打开（不是删代码）")
+	panel.free()
+
+	# 任务棋子尺寸：必须整整齐齐落在卡片里，不能再糊到卡片边上
+	var card := Rect2(0.0, 0.0, Layout.QUEUE_CARD_W, Layout.CARD_H)
+	t.eq(OrderPanel.CHIP_SIZE, 96.0, "任务棋子 96 见方")
+	t.ok(OrderPanel.CHIP_SIZE < Layout.CARD_H - 40.0, "棋子高度给卡片上下留够留白",
+			str(OrderPanel.CHIP_SIZE))
+
+	var one: Array = OrderPanel.mission_chip_rects(card, 1)
+	t.eq(one.size(), 1, "一枚任务棋子算出一个矩形")
+	t.eq((one[0] as Rect2).size, Vector2(96.0, 96.0), "棋子矩形 96x96")
+	t.ok(card.encloses(one[0]), "单枚棋子不越出卡片", str(one[0]))
+	t.eq((one[0] as Rect2).get_center().x, card.get_center().x, "单枚水平居中")
+	t.eq((one[0] as Rect2).get_center().y, card.get_center().y, "单枚垂直居中")
+
+	var two: Array = OrderPanel.mission_chip_rects(card, 2)
+	t.eq(two.size(), 2, "两行任务算出两个矩形")
+	t.ok(card.encloses(two[0]) and card.encloses(two[1]), "两枚都不越出卡片",
+			str(two))
+	t.ok((two[0] as Rect2).end.x <= (two[1] as Rect2).position.x, "两枚不重叠", str(two))
+	t.eq((two[0] as Rect2).get_center().x + (two[1] as Rect2).get_center().x,
+			card.get_center().x * 2.0, "两枚整体居中")
+
+	t.eq(OrderPanel.mission_chip_rects(card, 0), [], "没有任务行就没有棋子")

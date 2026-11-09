@@ -138,3 +138,17 @@ Get-CimInstance Win32_Process -Filter "Name LIKE '%Godot%'" |
 验收：`bash tools/render.sh --take ... --frames 60` → 1080x1920、md5 双跑一致；
 `output/mov/<stamp>/frames/00040.png` 与实机截图逐区域对比一致（顶栏/订单带/棋盘/底栏）。
 测试：2500 checks / 0 failures（新增 `t_layout_parity` 顶栏黄金值断言）。
+
+### 6.3 库存点击进 take（2026-11-09）
+
+`stockpile_tap` 现在是**一等 sim 事件**，录制/回放/成片全链路通：
+
+1. `src/core/event_model.gd` 的 `SIM_TYPES` 里登记 `"stockpile_tap"`
+   （不登记的话 take 校验会报 `EV_UNKNOWN_TYPE`，渲染 exit 3）
+2. `src/core/sim.gd` 的 `snapshot()` 增加 `stockpile: {enabled, count, entity, level}`，
+   实机与成片读同一份 → 成片里次数会跟着 take 里的点击递减
+3. `movie_scene._sync_live_band()` 改成读 `_snap["stockpile"]`（原来读关卡配置，所以永远 9）
+
+验证方式：往任意 take 的 timeline 里插 3 个 `stockpile_tap`（at 1.0/1.4/1.8），
+`bash tools/render.sh --take <该 take> --frames 130`，抽 00010/00070/00100/00125 四帧的库存区域：
+数字必须是 9 → 8 → 7 → 6。

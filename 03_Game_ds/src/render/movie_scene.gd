@@ -992,15 +992,12 @@ func _sync_live_band() -> void:
 	_push_live_top()
 	_live_band.set_clock(_t)
 	_live_band.sync_orders(OrderRows.build(_snap, _model))
-	var cfg = _model.level(idx).get("stockpile", {})
-	if typeof(cfg) == TYPE_DICTIONARY and bool((cfg as Dictionary).get("enabled", false)):
-		var entity := String((cfg as Dictionary).get("entity", ""))
-		var level_num := int((cfg as Dictionary).get("level", 0))
-		if entity.is_empty() or level_num <= 0:
-			var preview := _stockpile_preview_from_snap()
-			entity = String(preview.get("entity", ""))
-			level_num = int(preview.get("level", 1))
-		_live_band.set_stockpile(int((cfg as Dictionary).get("count", 0)), entity, level_num)
+	# 2026-11-09：库存状态读快照（take 里的 stockpile_tap 已回放进 sim）。
+	var stock = _snap.get("stockpile", {})
+	if typeof(stock) == TYPE_DICTIONARY and bool((stock as Dictionary).get("enabled", false)):
+		_live_band.set_stockpile(int((stock as Dictionary).get("count", 0)),
+				String((stock as Dictionary).get("entity", "")),
+				int((stock as Dictionary).get("level", 1)))
 	else:
 		_live_band.clear_stockpile()
 

@@ -13,7 +13,7 @@ extends RefCounted
 const CHANNEL_PRIORITY := {"sim": 0, "view": 1, "audio": 2}
 
 const SIM_TYPES := [
-	"tap", "drag", "swap", "merge", "deliver", "order_claim",
+	"tap", "stockpile_tap", "drag", "swap", "merge", "deliver", "order_claim",
 	"board_full", "energy_tick", "level_complete", "level_next",
 ]
 const VIEW_TYPES := [

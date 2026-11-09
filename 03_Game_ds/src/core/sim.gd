@@ -752,6 +752,7 @@ func _do_level_next(_payload: Dictionary) -> Dictionary:
 # ------------------------------------------------------------- snapshots
 
 func snapshot() -> Dictionary:
+	# 2026-11-09：库存次数进快照，实机与成片都读同一份（成片才能回放 stockpile_tap）。
 	var hud_snap := {}
 	var hud_keys: Array = hud.keys()
 	hud_keys.sort()
@@ -788,6 +789,12 @@ func snapshot() -> Dictionary:
 
 	return {
 		"level_index": level_index,
+		"stockpile": {
+			"enabled": not stockpile_config().is_empty() and bool(stockpile_config().get("enabled", false)),
+			"count": stockpile_remaining(),
+			"entity": String(stockpile_preview().get("entity", "")),
+			"level": int(stockpile_preview().get("level", 1)),
+		},
 		"level_id": current_level_id(),
 		"hud": hud_snap,
 		"orders": order_rows,

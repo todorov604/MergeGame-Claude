@@ -1214,12 +1214,11 @@ func _refresh_anchors() -> void:
 	if not orders.cards.is_empty():
 		var first := String((orders.cards[0] as Dictionary).get("id", ""))
 		table["order:default"] = table.get("order:" + first, Vector2(540.0, 300.0))
-	var coin_local: Vector2 = hud.counter_center("coin")
 	var star_local: Vector2 = hud.counter_center("star")
 	var gem_local: Vector2 = hud.counter_center("gem")
 	# The HUD is scaled down to make room for the §20.5 shop button, so its local
 	# anchors reach page space through the same scale.
-	table["hud:coin"] = coin_local * hud.scale + hud.position
+	table["hud:coin"] = _coin_anchor(hud.counter_center("coin"))
 	table["hud:star"] = star_local * hud.scale + hud.position
 	table["hud:gem"] = gem_local * hud.scale + hud.position
 	fly.set_anchors(table)
@@ -1419,6 +1418,17 @@ func _push_top_bar() -> void:
 		"coin_display": _coin_display,
 		"pop": pop,
 	})
+
+
+## 金币落点必须是**真正画顶栏的那个组件**给的（TopBar）：hud_view 在 chrome 模式下是
+## 隐藏的，2026-11-09 之前金币正是飞向那个看不见的控件（偏右 15px、偏上 6px）。
+## hud_local 是 hud_view 坐标（它被缩放到 0.8 给商店按钮腾位置），只作兜底。
+func _coin_anchor(hud_local: Vector2) -> Vector2:
+	if top_bar != null and top_bar.has_method("counter_center"):
+		return top_bar.counter_center("coin")
+	if hud == null:
+		return hud_local
+	return hud_local * hud.scale + hud.position
 
 
 func _refresh_order_ready() -> void:

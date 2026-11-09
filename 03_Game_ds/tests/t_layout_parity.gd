@@ -18,6 +18,7 @@ func run(t) -> void:
 	_rects_match(t)
 	_stockpile_matches(t)
 	_top_bar_matches(t)
+	_coin_anchor_matches(t)
 
 
 func _shared_constants(t) -> void:
@@ -96,4 +97,38 @@ func _top_bar_matches(t) -> void:
 	t.eq(TopBar.SHOP, Rect2(930.0, 8.0, 142.0, 132.0), "商店按钮矩形")
 	t.eq(TopBar.LEVEL_BADGE, Rect2(16.0, 16.0, 96.0, 67.2), "等级爪印矩形")
 	t.ok(absf(rects["coin"].get_center().x - 540.0) < 0.5, "金币条居中在 540")
+	bar.free()
+
+
+## 金币螺旋的落点（2026-11-09）：成片必须问顶栏组件要坐标，不许自己写死。
+## 反面证据：写死值 (473.6,49.6) 是已退役 hud_view 的公式（(552+40)*0.8, (20+42)*0.8），
+## 比金币图标的真实中心偏右 15px、偏上 6px。
+func _coin_anchor_matches(t) -> void:
+	var bar = TopBar.new()
+	var coin: Vector2 = bar.counter_center("coin")
+	var rect: Rect2 = bar.bar_rects()["coin"]
+	# 黄金值 = coin_bar.png 里金币圆盘 bbox(3,2)-(72,73) 的中心 (37.5,37.5)/255x82，
+	# 等比映射进金币条矩形后的页面坐标（成片帧 00040.png 实测 (459.0,56.5)，差 1.7px）。
+	t.ok(absf(coin.x - 458.785) < 0.1 and absf(coin.y - 54.841) < 0.1,
+		"金币落点 = 图标中心", str(coin))
+	t.ok(rect.has_point(coin), "落点在金币条内", str(coin))
+	t.ok(coin.x < rect.get_center().x - 40.0, "落点在数字左侧（不是条中心）", str(coin))
+	t.ok(coin.distance_to(Vector2(473.6, 49.6)) > 10.0,
+		"不再是退役 hud_view 的硬编码", str(coin))
+
+	# 成片：同一个函数，不许另算一份
+	var film = MovieScene.new()
+	film._live_top = bar
+	t.eq(film._hud_coin_anchor(), coin, "成片落点来自顶栏组件")
+	film._live_top = null
+	t.eq(film._hud_coin_anchor(), Vector2.ZERO, "没有顶栏时不猜坐标")
+	film.free()
+
+	# 实机：也必须问顶栏组件，不能继续用那个隐藏 hud_view 的换算
+	var screen = GameScreen.new()
+	screen.top_bar = bar
+	t.eq(screen._coin_anchor(Vector2(592.0, 62.0)), coin, "实机落点来自顶栏组件")
+	screen.top_bar = null
+	t.eq(screen._coin_anchor(Vector2(592.0, 62.0)), Vector2(592.0, 62.0), "无顶栏时退回原坐标")
+	screen.free()
 	bar.free()

@@ -832,7 +832,7 @@ func _advance_to(t: float) -> void:
 			if typeof(src_raw) == TYPE_ARRAY and (src_raw as Array).size() >= 2:
 				var src_cell := Vector2i(int((src_raw as Array)[0]), int((src_raw as Array)[1]))
 				var ord_rect := _claim_card_rect(ord)
-				_play_claim_effects(ord, src_cell, float(r.get("at", t)), r.get("taken", []))
+				_play_claim_effects(ord, src_cell, float(r.get("at", t)), claim_taken(r))
 				# 交付后金库立刻 +N（sim 是瞬时的）；这笔 N 从关卡订单数据取，不依赖显示值。
 				var coin_after := int(_evaluator.sim.hud.get("coin", 0))
 				var gained := _order_coin_from_model(ord, int(_evaluator.sim.level_index))
@@ -1142,6 +1142,20 @@ func _setup_live_top() -> void:
 	_live_top.set_asset_theme(_theme_loader, _model.project)
 
 
+## 交付消耗了哪几格 —— 飞行动画的数量**只认这一份数据**（AGENTS §6.8/§6.9）。
+## evaluator.step() 的报告把 sim 的返回字典嵌在 "sim" 键下，顶层只有 ok/code/id/type/
+## channel/at；`r.get("taken")` 永远是空数组，于是成片每次都走兜底、只飞一枚，
+## 2 行任务的订单也飞不出第二枚（和 §6.7 的 payload 是同一个坑）。
+static func claim_taken(report: Dictionary) -> Array:
+	var sim_res = report.get("sim", {})
+	if typeof(sim_res) != TYPE_DICTIONARY:
+		return []
+	var taken = (sim_res as Dictionary).get("taken", [])
+	if typeof(taken) != TYPE_ARRAY:
+		return []
+	return taken
+
+
 ## 与实机同一算式：1800 - (秒数 % 1800)。
 func _energy_countdown() -> int:
 	var elapsed := int(floor(_t)) % 1800
@@ -1187,13 +1201,13 @@ func _push_live_top() -> void:
 ## 底栏同样托管实机组件。
 ## 把实机棋盘的每格中心 + 订单卡中心喂给 FlyAnim（否则它只会退回棋盘中心）。
 func _refresh_flight_anchors() -> void:
-	if _live_fly == null or _live_board == null:
+	if _live_fly == null or _live_board == null or _live_top == null:
 		return
 	var table := {}
 	for y in 9:
 		for x in 7:
 			table["cell:%d,%d" % [x, y]] = _live_board.cell_rect(x, y).get_center()
-	table["hud:coin"] = Vector2(473.6, 49.6)
+	table["hud:coin"] = _hud_coin_anchor()
 	table["order:default"] = Vector2(540.0, 320.0)
 	if _live_band != null:
 		for card in _live_band.cards:
@@ -1204,6 +1218,16 @@ func _refresh_flight_anchors() -> void:
 				continue
 			table["order:" + cid] = _live_band.card_rect(cid).get_center() + _live_band.position
 	_live_fly.set_anchors(table)
+
+
+## 金币螺旋的落点：顶栏组件里那枚金币图标的中心。
+## 与实机调**同一个函数**（top_bar.counter_center），成片不许自己猜坐标。
+## 2026-11-09 之前这里是写死的 (473.6,49.6)，来自已退役 hud_view 的公式。
+func _hud_coin_anchor() -> Vector2:
+	if _live_top == null:
+		# 走不到：_refresh_flight_anchors() 已经把 _live_top 判空了。
+		return Vector2.ZERO
+	return _live_top.counter_center("coin")
 
 
 ## 最上层：手型光标 + toast，必须画在托管进来的实机组件之上。

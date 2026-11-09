@@ -2,6 +2,11 @@
 
 本文件是跨会话的持久约定，优先级高于临时话术；新会话开工先读这里。
 
+> **硬规矩（2026-11-09 操作者亲自定，优先级最高）：改实机画面 = 同步改成片画面。**
+> 游戏里看到的每一处（顶栏 / 订单带 / 棋盘 / 底栏 / 交付 / 金币 / 光标 / 拖拽 / 提示），
+> 成片必须跟着一起变，而且要用**同一份数据、同一套组件**；改完必须出片比对并加对拍断言。
+> 详见 §8「双画面同步」。
+
 > **长期记忆载体 = 本文件**（2026-11-04 起）。`deja` 长期记忆已由操作者关闭：**不要调用 `deja_remember`**，它只会返回 `deja did not record that.`（本机 `~/.deja` 存储也不存在）。要沉淀经验，直接写进本文件，写入即对后续会话生效。
 
 ## 0. 新素材归档与登记（长期约定，2026-11-05，操作者明确要求）
@@ -261,14 +266,99 @@ Get-CimInstance Win32_Process -Filter "Name LIKE '%Godot%'" |
 **配套规则（同一天踩的坑）**：交付飞行的数量 = `sim` 返回的 `taken` 数量，
 不再由视图层按任务行数猜；2 行任务的订单就是 2 枚、各自从自己的格子起飞（实机与成片同一份数据）。
 
+### 6.10 金币落点 = 顶栏图标（2026-11-09，两套顶栏并存的坑）
+
+**症状**：金币螺旋的落点在成片里是写死的 `Vector2(473.6, 49.6)`，实机读的是
+`hud.counter_center("coin") * 0.8 + hud.position` —— 同一组数，但**两个都在读一个看不见的控件**：
+`hud_view.gd` 在 §20.5 chrome 模式下 `visible = false`（钱条由 `top_bar.gd` 画），
+所以金币一直飞向一个隐藏控件的坐标，比顶栏里那枚金币图标的真实中心**偏右 15px、偏上 6px**。
+这正是 §7.3 第 2 条禁的那类事：视图层猜坐标。
+
+**做法（唯一来源）**：
+1. `top_bar.gd` 新增 `fit_rect_for(key, rect)`（纯几何，不画）+ `COIN_ICON_RATIO`
+   + `counter_center(key) -> Vector2`。比例**量自贴图**：`coin_bar.png` 里金币圆盘
+   金色本体 bbox `(3,2)-(72,73)`，中心 `(37.5,37.5) / 255x82`。
+2. 实机 `game_screen._coin_anchor(hud_local)`：有顶栏就问顶栏，没有才退回 hud_view 换算。
+3. 成片 `movie_scene._hud_coin_anchor()`：**调同一个函数**；`_refresh_flight_anchors()`
+   现在把 `_live_top` 也纳入前置判断，落点不再有任何字面量。
+
+**验证（三层）**：
+- 单测 `t_layout_parity._coin_anchor_matches`：落点 = `(458.785, 54.841)±0.1`、
+  在金币条矩形内、在数字左侧、离旧硬编码 > 10px、成片锚点 == 顶栏锚点。
+- 像素：成片 `frames/00040.png` 顶栏里那枚金币实测中心 `(459.0, 56.5)`，
+  贴图比例映射出来 `(458.79, 54.84)`，差 1.7px（贴图带投影）。
+- A/B 出片：同一 take 用旧硬编码再渲一遍，飞行中段金币整体左移约 7px
+  （= 总位移 15.7px × lerp 比例），轨迹改动确实落在画面里。
+
+**反向验证（照 §6.9 做，两处各一次）**：
+
+```text
+成片改回硬编码： FAIL t_layout_parity.gd :: 成片落点来自顶栏组件 [expected=(458.7852, 54.84165) actual=(473.6, 49.6)]
+                FAIL t_layout_parity.gd :: 没有顶栏时不猜坐标 [expected=(0.0, 0.0) actual=(473.6, 49.6)]
+                [tests] TOTAL checks=2523 failures=2
+
+实机绕过顶栏：   FAIL t_layout_parity.gd :: 实机落点来自顶栏组件 [expected=(458.7852, 54.84165) actual=(592.0, 62.0)]
+                [tests] TOTAL checks=2523 failures=1
+
+恢复后：        [tests] TOTAL checks=2523 failures=0  RESULT PASS
+```
+
+**还没收口**：`hud:star` / `hud:gem` 仍来自隐藏的 `hud_view`（star 顶栏都没有对应控件）。
+哪天真要画星星/钻石飞行，照本节的做法先量贴图再改，别再写死。
+
+### 6.11 交付飞几枚 = sim 的 taken（2026-11-09，和 §6.7 同款的读数坑）
+
+**症状**：2 行任务的订单（第 2 关 order_4 / order_5 / order_6）交付时**只飞一枚**，
+第二枚棋子凭空不动，看起来像"完成任务但没飞"。
+
+**根因**：`movie_scene._advance_to()` 里写的是 `r.get("taken", [])`，但
+`evaluator.step()` 的报告把 sim 的返回字典**嵌在 `"sim"` 键下**，顶层只有
+`ok / code / id / type / channel / at`。于是 `taken` 永远是空数组，成片每次都走
+"飞被点击格"的兜底 —— 兜底只飞一枚。这和 §6.7 的 `payload` 是同一个坑，只是上次只修了 payload。
+
+实机没这个问题：`game_screen._claim_from_cell()` 读的是 `sim.apply()` 原字典（`result["taken"]`）。
+
+**修法**：`movie_scene.claim_taken(report)` 静态函数，从 `report["sim"]["taken"]` 取；
+`_advance_to` 只调它。成片飞几枚从此只认这一份数据（§6.8 的规矩）。
+
+**实测数据**（take `20261109_160815`，探针 `tools/probe_claim_taken.gd` 回放）：
+
+```text
+claim @ 2.611  order_1  TOP_taken=[]  SIM_taken=[[3,3]]
+claim @ 10.624 order_4  TOP_taken=[]  SIM_taken=[[6,7],[0,7]]   ← 2 枚，原来只飞 1 枚
+claim @ 16.358 order_2  TOP_taken=[]  SIM_taken=[[3,7]]
+claim @ 19.944 order_5  TOP_taken=[]  SIM_taken=[[6,7],[1,7]]   ← 2 枚，原来只飞 1 枚
+```
+
+**验证**：新增 `tests/t_claim_flight.gd`（12 checks）：真 evaluator 跑一次 2 行任务交付，
+断言 `claim_taken` 拿到 2 格、被点击格在内、两格不同；1 行任务只 1 枚；没有 sim 块不飞。
+出片对比：帧 660 同时有两个移动体 `(743,631)` 和 `(377,871)`（一骨头一拐杖糖），
+修复前只有一条轨迹从 `(962,1517)` 飞到 `(657,365)`。
+
+**反向验证**：把 `claim_taken` 改回读顶层 →
+
+```text
+FAIL t_claim_flight.gd :: 2 行任务交付 → 飞 2 枚 [expected=2 actual=0]
+FAIL t_claim_flight.gd :: 成片取的就是 sim 的 taken [expected=[[0,0],[2,0]] actual=[]]
+FAIL t_claim_flight.gd :: 被点击的格子出现在 taken 里 [[]]
+FAIL t_claim_flight.gd :: 1 行任务交付 → 只飞 1 枚 [expected=1 actual=0]
+FAIL t_claim_flight.gd :: 只把 taken 放在顶层不算数 [expected=[] actual=[[1,1]]]
+[tests] TOTAL checks=2532 failures=5
+恢复后：TOTAL checks=2535 failures=0  RESULT PASS
+```
+
+**顺带记住**：交付取贴图时用的是 `_snap`（事件循环里还是上一帧，§7.2 #2）。
+这批 take 里都取到了真实棋子；真遇到取不到的情况会退回订单图标 —— 要更稳就得让
+sim 在 taken 里带 `entity/level`，属于改数据结构，别顺手改。
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
 
 ### 7.1 当前锚点
 
-- 分支 `main` @ `4943b0e`，标签 `录屏内容基本完成`
-- 测试 **2515 checks / 0 failures**（`t_sim.gd` 216）；`check_portability.ps1` blocking = none
+- 分支 `main` @ `2773a5d`（tag `录屏内容基本完成`）；2026-11-09 下午的两处修复（金币落点 §6.10、交付枚数 §6.11）**尚未提交**（等审）
+- 测试 **2535 checks / 0 failures**（`t_sim.gd` 216、`t_layout_parity` 60、`t_claim_flight` 12）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 
@@ -301,3 +391,56 @@ Get-CimInstance Win32_Process -Filter "Name LIKE '%Godot%'" |
 3. **短跑不进成品目录**；完整出片才写 `output/mov/<stamp>/film.mp4`。
 4. **先打数据再改代码**：涉及"从哪飞到哪"，先打印起点/落点/来源格子三个数。
 5. **一次只改一个行为**：改完 编译 → 测试 → 一张图，再进下一个。
+
+## 8. 双画面同步（2026-11-09 操作者亲自定的硬规矩，优先级最高）
+
+**一句话**：**我改实机（游戏里玩的那个画面）的任何东西，成片（`output/mov/<stamp>/film.mp4`）必须跟着一起改。**
+两个画面是同一个产品的两种呈现，不允许"游戏里改了、片子里还是老样子"。
+
+### 8.1 为什么这条必须成文
+
+成片的四层界面（顶栏 / 订单带 / 棋盘 / 底栏）已经是**托管实机组件**（§6.2），
+成片自己只负责：取快照、推进时钟、画光标/飞行/提示。也就是说：
+
+- **几何**只有一份：`layout_shared.gd` + `top_bar.bar_rects()` + `bottom_bar` 常量；
+- **数据**只有一份：`sim.snapshot()` / `sim.apply()` 的返回值；
+- **动画起点/数量**只有一份：`taken` / `spawn` / `unlock`。
+
+所以"改实机不用改成片"这件事**本来就不该存在**——真出现，就说明有人在成片侧自己算了一份，
+那就是 §6.8 和 §6.10 / §6.11 那三个 bug 的成因。
+
+### 8.2 改实机画面时的必做清单（缺一条都算没做完）
+
+1. **问自己这一改会不会出现在成片里**：顶栏数字/布局、订单卡、棋盘棋子/高亮、底栏、
+   光标、飞行、提示 toast、关卡切换 —— 只要会出现在画面里，就走完下面全部步骤。
+2. **改共享来源，不改两份**：几何进 `layout_shared.gd`；顶栏几何进 `top_bar`；
+   能复用的组件就让成片实例化它，**不要在 `movie_scene` 里再画一遍**。
+3. **数据只从 sim 来**：`snapshot()` 缺字段就在 `snapshot()` 里加（实机与成片同时拿到），
+   顺序是"先让 sim 快照带上这个数 → 两边一起读"，不是"成片自己算一个"。
+4. **加对拍断言**：`tests/t_layout_parity.gd`（几何/锚点）、`tests/t_order_rows.gd`（行数据）、
+   `tests/t_claim_flight.gd`（动画数量）—— 断言"实机 == 成片"，不是各自对一个常量。
+5. **反向验证**：把实机这侧改动关掉 → 断言必须红（§6.9 同一套做法）。
+6. **出片比对**：`bash tools/render.sh --take <take> --frames N --out output/render/xxx.mp4`
+   抽帧看改动区域；确认无误再完整出片写回 `output/mov/<stamp>/`。
+7. **文档留痕**：AGENTS 本节 + HANDOFF 的"待定/已收口"表同步更新。
+
+### 8.3 判断"改了哪个画面"的实操办法
+
+| 改的是 | 谁看得见 | 必做 |
+|---|---|---|
+| `src/core/**`（规则） | 两边 | 反向失败单测（§6.9）+ 成片抽帧 |
+| `src/view/**`（组件） | 两边 | 对拍断言 + 成片抽帧（成片实例化同一组件） |
+| `src/render/movie_scene.gd`（成片专属） | 只有成片 | 抽帧 + 说明实机对应行为是否也变了 |
+| 数据 `data/*.json` | 两边 | 跑 `t_local_assets` / `t_sim` / `t_orders_reach` + 出片 |
+
+成片专属的改动（比如只画在成片上的光标热点）也必须回答一句："实机里对应的是什么？"
+如果实机没有对应物，说明这块是成片自绘的，写进文档别让人以为两边一样。
+
+### 8.4 已经吃过亏的地方（都是"画面没同步"）
+
+- §6.10 金币落点：成片写死坐标，实机读另一个控件 → 落点偏 15px；
+- §6.11 交付枚数：2 行任务的订单成片只飞 1 枚 → 画面少了半拍；
+- §7.2 #7：成片自绘 + 实机 FlyAnim 同时画 → 一次交付两个芯片。
+
+**判据**：只要你在成片侧看到"又一个坐标/又一个数量/又一份文案"，
+那它迟早会和实机分叉 —— 当场改成共享来源。

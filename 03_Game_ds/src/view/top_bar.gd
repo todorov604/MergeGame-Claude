@@ -9,6 +9,14 @@ const BAR_ROW_MAX_W := 760.0
 const BAR_LEFT_LIMIT := 120.0
 const BAR_RIGHT_LIMIT := 926.0
 const BAR_ASPECTS := {"energy": 243.0 / 90.0, "coin": 255.0 / 82.0, "gem": 246.0 / 67.0}
+## 钱条 => 贴图 key。_draw() 与 counter_center() 共用这一张表。
+const BAR_ART := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
+## 金币图标在 coin_bar.png 里的相对位置：金币圆盘的金色本体 bbox=(3,2)-(72,73)，
+## 中心 (37.5,37.5)，除以贴图 255x82。**量自贴图本身**，不是估的。
+## 交叉验证：成片 frame 00040.png 顶栏里那枚金币的实测中心 (459.0,56.5)，
+## 本比例映射出来的页面坐标 (458.79,54.84)，差 1.7px（贴图带投影）。
+const COIN_ICON_RATIO := Vector2(37.5 / 255.0, 37.5 / 82.0)
+const ICON_RATIOS := {"coin": COIN_ICON_RATIO}
 const BAR_CENTER_X := 540.0
 const BAR_CENTER_Y := 58.0
 const LEVEL_BADGE := Rect2(16.0, 16.0, 96.0, 67.2)
@@ -73,20 +81,28 @@ func _ui(key: String) -> Texture2D:
 	return texture
 
 
-## 等比放进矩形（与 panel 的 draw_ui_fit 同一规则）。
-## 等比放进矩形；返回实际画出来的矩形（调用方按它的高度定字号）。
-func _draw_fit_rect(key: String, rect: Rect2) -> Rect2:
+## 等比放进矩形（与 panel 的 draw_ui_fit 同一规则）。**纯几何，不画**。
+## 飞行动画的落点要靠它把"贴图里的图标位置"换算到页面坐标，所以它必须能在
+## 没有绘制上下文（甚至没有贴图）的时候调用。
+func fit_rect_for(key: String, rect: Rect2) -> Rect2:
 	var texture := _ui(key)
 	if texture == null:
 		return Rect2()
 	var src := texture.get_size()
 	if src.x <= 0.0 or src.y <= 0.0:
 		return Rect2()
-	var scale: float = minf(rect.size.x / src.x, rect.size.y / src.y)
-	var size := src * scale
-	var at := rect.position + (rect.size - size) * 0.5
-	draw_texture_rect(texture, Rect2(at, size), false)
-	return Rect2(at, size)
+	var s: float = minf(rect.size.x / src.x, rect.size.y / src.y)
+	var size := src * s
+	return Rect2(rect.position + (rect.size - size) * 0.5, size)
+
+
+## 等比放进矩形并画出来；返回实际画出来的矩形（调用方按它的高度定字号）。
+func _draw_fit_rect(key: String, rect: Rect2) -> Rect2:
+	var box := fit_rect_for(key, rect)
+	if box.size.x <= 0.0:
+		return Rect2()
+	draw_texture_rect(_ui(key), box, false)
+	return box
 
 
 func _draw_fit(key: String, rect: Rect2) -> bool:
@@ -136,14 +152,31 @@ func bar_rects() -> Dictionary:
 	return {"energy": energy, "coin": coin, "gem": gem}
 
 
+## 飞行动画的落点：某根条里那枚图标的中心（本控件坐标系）。
+## **成片与实机都调这一个函数，谁都不许再写死坐标。**
+## 2026-11-09 之前成片写死 (473.6,49.6) —— 那是已退役 hud_view 的公式换算出来的，
+## 落在数字左边，比图标实际中心偏右 15px、偏上 6px（实机读的也是那个隐藏控件）。
+func counter_center(key: String) -> Vector2:
+	var rects := bar_rects()
+	var ratio: Vector2 = ICON_RATIOS.get(key, Vector2(0.5, 0.5))
+	if not rects.has(key):
+		return Vector2(BAR_CENTER_X, BAR_CENTER_Y) * scale + position
+	var rect: Rect2 = rects[key]
+	var box := fit_rect_for(String(BAR_ART.get(key, "")), rect)
+	if box.size.x <= 0.0:
+		# 无贴图（无资产模式/单测）：coin_bar 的长宽比与它的 bar 矩形完全一致，
+		# 所以退回矩形本身算出来的落点和有贴图时相同。
+		box = rect
+	return (box.position + box.size * ratio) * scale + position
+
+
 func _draw() -> void:
 	if _state.is_empty():
 		return
-	var bars := {"energy": "energy_bar", "coin": "coin_bar", "gem": "gem_bar"}
 	var rects := bar_rects()
 	var art_rects := {}
-	for key in bars.keys():
-		var art := _draw_fit_rect(String(bars[key]), rects[key])
+	for key in BAR_ART.keys():
+		var art := _draw_fit_rect(String(BAR_ART[key]), rects[key])
 		if art.size.x <= 0.0:
 			draw_rect(rects[key], Color(1, 1, 1, 0.82), true)
 			art = rects[key]

@@ -1102,7 +1102,12 @@ func obstacles_has_kind(key: Vector2i, kind: String) -> bool:
 
 ## sim 给的每格剩余秒数：{cell: seconds}。没有条目时退回旧的按时间推算。
 func set_ice_remaining_map(rows: Dictionary) -> void:
+	if rows == _ice_left:
+		return
 	_ice_left = rows.duplicate()
+	# 2026-11-10：倒计时每秒都在变，必须自己触发重绘 —— 以前只有点击/事件才会重画，
+	# 操作者看到的是"不点鼠标就不刷新"。
+	queue_redraw()
 
 
 ## 冰到点自己化掉：播一次"扩大消失"（实机与成片同一套绘制）。

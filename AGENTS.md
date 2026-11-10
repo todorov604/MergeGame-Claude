@@ -940,6 +940,30 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 [verify] RESULT PASS
 ```
 
+### 6.28 冰倒计时必须每帧刷新（2026-11-10，实机报"不点鼠标不跳字"）
+
+**现象**：游戏里冰的倒计时停在初始值，鼠标点一下才跳到最新。
+
+**根因**：剩余秒数原来是塞在 `_sync_from_sim()` 里推的，而 `_sync_from_sim()` 只在
+**有事件时**调用（点击/合并/交付）。没有事件 → 视图里的 `_ice_left` 一直是旧的；
+`board_view.set_ice_remaining_map()` 那时也**不触发重绘**。
+
+**修法**：
+1. `board_view.set_ice_remaining_map()` 值变了就 `queue_redraw()`
+   （倒计时每秒都在变，必须自己触发重绘）。
+2. `game_screen` 抽出 `_push_ice_countdown()`，在**每帧**的 `_process` 里调用，
+   数据直接从 `sim.board.obstacles` + `sim.ice_remaining()` 取（不依赖快照，融化后该格自然消失）。
+   `_sync_from_sim()` 也复用同一个函数，不再有第二份算法。
+
+**验证**（headless 跑真实场景，不需要点鼠标）：
+
+```text
+[probe] t=1.0 cell=(3, 6) left=45 view=45
+[probe] t=2.0 cell=(3, 6) left=44 view=44
+```
+
+`left` 是 sim 算的、`view` 是棋盘手里那份，两秒都在往前走 —— 没有任何点击事件参与。
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。

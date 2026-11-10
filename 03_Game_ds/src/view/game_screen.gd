@@ -1139,6 +1139,22 @@ func _load_dynamic_font(path: String) -> Font:
 	return file
 
 
+## 把每格冰的剩余秒数推给棋盘（每帧调用；融化后该格自然消失）。
+func _push_ice_countdown() -> void:
+	if board == null or evaluator == null or evaluator.sim == null:
+		return
+	if not board.has_method("set_ice_remaining_map"):
+		return
+	var left := {}
+	var sim = evaluator.sim
+	for cell in sim.board.obstacles.keys():
+		var kinds: Array = sim.board.obstacle_types(cell)
+		if not (kinds.has("ice") or kinds.has("icebox")):
+			continue
+		left[cell] = sim.ice_remaining(cell)
+	board.set_ice_remaining_map(left)
+
+
 func _sync_from_sim() -> void:
 	if evaluator == null or evaluator.sim == null:
 		return
@@ -1151,18 +1167,7 @@ func _sync_from_sim() -> void:
 			_generators_live(snap))
 	board.apply_state({"selected": _to_array(_selected), "completed": _completed_cells(snap)})
 	board.set_clock(_clock)
-	# 2026-11-10：倒计时数字用 sim 的剩余秒数（第 1 关的冰 45 秒，显示 00:45）。
-	if evaluator != null and evaluator.sim != null and board.has_method("set_ice_remaining_map"):
-		var left := {}
-		for row in (snap.get("board", {}) as Dictionary).get("obstacles", []):
-			if typeof(row) != TYPE_ARRAY or (row as Array).size() < 3:
-				continue
-			var kinds: Array = (row as Array)[2]
-			if not (kinds.has("ice") or kinds.has("icebox")):
-				continue
-			var icell := Vector2i(int((row as Array)[0]), int((row as Array)[1]))
-			left[icell] = evaluator.sim.ice_remaining(icell)
-		board.set_ice_remaining_map(left)
+	_push_ice_countdown()
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
@@ -1801,6 +1806,8 @@ func _process(delta: float) -> void:
 	if board != null and board.has_method("set_ice_elapsed"):
 		board.set_ice_elapsed(_clock)
 	# 2026-11-10：冰到点自己化掉（唯一的解锁方式）。先推进 sim，再播"扩大消失"。
+	# 2026-11-10：倒计时数字每帧都推给视图（不点鼠标也要跳字）。
+	_push_ice_countdown()
 	if evaluator != null and evaluator.sim != null:
 		var melts: Array = evaluator.sim.tick_to(_clock)
 		if not melts.is_empty():

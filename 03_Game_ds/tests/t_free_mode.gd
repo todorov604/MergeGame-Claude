@@ -413,8 +413,9 @@ func _test_swap_command(t) -> void:
 	# 所见即所得: the green cell + finish badge are derived from the snapshot, so the
 	# completed marker travels with the chip after a swap.
 	var done_before: Array = CompletedCells.from_snapshot(sim.snapshot())
-	# 第 1 关保持原样：任务要 lv2，开局棋盘只有 lv1，得先合并
-	t.eq(done_before.size(), 0, "level 1 starts with no completed cell (its mission needs a merge)")
+	# 2026-11-10：第 1 关改成两个任务（Ca2×1 + Ca1×2），Ca1 开局就摆在棋盘上，
+	# 所以开局可付的格子 = 4 枚 Ca1（Ca2 那行还得靠合并）
+	t.eq(done_before.size(), 6, "level 1 starts with its Ca1 cells completed")
 	if done_before.size() >= 1:
 		var done_cell := Vector2i(int(done_before[0][0]), int(done_before[0][1]))
 		var free2 := Vector2i(-1, -1)
@@ -429,7 +430,9 @@ func _test_swap_command(t) -> void:
 		SimHandlers.apply(sim, {"type": "swap",
 				"payload": {"from": [done_cell.x, done_cell.y], "to": [free2.x, free2.y]}})
 		var done_after: Array = CompletedCells.from_snapshot(sim.snapshot())
-		t.eq(done_after, [[free2.x, free2.y]], "the completed marker follows the chip to the new cell")
+		# 标记会跟着棋子走：目标格也在可付集合里（其余 Ca1 仍然可付）
+		t.ok((done_after as Array).has([free2.x, free2.y]),
+				"the completed marker follows the chip to the new cell", str(done_after))
 
 	t.eq((sim.snapshot().get("board", {}).get("cells", []) as Array).size(),
 			(before.get("board", {}).get("cells", []) as Array).size(),

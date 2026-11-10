@@ -223,6 +223,37 @@ func _card_decor_matches(t) -> void:
 	solo.free()
 
 	# 2026-11-09：每个任务棋子右下角带 have/need 角标；完成前后两套颜色（取色自参考图）
+	# 2026-11-10：交付命中区 = **底板矩形**，且只认绿色（可交付）的行。
+	# 用独立的 panel 夹具，别碰上面已经 free() 掉的那个。
+	var hit_panel = OrderPanel.new()
+	hit_panel.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	hit_panel.build_from_level({"id": "hit_lv", "orders": [
+		{"id": "hit_1", "character": "char_blonde",
+			"mission": [{"entity": "CleanSet_Ca", "level": 2}, {"entity": "CleanSet_Ca", "level": 1}],
+			"coin": 5, "star": 0, "gem": 1, "energy": 10}]})
+	hit_panel.size = Vector2(1080.0, 250.0)
+	hit_panel.sync_orders([{
+		"id": "hit_1", "character": "char_blonde", "coin": 5, "star": 0, "gem": 1, "energy": 10,
+		"done": false,
+		"mission": [
+			{"entity": "CleanSet_Ca", "level": 2, "have": 0, "need": 1, "ready": false},
+			{"entity": "CleanSet_Ca", "level": 1, "have": 0, "need": 4, "ready": true},
+		]}])
+	var hit_card: Rect2 = hit_panel.card_rect("hit_1")
+	var hit_chips := OrderPanel.mission_chip_rects(OrderPanel.mission_area_rect(hit_card), 2)
+	var plate0: Rect2 = OrderPanel.mission_plate_rect(hit_chips[0])
+	var plate1: Rect2 = OrderPanel.mission_plate_rect(hit_chips[1])
+	var hit0: Dictionary = hit_panel.mission_row_at(plate0.get_center())
+	t.ok(hit0.is_empty(), "棕色的行不接交付（只认底板里的绿色行）", str(hit0))
+	var hit1: Dictionary = hit_panel.mission_row_at(plate1.get_center())
+	t.eq(int(hit1.get("row", -1)), 1, "绿色底板命中第二行")
+	t.eq(String(hit1.get("order", "")), "hit_1", "命中返回订单 id")
+	var outside: Dictionary = hit_panel.mission_row_at(
+			Vector2(plate1.position.x + 1.0, plate1.position.y - 6.0))
+	t.ok(outside.is_empty(), "底板外面不算命中")
+	t.eq(hit_panel.mission_row_center("hit_1", 1), plate1.get_center(), "飞行落点 = 那一行底板中心")
+	hit_panel.free()
+
 	# 叹号只认"真收齐"（操作者 2026-11-09 补的口径）：0/1 就绪也不给，1/1、2/2 才给
 	t.ok(not OrderPanel.mission_bang_visible(0, 1), "0/1 不该出现叹号")
 	t.ok(OrderPanel.mission_bang_visible(1, 1), "1/1 出现叹号")

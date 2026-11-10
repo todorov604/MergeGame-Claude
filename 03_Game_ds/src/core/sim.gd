@@ -147,6 +147,9 @@ func _make_order(raw: Dictionary) -> Dictionary:
 			mission.append({
 				"entity": String(it.get("entity", "")),
 				"level": int(it.get("level", 1)),
+				# 2026-11-10：一个任务行可以要**多枚**同名同级棋子（JSON 里的 count，缺省 1）。
+				# 角标读它当分母：count=2 就是 0/2、1/2、2/2。
+				"need": maxi(int(it.get("count", 1)), 1),
 				"have": 0,
 			})
 	return {
@@ -656,23 +659,66 @@ func _do_deliver(payload: Dictionary) -> Dictionary:
 	if not board.has_item(from):
 		return _err("SIM_DELIVER_MISMATCH", "no item to deliver at " + str(from))
 	var it: Dictionary = board.item(from)
-	var k := _unsatisfied_match(order, String(it.get("entity", "")), int(it.get("level", 1)))
+	# 2026-11-10：交付只推进**一行的一枚**。payload 可以带 row 精确指定行
+	# （右键点卡上某个任务格子走这条），不带就按"第一行还没收满的"落。
+	var row_hint := int(payload.get("row", -1))
+	var k := _unsatisfied_match(order, String(it.get("entity", "")), int(it.get("level", 1)), row_hint)
 	if k < 0:
 		return _err("SIM_DELIVER_MISMATCH", "item does not match an unsatisfied mission entry")
 	order["mission"][k]["have"] = int(order["mission"][k]["have"]) + 1
 	board.take(from)
-	return _ok("delivered " + String(it.get("entity", "")) + " to \"" + order_id + "\"")
+	var out := _ok("delivered " + String(it.get("entity", "")) + " to \"" + order_id + "\"")
+	out["row"] = k
+	out["have"] = int(order["mission"][k]["have"])
+	out["need"] = int(order["mission"][k].get("need", 1))
+	# 每一行都收满 = 整单交付完成：和点卡结算走同一段入账逻辑（不重复取棋盘棋子）。
+	if _order_rows_full(order):
+		_settle_order(order)
+		out["settled"] = true
+	return out
 
 
-func _unsatisfied_match(order: Dictionary, entity_id: String, level: int) -> int:
+func _unsatisfied_match(order: Dictionary, entity_id: String, level: int, row_hint: int = -1) -> int:
 	var mission: Array = order["mission"]
+	# 指定了行就只认那一行（右键点卡上的任务格子）
+	if row_hint >= 0:
+		if row_hint >= mission.size():
+			return -1
+		var want: Dictionary = mission[row_hint]
+		if int(want["have"]) >= int(want.get("need", 1)):
+			return -1
+		if String(want["entity"]) == entity_id and int(want["level"]) == level:
+			return row_hint
+		return -1
 	for k in range(mission.size()):
 		var it: Dictionary = mission[k]
-		if int(it["have"]) >= 1:
+		if int(it["have"]) >= int(it.get("need", 1)):
 			continue
 		if String(it["entity"]) == entity_id and int(it["level"]) == level:
 			return k
 	return -1
+
+
+## 这一单的每一行都收满了没有（交付完成判定）。
+func _order_rows_full(order: Dictionary) -> bool:
+	for it in order["mission"]:
+		if int(it["have"]) < int(it.get("need", 1)):
+			return false
+	return true
+
+
+## 整单入账：奖励、done 标记、关卡完成标记。交付与点卡结算共用这一段。
+func _settle_order(order: Dictionary) -> void:
+	for it in order["mission"]:
+		it["have"] = 0
+	order["done"] = true
+	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
+	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
+	# 2026-11-09：钻石/体力与金币同一时刻入账（视图层据此播飞行 + 数字跳）。
+	hud["gem"] = int(hud.get("gem", 0)) + int(order.get("gem", 0))
+	hud["energy"] = int(hud.get("energy", 0)) + int(order.get("energy", 0))
+	if _all_orders_done():
+		level_complete_pending = true
 
 
 ## Claim = "turn in the order". Satisfied either by delivered units (have >= 1)
@@ -698,44 +744,37 @@ func _do_order_claim(payload: Dictionary) -> Dictionary:
 		src_cell = Vector2i(int((raw_src as Array)[0]), int((raw_src as Array)[1]))
 	for k in range(mission.size()):
 		var need: Dictionary = mission[k]
-		if int(need["have"]) >= 1:
-			plan.append({"k": k, "delivered": true, "slot": INVALID_POS})
-			continue
-		var found := Vector2i(-1, -1)
-		if src_cell.x >= 0 and not used.has(src_cell) and board.has_item(src_cell):
-			var clicked: Dictionary = board.item(src_cell)
-			if String(clicked.get("entity", "")) == String(need["entity"]) \
-					and int(clicked.get("level", 1)) == int(need["level"]):
-				found = src_cell
-		if found.x < 0:
-			for pos in board.sorted_cells():
-				if used.has(pos):
-					continue
-				var it: Dictionary = board.item(pos)
-				if String(it.get("entity", "")) == String(need["entity"]) and int(it.get("level", 1)) == int(need["level"]):
-					found = pos
-					break
-		if found.x < 0:
-			return _err("SIM_ORDER_UNSATISFIED", "\"" + order_id + "\" still needs " + String(need["entity"]) + " lv" + str(int(need["level"])))
-		used[found] = true
-		plan.append({"k": k, "delivered": false, "slot": found})
+		var want := int(need.get("need", 1))
+		var already := int(need["have"])
+		# 已经交付过的那几枚直接记账，剩下的从棋盘上取
+		while already < want:
+			var found := Vector2i(-1, -1)
+			if src_cell.x >= 0 and not used.has(src_cell) and board.has_item(src_cell):
+				var clicked: Dictionary = board.item(src_cell)
+				if String(clicked.get("entity", "")) == String(need["entity"]) \
+						and int(clicked.get("level", 1)) == int(need["level"]):
+					found = src_cell
+			if found.x < 0:
+				for pos in board.sorted_cells():
+					if used.has(pos):
+						continue
+					var it: Dictionary = board.item(pos)
+					if String(it.get("entity", "")) == String(need["entity"]) and int(it.get("level", 1)) == int(need["level"]):
+						found = pos
+						break
+			if found.x < 0:
+				return _err("SIM_ORDER_UNSATISFIED", "\"" + order_id + "\" still needs " + String(need["entity"]) + " lv" + str(int(need["level"])))
+			used[found] = true
+			plan.append({"k": k, "delivered": false, "slot": found})
+			already += 1
 
 	var taken: Array = []
 	for step in plan:
-		var k: int = int(step["k"])
-		mission[k]["have"] = 0
 		if not bool(step["delivered"]):
-			board.take(step["slot"])
-			taken.append([int((step["slot"] as Vector2i).x), int((step["slot"] as Vector2i).y)])
-	order["done"] = true
-	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
-	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
-	# 2026-11-09：钻石奖励与金币同一时刻入账（视图层据此播一次钻石飞行 + 数字跳）。
-	hud["gem"] = int(hud.get("gem", 0)) + int(order.get("gem", 0))
-	# 2026-11-09：体力奖励同一刻入账（视图层据此播一次闪电飞行 + 数字跳）。
-	hud["energy"] = int(hud.get("energy", 0)) + int(order.get("energy", 0))
-	if _all_orders_done():
-		level_complete_pending = true
+			var slot: Vector2i = step["slot"]
+			board.take(slot)
+			taken.append([int(slot.x), int(slot.y)])
+	_settle_order(order)
 	var out := _ok("claimed \"" + order_id + "\"")
 	# 视图层据此为每一枚被消耗的棋子播一次飞行动画（2 枚任务就飞 2 枚）。
 	out["taken"] = taken
@@ -799,7 +838,9 @@ func snapshot() -> Dictionary:
 	for o in orders:
 		var mission_rows: Array = []
 		for it in o["mission"]:
-			mission_rows.append([String(it["entity"]), int(it["level"]), int(it["have"])])
+			# 2026-11-10：第 4 位带上 need（一行可能要多枚），视图层据此画 0/2、1/2
+			mission_rows.append([String(it["entity"]), int(it["level"]), int(it["have"]),
+					int(it.get("need", 1))])
 		order_rows.append({
 			"id": String(o["id"]),
 			"character": String(o["character"]),

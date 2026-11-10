@@ -49,7 +49,7 @@ func _single_order_level(t) -> void:
 	t.eq(bool(row.get("done", true)), false, "a fresh order is not done")
 
 	var mission := _mission(row)
-	t.eq(mission.size(), 1, "the row carries one mission entry")
+	t.eq(mission.size(), 2, "the row carries two mission entries")
 	var item: Dictionary = mission[0]
 	for key in MISSION_FIELDS:
 		t.ok(item.has(String(key)), "mission row field present: " + String(key))
@@ -73,10 +73,26 @@ func _ready_follows_the_board(t) -> void:
 		return
 	var sim = _fresh_sim(model)
 	var empty_snap: Dictionary = sim.snapshot()
-	t.eq(_ready_keys(OrderRows.build(empty_snap, model)).size(), 0,
-			"an empty queue pays nothing yet")
+	# 2026-11-10：第 1 关有 Ca1×2 的任务，开局 4 枚 Ca1 都可付
+	t.eq(_ready_keys(OrderRows.build(empty_snap, model)).size(), 1,
+			"the fresh board already pays the Ca1 row")
+	# 2026-11-10：半途也要变绿 —— 2/4 且棋盘上只剩 1 枚，这一行仍算"能交"。
+	# 反向验证：把 ready 改回 `have + 棋盘 >= need`（3 < 4）时这条会红。
+	var half_snap := {
+		"orders": [{"id": "half", "character": "char_blonde", "mission": [
+			["CleanSet_Ca", 1, 2, 4]]}],
+		"board": {"cells": [[2, 2, "CleanSet_Ca", 1]], "obstacles": []},
+	}
+	var half_rows: Array = OrderRows.build(half_snap, model)
+	var half_row: Dictionary = (half_rows[0]["mission"] as Array)[0]
+	t.eq(int(half_row.get("have", -1)), 2, "半途行 have = 2")
+	t.eq(int(half_row.get("need", -1)), 4, "半途行 need = 4")
+	t.ok(bool(half_row.get("ready", false)),
+			"2/4 且棋盘上还有 1 枚 → 必须绿色（不是'凑够 4 枚才绿'）", str(half_row))
+
+	# 2026-11-10：ready 改成**计数**（要 2 枚的任务得看棋盘上有几枚）
 	t.eq(_ready_keys(OrderRows.build(empty_snap, model)), _completed_keys(empty_snap),
-			"ready set matches CompletedCells on the fresh board")
+			"ready counts match CompletedCells on the fresh board")
 
 	var free: Vector2i = sim.board.first_free_cell()
 	t.ok(free.x >= 0, "level_1 still has a free, unblocked cell", str(free))

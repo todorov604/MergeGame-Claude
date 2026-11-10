@@ -657,6 +657,10 @@ var _autoplay: bool = false
 var _freeze: bool = false
 var _t_target: float = -1.0
 var _selected := Vector2i(-1, -1)
+## 2026-11-10：左键点订单卡会**整单结算**（一次把这一单的行全收掉）。操作者要求先屏蔽——
+## 交付要一枚一枚来（右键棋子 / 拖到卡上 / 右键卡上任务格子），点卡不再结算。
+## 想恢复把这里改回 true。
+const CLICK_CARD_CLAIMS := false
 var _level_index: int = 0
 var _level_static: Dictionary = {}
 var _end_time: float = 0.0
@@ -1952,10 +1956,17 @@ func _input(event: InputEvent) -> void:
 		if mouse.button_index == MOUSE_BUTTON_RIGHT:
 			# 2026-11-06: right-click on a green chip delivers it too.
 			if mouse.pressed:
+				# 2026-11-10：先看是不是点在订单带的任务格子上（第三种交付入口）
+				if _deliver_from_card(mouse.position):
+					return
 				var rcell := _cell_at(mouse.position)
-				if rcell.x >= 0 and _claim_from_cell(rcell):
-					_last_click_at = _clock
-					_last_click_point = _mouse_canvas_point()
+				# 右键 = 交**这一枚**（不再是整单结算、一次飞好几枚）
+				if rcell.x >= 0:
+					var ritem: Dictionary = evaluator.sim.board.item(rcell) 							if evaluator.sim.board.has_item(rcell) else {}
+					var rtarget := _deliver_target_for(ritem)
+					if not rtarget.is_empty() 							and _deliver_to(String(rtarget["order"]), int(rtarget["row"]), rcell):
+						_last_click_at = _clock
+						_last_click_point = _mouse_canvas_point()
 			return
 		if mouse.button_index != MOUSE_BUTTON_LEFT:
 			return
@@ -1997,6 +2008,16 @@ func _rec_drag_sample(at: Vector2) -> void:
 		return
 	_rec_drag.append([snappedf(_rec_offset(), 0.001), _drag_from.x, _drag_from.y,
 			snappedf(at.x, 0.1), snappedf(at.y, 0.1)])
+
+
+func _update_hover_row(point: Vector2) -> void:
+	if orders == null:
+		return
+	var hit: Dictionary = orders.mission_row_at(point - orders.position) 			if _dragging else {}
+	if hit.is_empty():
+		orders.set_hover_row("", -1)
+	else:
+		orders.set_hover_row(String(hit["order"]), int(hit["row"]))
 
 
 func _maybe_start_drag(point: Vector2) -> void:
@@ -2088,7 +2109,7 @@ func _end_press(release_point: Vector2) -> void:
 	if _dragging:
 		var to := _cell_at(point)
 		# Dropping a chip onto the order band delivers it instead of a board action.
-		if not _order_card_at(point).is_empty() and _claim_from_cell(_drag_from):
+		if _deliver_drop(point, _drag_from):
 			board.set_drag_state({})
 			if ghost != null:
 				ghost.clear()
@@ -2183,6 +2204,161 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 	return true
 
 
+## 2026-11-10：**一枚一枚交**。三种入口（右键棋子 / 拖到卡上 / 右键卡上任务格子）
+## 都落到这里：只推进一行的一枚，不再是"整单一次结算"。
+func _deliver_to(order_id: String, row: int, cell: Vector2i,
+		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0) -> bool:
+	if evaluator == null or evaluator.sim == null:
+		return false
+	if not evaluator.sim.board.has_item(cell):
+		return false
+	var item: Dictionary = evaluator.sim.board.item(cell)
+	var result: Dictionary = _apply_free("deliver",
+			{"order": order_id, "from": [cell.x, cell.y], "row": row})
+	if not bool(result.get("ok", false)):
+		return false
+	var taken_row := int(result.get("row", row))
+	_play_deliver_flight(order_id, taken_row, cell, item, from_point, dur)
+	# 到货反馈：那一行底板吞一下（拖拽交付尤其明显——棋子已经在指针上，不该再"从棋盘飞"）
+	if orders != null:
+		orders.punch_row(order_id, taken_row)
+	if bool(result.get("settled", false)):
+		_after_settle(order_id)
+	return true
+
+
+## 这一枚该交给哪张卡哪一行：按卡的顺序找**还没收满、且有同款需求**的行。
+func _deliver_target_for(item: Dictionary) -> Dictionary:
+	var entity := String(item.get("entity", ""))
+	var level := int(item.get("level", 1))
+	for raw in orders.cards:
+		var card: Dictionary = raw
+		if bool(card.get("done", false)):
+			continue
+		var items: Array = card.get("mission", [])
+		for i in items.size():
+			var m: Dictionary = items[i]
+			if String(m.get("entity", "")) != entity or int(m.get("level", 1)) != level:
+				continue
+			if int(m.get("have", 0)) >= maxi(int(m.get("need", 1)), 1):
+				continue
+			return {"order": String(card.get("id", "")), "row": i}
+	return {}
+
+
+## 棋盘上随机挑一枚符合这一行的棋子（右键点卡上任务格子时用）。
+func _random_cell_for(order_id: String, row: int) -> Vector2i:
+	var card: Dictionary = {}
+	for raw in orders.cards:
+		if String((raw as Dictionary).get("id", "")) == order_id:
+			card = raw
+			break
+	if card.is_empty():
+		return Vector2i(-1, -1)
+	var items: Array = card.get("mission", [])
+	if row < 0 or row >= items.size():
+		return Vector2i(-1, -1)
+	var m: Dictionary = items[row]
+	var cells: Array = []
+	for pos in evaluator.sim.board.sorted_cells():
+		var it: Dictionary = evaluator.sim.board.item(pos)
+		if String(it.get("entity", "")) == String(m.get("entity", "")) 				and int(it.get("level", 1)) == int(m.get("level", 1)):
+			cells.append(pos)
+	if cells.is_empty():
+		return Vector2i(-1, -1)
+	# 随机一枚（固定种子便于复现）；挑中的格子会写进 take，成片回放是确定的。
+	var idx := int(abs(float(_clock) * 1000.0 + float(cells.size()))) % cells.size()
+	return cells[idx]
+
+
+## 交付一枚的飞行：起点 = 那一格，落点 = **那一行的底板中心**（不是卡中心）。
+func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, item: Dictionary,
+		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0) -> void:
+	if fly == null or orders == null:
+		return
+	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
+			int(item.get("level", 1)))
+	if texture == null:
+		return
+	var target: Vector2 = orders.position + orders.mission_row_center(order_id, row)
+	var payload := {"from": [cell.x, cell.y], "order": order_id,
+			"to_point": [target.x, target.y], "texture": texture}
+	# 2026-11-10：拖拽交付时棋子本来就跟着指针，**从松手点**吸进去（0.16s），
+	# 不再从已经被拖空的那一格起飞。右键交付仍是"从格子飞"（0.55s）。
+	if from_point.x >= 0.0:
+		payload["from_point"] = [from_point.x, from_point.y]
+		payload["dur"] = dur if dur > 0.0 else FlyAnim.deliver_duration(from_point, target)
+	else:
+		# 右键交付：起点是被点的那一格，时长同样按距离算（公式与成片共用）
+		var cell_centre: Vector2 = board.cell_rect(cell.x, cell.y).get_center() 				+ board.position
+		payload["dur"] = dur if dur > 0.0 else FlyAnim.deliver_duration(cell_centre, target)
+	fly.play_event({"type": "deliver_chip", "at": _clock, "payload": payload})
+
+
+## 整单收满之后的结算表现（奖励飞行 + 卡片 hold 后缩掉），与点卡结算同一套。
+func _after_settle(order_id: String) -> void:
+	if orders == null:
+		return
+	_arm_claim_hold(order_id)
+	_schedule_coin(order_id)
+	_clear_drag_art()
+	_last_click_at = _clock
+	_last_click_point = _mouse_canvas_point()
+
+
+## 右键点在订单带的某个任务格子上（只认绿色底板）：从棋盘随机挑一枚对应的，
+## 飞进那一行。这是第三种交付入口。
+func _deliver_from_card(point: Vector2) -> bool:
+	if orders == null or evaluator == null or evaluator.sim == null:
+		return false
+	var hit: Dictionary = orders.mission_row_at(point - orders.position)
+	if hit.is_empty() or not bool(hit.get("ready", false)):
+		return false
+	var cell := _random_cell_for(String(hit["order"]), int(hit["row"]))
+	if cell.x < 0:
+		return false
+	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell):
+		return false
+	_last_click_at = _clock
+	_last_click_point = point
+	_record_click(point, {"kind": "deliver", "ok": true})
+	return true
+
+
+## 拖拽落点在订单带上：只认**底板矩形**里、且已经变绿的行；否则当没交（棋子回原位）。
+func _deliver_drop(point: Vector2, cell: Vector2i) -> bool:
+	if orders == null or evaluator == null or evaluator.sim == null:
+		return false
+	if not evaluator.sim.board.has_item(cell):
+		return false
+	var hit: Dictionary = orders.mission_row_at(point - orders.position)
+	if hit.is_empty() or not bool(hit.get("ready", false)):
+		return false
+	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell, point, 0.16):
+		return false
+	_clear_drag_art()
+	_last_click_at = _clock
+	_last_click_point = _mouse_canvas_point()
+	_record_click(point, {"kind": "deliver", "ok": true})
+	return true
+
+
+## 交付/点卡之后统一清掉拖拽残留：ghost、拖拽层、选中框。
+## 2026-11-10：以前只清了 ghost，`board.selected` 还指在被交走的那一格上，
+## 棋盘上就会留一枚"飘着"的棋子（带四个选中角标）。
+func _clear_drag_art() -> void:
+	board.set_drag_state({})
+	board.drag_chip_visible = true
+	if ghost != null:
+		ghost.clear()
+	_dragging = false
+	_drag_from = Vector2i(-1, -1)
+	_pressing = false
+	_selected = Vector2i(-1, -1)
+	board.apply_state({"selected": _to_array(_selected),
+			"completed": _completed_cells(evaluator.sim.snapshot())})
+
+
 ## One click: board first (tap a generator / select+merge a chip), then an order
 ## card (claim it), then "level complete → click to continue". Anything else drops
 ## the selection. Every click is logged for the take (so the film shows the hand
@@ -2213,7 +2389,8 @@ func _free_click_at(point: Vector2) -> Dictionary:
 		var doubled := cell == _last_cell and _clock - _last_cell_at <= DOUBLE_CLICK
 		_last_cell = cell
 		_last_cell_at = _clock
-		if doubled and _claim_from_cell(cell):
+		# 同一个开关：双击棋子也不再整单结算（2026-11-10 屏蔽）
+		if CLICK_CARD_CLAIMS and doubled and _claim_from_cell(cell):
 			out["cell"] = [cell.x, cell.y]
 			out["kind"] = "order_claim"
 			out["ok"] = true
@@ -2238,7 +2415,7 @@ func _free_click_at(point: Vector2) -> Dictionary:
 			out["ok"] = true
 		_record_click(point, out)
 		return out
-	var order_id := _order_card_at(point)
+	var order_id := _order_card_at(point) if CLICK_CARD_CLAIMS else ""
 	if not order_id.is_empty():
 		out["kind"] = "order_claim"
 		# Capture the delivered chip BEFORE the claim consumes it: the flight needs its

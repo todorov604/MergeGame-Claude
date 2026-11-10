@@ -833,6 +833,30 @@ func _advance_to(t: float) -> void:
 			if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
 				_pulse = {"cell": Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])),
 						"started": float(r.get("at", t))}
+		# 2026-11-10：一枚一枚交（右键棋子 / 拖到卡上 / 右键卡上任务格子）在 take 里是
+		# `deliver` 事件。成片按同一条数据播：只飞一枚，落点是**那一行的底板中心**；
+		# sim 回 settled=true 时才走整单结算的表现（和点卡结算同一套）。
+		if channel == "sim" and bool(r.get("ok", false)) 				and String(r.get("type", "")) == "deliver":
+			var d_payload = (ev.get("payload", {}) as Dictionary)
+			var d_from = d_payload.get("from", [])
+			var d_order := String(d_payload.get("order", ""))
+			var d_sim = (r.get("sim", {}) as Dictionary)
+			var d_row := int(d_sim.get("row", d_payload.get("row", 0)))
+			var at_now := float(r.get("at", t))
+			if typeof(d_from) == TYPE_ARRAY and (d_from as Array).size() >= 2:
+				# 2026-11-10：拖拽交付时棋子跟着手走，成片用**当时的光标位置**当起点，
+				# 时长 0.16s；右键交付（光标不在订单带上）仍从棋子那一格飞 0.55s。
+				var cursor_pos: Dictionary = TakeIo.cursor_at(_take, at_now)
+				var from_point := Vector2(-1, -1)
+				if not cursor_pos.is_empty():
+					var cp := Vector2(float(cursor_pos.get("x", -1.0)), float(cursor_pos.get("y", -1.0)))
+					if cp.x >= 0.0 and _band_contains(cp):
+						from_point = cp
+				_play_deliver_flight(d_order, d_row,
+						Vector2i(int((d_from as Array)[0]), int((d_from as Array)[1])),
+						at_now, from_point, 0.0)
+			if bool(d_sim.get("settled", false)):
+				_play_settle_effects(d_order, float(r.get("at", t)))
 		if channel == "sim" and bool(r.get("ok", false)) \
 				and String(r.get("type", "")) == "order_claim":
 			var claim_payload = (ev.get("payload", {}) as Dictionary)
@@ -1017,6 +1041,63 @@ func _queue_gem_ticks(amount: int, at: float) -> void:
 	for i in n:
 		_gem_ticks.append({"at": start + gap * float(i),
 				"amount": base + (1 if i < rest else 0)})
+
+
+## 单枚交付的飞行：起点 = 事件里的格子，落点 = 那一行的底板中心。
+func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, at: float,
+		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0) -> void:
+	if _live_fly == null or _live_band == null:
+		return
+	var it := _item_at_cell(cell)
+	var tex: Texture2D = null
+	if not it.is_empty():
+		tex = _chip_texture(String(it.get("entity", "")), int(it.get("level", 1)))
+	if tex == null:
+		tex = _claim_texture(order_id)
+	if tex == null:
+		return
+	var target: Vector2 = _live_band.position + _live_band.mission_row_center(order_id, row)
+	var payload := {"from": [cell.x, cell.y], "order": order_id,
+			"to_point": [target.x, target.y], "texture": tex}
+	if from_point.x >= 0.0:
+		payload["from_point"] = [from_point.x, from_point.y]
+		payload["dur"] = dur if dur > 0.0 else FlyAnimScene.deliver_duration(from_point, target)
+	else:
+		var cell_centre: Vector2 = _live_board.cell_rect(cell.x, cell.y).get_center() 				+ _live_board.position
+		payload["dur"] = dur if dur > 0.0 else FlyAnimScene.deliver_duration(cell_centre, target)
+	_live_fly.play_event({"type": "deliver_chip", "at": at, "payload": payload})
+	if _live_band != null:
+		_live_band.punch_row(order_id, row)
+
+
+## 页面坐标点是否落在订单带上（用来判断这次交付是不是"拖到卡上"）。
+func _band_contains(point: Vector2) -> bool:
+	if _live_band == null:
+		return false
+	return Rect2(_live_band.position, _live_band.size).has_point(point)
+
+
+## 整单收满后的结算表现：奖励飞顶栏 + 数字 tick + 卡片 hold 后缩掉。
+func _play_settle_effects(order_id: String, at: float) -> void:
+	var coin_after := int(_evaluator.sim.hud.get("coin", 0))
+	var gained := _order_coin_from_model(order_id, int(_evaluator.sim.level_index))
+	if gained <= 0:
+		gained = maxi(coin_after - int(round(_coin_display)), 0)
+	_coin_display = minf(_coin_display, float(coin_after - gained))
+	_queue_coin_ticks(gained, at)
+	var gem_gain := _order_gem(order_id)
+	if gem_gain > 0:
+		_queue_gem_ticks(gem_gain, at)
+	var stamina_gain := _order_energy(order_id)
+	if stamina_gain > 0:
+		_queue_energy_ticks(stamina_gain, at)
+	var centre := orders_anchor(order_id)
+	if gained > 0:
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.55, "payload": {
+			"from_point": [centre.x, centre.y], "amount": gained,
+			"count": clampi(gained / 5, 3, 8), "texture": _ui("coin_big")}})
+	if _live_band != null:
+		_live_band.hold_done(order_id, 1.55)
 
 
 func _play_claim_effects(order_id: String, cell: Vector2i, at: float, taken: Array = []) -> void:

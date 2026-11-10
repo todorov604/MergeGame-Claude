@@ -531,18 +531,28 @@ func _test_deliver(t) -> void:
 	t.ok(not s.board.has_item(Vector2i(0, 0)), "delivered item leaves the board")
 	t.ok(not bool(s.orders[0]["done"]), "deliver alone does not complete the order")
 
+	# 2026-11-10：最后一行收满 = 整单交付完成（自动结算，不用再点卡）
 	var r2: Dictionary = s.apply({"type": "deliver", "payload": {"from": [1, 0], "order": "o1"}})
 	t.ok(bool(r2.get("ok", false)), "deliver the second mission item", str(r2))
-	t.eq(int(s.orders[0]["mission"][1]["have"]), 1, "mission[1] have becomes 1")
+	t.ok(bool(r2.get("settled", false)), "the last row settles the order")
+	t.ok(bool(s.orders[0]["done"]), "settled order is marked done")
+	t.eq(int(s.hud["coin"]), 12, "settling credits the order coin")
+	t.ok(s.level_complete_pending, "settling the last order completes the level")
 
 	var r3: Dictionary = s.apply({"type": "deliver", "payload": {"from": [9, 0], "order": "o1"}})
-	t.eq(String(r3.get("code", "")), "SIM_SLOT_OOB", "deliver from outside the board")
-	var r4: Dictionary = s.apply({"type": "deliver", "payload": {"from": [0, 0], "order": "o1"}})
-	t.eq(String(r4.get("code", "")), "SIM_DELIVER_MISMATCH", "deliver from an empty cell")
-	var r5: Dictionary = s.apply({"type": "deliver", "payload": {"from": [2, 0], "order": "o1"}})
-	t.eq(String(r5.get("code", "")), "SIM_DELIVER_MISMATCH", "wrong entity/level is a mismatch")
+	t.eq(String(r3.get("code", "")), "SIM_DELIVER_MISMATCH", "deliver into a settled order is refused")
 	var r6: Dictionary = s.apply({"type": "deliver", "payload": {"from": [2, 0], "order": "nope"}})
 	t.eq(String(r6.get("code", "")), "SIM_ORDER_UNKNOWN", "deliver to an unknown order")
+
+	# 行号可以精确指定；不在那一行的棋子照样拒收
+	var rows = _new_sim(_deliver_project(), 3)
+	var a: Dictionary = rows.apply({"type": "deliver", "payload": {"from": [0, 0], "order": "o1", "row": 0}})
+	t.ok(bool(a.get("ok", false)), "deliver into an explicit row", str(a))
+	t.eq(int(a.get("row", -1)), 0, "the response reports which row took it")
+	var b: Dictionary = rows.apply({"type": "deliver", "payload": {"from": [1, 0], "order": "o1", "row": 0}})
+	t.eq(String(b.get("code", "")), "SIM_DELIVER_MISMATCH", "row 0 already has that chip")
+	var c: Dictionary = rows.apply({"type": "deliver", "payload": {"from": [1, 0], "order": "o1", "row": 1}})
+	t.ok(bool(c.get("ok", false)), "row 1 takes its own chip", str(c))
 
 	var junk = _new_sim(_deliver_project(), 3)
 	junk.apply({"type": "order_claim", "payload": {"order": "o1"}})
@@ -552,10 +562,10 @@ func _test_deliver(t) -> void:
 
 func _test_claim(t) -> void:
 	var s = _new_sim(_deliver_project(), 3)
+	# 2026-11-10：全交完会自动结算，所以这里只交付一枚，剩下那行由点卡从棋盘取
 	s.apply({"type": "deliver", "payload": {"from": [0, 0], "order": "o1"}})
-	s.apply({"type": "deliver", "payload": {"from": [1, 0], "order": "o1"}})
 	var r1: Dictionary = s.apply({"type": "order_claim", "payload": {"order": "o1"}})
-	t.ok(bool(r1.get("ok", false)), "claim with both items delivered", str(r1))
+	t.ok(bool(r1.get("ok", false)), "claim finishes the rows that were not delivered", str(r1))
 	t.eq(int(s.hud["coin"]), 12, "coin = 5 + 7")
 	t.eq(int(s.hud["star"]), 3, "star = 1 + 2")
 	t.ok(bool(s.orders[0]["done"]), "order is marked done")

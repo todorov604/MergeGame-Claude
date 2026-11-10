@@ -16,6 +16,15 @@ const HANDLED := [
 	"character_leave", "character_next", "levelup", "transition",
 ]
 const PAGE := Vector2(1080.0, 1920.0)
+## 2026-11-10：交付飞行的时长/弧高统一按距离算（实机与成片共用这一个公式）：
+## 短距离（拖拽松手）就是"啪"一下吸进去，远距离（从棋盘对角飞）速度一样，不拖沓。
+const DELIVER_MIN_DUR := 0.16
+const DELIVER_MAX_DUR := 0.42
+const DELIVER_SPEED := 2400.0
+
+
+static func deliver_duration(from: Vector2, to: Vector2) -> float:
+	return clampf(from.distance_to(to) / DELIVER_SPEED, DELIVER_MIN_DUR, DELIVER_MAX_DUR)
 
 var palette: Dictionary = {}
 var metrics: Dictionary = {}
@@ -140,10 +149,12 @@ func play_event(ev: Dictionary) -> bool:
 			var to_point = payload.get("to_point", null)
 			if typeof(to_point) == TYPE_ARRAY and (to_point as Array).size() >= 2:
 				target = Vector2(float((to_point as Array)[0]), float((to_point as Array)[1]))
+			# 2026-11-10：拖拽交付时棋子已经在指针上，飞行要短促（payload 可覆盖时长）
+			var want_dur := float(payload.get("dur", 0.0))
 			motions.append({
 				"kind": "deliver_chip",
 				"start": at,
-				"dur": dur if dur > 0.0 else 0.55,
+				"dur": want_dur if want_dur > 0.0 else (dur if dur > 0.0 else 0.55),
 				"from": chip_from,
 				"to": target,
 				"texture": payload.get("texture", null),

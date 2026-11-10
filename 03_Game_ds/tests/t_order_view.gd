@@ -36,7 +36,7 @@ func _cards(t) -> void:
 	var built: Dictionary = panel.build_from_level(level)
 	t.ok(bool(built.get("ok", false)), "level_1 builds into order cards")
 	t.eq(int(built.get("cards", 0)), 1, "level_1 has exactly one order card")
-	t.eq(int(built.get("missions", 0)), 1, "level_1 order needs one item")
+	t.eq(int(built.get("missions", 0)), 2, "level_1 order needs two mission rows")
 	t.eq(String(built.get("level_id", "")), "level_1", "card build reports the level id")
 	t.eq(panel.cards.size(), 1, "panel keeps one card")
 
@@ -44,12 +44,16 @@ func _cards(t) -> void:
 	t.eq(String(card.get("id", "")), "order_1", "card uses the order id")
 	t.eq(String(card.get("character", "")), "char_blonde", "card points at the blonde character")
 	var mission: Array = card.get("mission", [])
-	t.eq(mission.size(), 1, "mission has one entry")
+	t.eq(mission.size(), 2, "mission has two entries")
 	var item: Dictionary = mission[0]
 	t.eq(String(item.get("entity", "")), "CleanSet_Ca", "mission entity matches the data")
 	t.eq(int(item.get("level", 0)), 2, "mission level matches the data")
-	t.eq(int(item.get("need", 0)), 1, "mission need is 1")
+	t.eq(int(item.get("need", 0)), 1, "first mission needs 1")
 	t.eq(int(item.get("have", -1)), 0, "mission starts with have=0")
+	# 2026-11-10：第二行要 2 枚（角标显示 0/2）
+	var second: Dictionary = mission[1]
+	t.eq(int(second.get("level", 0)), 1, "second mission is the lv1 row")
+	t.eq(int(second.get("need", 0)), 4, "second mission needs 4")
 	t.eq(int(card.get("coin", -1)), 5, "card shows the coin reward")
 	t.eq(int(card.get("star", 0)), 0, "level 1 has no star reward")
 

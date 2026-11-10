@@ -593,6 +593,14 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 				int(item.get("need", 1)), bool(item.get("ready", false)))
 		# 2026-11-09：底板改成贴图（九宫格，倒角不缩放）：完成 = 浅绿框，未完成 = 米色框。
 		var plate_rect := mission_plate_rect(chip)
+		# 交付成功那一刻底板"吞一下"（以底板中心为锚点缩放）
+		var punch := _punch_scale(String(card.get("id", "")), i)
+		# 拖拽悬停在可交付行上：底板再放大一点，给"松手就落这儿"的反馈
+		if _hover_hit(String(card.get("id", "")), i):
+			punch = maxf(punch, 1.04)
+		if punch > 1.0:
+			var c := plate_rect.get_center()
+			plate_rect = Rect2(c - plate_rect.size * punch * 0.5, plate_rect.size * punch)
 		var frame := _ui_texture("mission_frame_done" if done_chip else "mission_frame_todo")
 		if frame != null:
 			_draw_nine(frame, plate_rect, minf(14.0, plate_rect.size.x * 0.28))
@@ -955,7 +963,8 @@ func _make_card(raw: Dictionary) -> Dictionary:
 				"entity": entity_id,
 				"level": int((m as Dictionary).get("level", 1)),
 				"have": 0,
-				"need": 1,
+				# 2026-11-10：一行可以要多枚（JSON 的 count），角标分母就是它
+				"need": maxi(int((m as Dictionary).get("count", 1)), 1),
 				"hue": Color.from_string(String(vis2.get("hue", "")), Color("#94A3B8")),
 				"label": String(vis2.get("label", entity_id.left(3))),
 			})
@@ -1019,6 +1028,91 @@ static func mission_bang_visible(have: int, need: int) -> bool:
 ## 角标什么时候算"完成态（绿色）"：棋盘上已经有这枚棋子（ready），或已经交付（have >= need）。
 static func mission_badge_done(have: int, need: int, ready: bool) -> bool:
 	return ready or have >= maxi(need, 1)
+
+
+## 交付成功时让那一行底板"吞一下"（1.10 → 1.0，0.18s）。实机与成片共用。
+var _punch: Dictionary = {}
+## 拖拽时指针落在哪一行上（只记可交付的那一行），画一层高亮。
+var _hover: Dictionary = {}
+
+func set_hover_row(order_id: String, row: int) -> void:
+	var next := {} if order_id.is_empty() else {"order": order_id, "row": row}
+	if next != _hover:
+		_hover = next
+		queue_redraw()
+
+
+func _hover_hit(order_id: String, row: int) -> bool:
+	return not _hover.is_empty() and String(_hover.get("order", "")) == order_id 			and int(_hover.get("row", -1)) == row
+
+func punch_row(order_id: String, row: int) -> void:
+	_punch = {"order": order_id, "row": row, "started": _clock_now}
+
+
+func _punch_scale(order_id: String, row: int) -> float:
+	if _punch.is_empty():
+		return 1.0
+	if String(_punch.get("order", "")) != order_id or int(_punch.get("row", -1)) != row:
+		return 1.0
+	var p: float = clampf((_clock_now - float(_punch.get("started", 0.0))) / 0.18, 0.0, 1.0)
+	if p >= 1.0:
+		_punch = {}
+		return 1.0
+	return 1.0 + 0.10 * (1.0 - p)
+
+
+## 某张卡第 row 个任务格子的**底板中心**（面板局部坐标）。飞行落点用它，
+## 让棋子飞进"那一行"而不是卡片中心。
+func mission_row_center(order_id: String, row: int) -> Vector2:
+	var rect: Rect2 = card_rect(order_id)
+	if rect.size == Vector2.ZERO:
+		return Vector2.ZERO
+	var card: Dictionary = _card_by_id(order_id)
+	var items: Array = card.get("mission", [])
+	if row < 0 or row >= items.size():
+		row = clampi(row, 0, maxi(items.size() - 1, 0))
+	var chips := mission_chip_rects(mission_area_rect(rect), items.size())
+	if chips.is_empty():
+		return rect.get_center()
+	return mission_plate_rect(chips[row]).get_center()
+
+
+## 命中测试：面板**局部**坐标点在哪一行的**底板**里。只认绿色（可交付）的行，
+## 棕色的（棋盘上还不够数）一律当没点到 —— 操作者要求"范围就是底色的范围"。
+func mission_row_at(local_point: Vector2) -> Dictionary:
+	for raw in cards:
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var card: Dictionary = raw
+		if bool(card.get("done", false)):
+			continue
+		var id := String(card.get("id", ""))
+		var rect: Rect2 = card_rect(id)
+		if rect.size == Vector2.ZERO:
+			continue
+		var items: Array = card.get("mission", [])
+		var chips := mission_chip_rects(mission_area_rect(rect), items.size())
+		for i in range(mini(items.size(), chips.size())):
+			if not mission_plate_rect(chips[i]).has_point(local_point):
+				continue
+			var item: Dictionary = items[i]
+			var have := int(item.get("have", 0))
+			var need := maxi(int(item.get("need", 1)), 1)
+			# 只有"可交付"（绿色）的行才接单：棋盘上不够数的行一律当没点到
+			if not (bool(item.get("ready", false)) or have >= need):
+				return {}
+			return {
+				"order": id, "row": i, "ready": true,
+				"center": mission_plate_rect(chips[i]).get_center(),
+			}
+	return {}
+
+
+func _card_by_id(order_id: String) -> Dictionary:
+	for raw in cards:
+		if typeof(raw) == TYPE_DICTIONARY and String((raw as Dictionary).get("id", "")) == order_id:
+			return raw
+	return {}
 
 
 ## 任务棋子右下角的 "have/need" 角标矩形（右下角对齐，宽按文字量出来）。

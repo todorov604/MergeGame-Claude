@@ -69,6 +69,11 @@ static func drag_at(take: Dictionary, t: float) -> Dictionary:
 			break
 	var t0 := float((prev as Array)[0])
 	var t1 := float((next as Array)[0])
+	# 2026-11-10：drag 采样只在**真正拖拽的那几段**里密集。两条样本之间隔太久
+	# （> 0.25s）说明这是两次手势之间的空档，不能插值——否则成片会把上一次拖拽的
+	# 棋子一直画在原地，看起来像"一枚棋子飘在棋盘上"（帧 1129 就是这个）。
+	if prev != next and t1 - t0 > 0.25:
+		return {}
 	var p := 0.0 if t1 <= t0 else clampf((t - t0) / (t1 - t0), 0.0, 1.0)
 	var pos := Vector2(float((prev as Array)[3]), float((prev as Array)[4])).lerp(
 			Vector2(float((next as Array)[3]), float((next as Array)[4])), p)

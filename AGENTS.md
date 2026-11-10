@@ -503,7 +503,7 @@ assets_local +20（69 条）、PROVENANCE +20 行、LICENSES、`theme.chip_icons
 
 **验证**：
 - 探针回放该 take：4 次交付全 ok，`SIM_taken` 依次 1 / 2 / 4 / 1 枚（与任务数一致）
-- 测试 **3189 checks / 0 failures**
+- 测试 **3192 checks / 0 failures**
 - 出片：两张卡同屏，4 图标卡 = 4 个不同系列/等级，3 图标卡 = 降难度那单
 
 ### 6.16 立绘放大 + 第 1 关卡宽统一（2026-11-09，操作者第五次改界面）
@@ -618,7 +618,7 @@ manifest（253 条 / 256 行）、assets_local（71 条）、PROVENANCE、主题
 - 素材计数：payload **111**、guard 索引 251（strict 226 / loose 246）、主题 ui 键 **60**、
   validator 主题引用 **100**、`t_local_assets` 本地 id **71**
 - 出片：帧 60 = 米色底板 + `0/1` 棕；帧 130 = 绿色底板 + 左上叹号 + `0/1` 绿
-- 测试 **3189 checks / 0 failures**
+- 测试 **3192 checks / 0 failures**
 
 ### 6.19 第 2 关棋盘重排：柜子行不再压棋子 + 两排冰块（2026-11-09，操作者第八次改界面）
 
@@ -644,9 +644,125 @@ manifest（253 条 / 256 行）、assets_local（71 条）、PROVENANCE、主题
 （`SIM_NOT_SWAPPABLE`），最后 `rejected=0`、4 次交付 `ok=true`、`SIM_taken` 仍是 1/2/4/1。
 
 **验证**：
-- 测试 **3189 checks / 0 failures**
+- 测试 **3192 checks / 0 failures**
 - 探针回放：4 次 claim 全 `ok=true`
 - 出片：第 2 关棋盘下半部分是「两排冰块 + 一排柜子」，棋子不再压柜子
+
+### 6.20 任务行支持「要几枚」+ 第 1 关两个任务（2026-11-10）
+
+**操作者原话**：「把第一关的任务栏配置成 2 个任务。」→「一个要 0/1，另一个要 0/2。」
+—— 即**同一个任务行可以要 2 枚**，角标写 `0/2`、`1/2`、`2/2`。
+
+**数据**：`sample_project.json` 第 1 关
+`mission: [{CleanSet_Ca, level 2, count 1}, {CleanSet_Ca, level 1, count 2}]`。
+棋盘不用动（3 枚 Ca1 本来就在，2 枚付 lv1 那行、合并出的 Ca2 付 lv1 那行），
+take 的 claim 现在一次取 **3 枚**（`SIM_taken = [[3,3],[1,4],[5,5]]`）。
+
+**改动链路（一处都不能漏，漏一处角标分母就退回 1）**：
+1. `sim._make_order()`：任务行存 `need = max(count, 1)`（JSON 字段名 `count`，缺省 1）
+2. `sim._unsatisfied_match()` / `_do_order_claim()`：按 `need` 逐枚结算——
+   已交付的先记账，剩下的从棋盘取（`src` 优先、再行优先），取不够就报 `SIM_ORDER_UNSATISFIED`
+3. `sim.snapshot()`：mission 行从 3 位扩到 4 位 `[entity, level, have, need]`
+4. `order_rows._mission_slot()`：字典/数组两种形态都读 `count`，**快照里叫 `need`**
+   （`m.get("count", m.get("need", 1))` —— 只读 count 的话成片里分母又变回 1）
+5. `order_rows`：`ready` 改成**计数判断**（`_ready_keys` 由 set 变 count map），
+   要 2 枚的任务必须棋盘上真有 2 枚才算"能交"
+6. `order_panel._make_card()`：从关卡 JSON 建卡时 `need = max(count, 1)`
+
+**验证**：
+- 测试 **3192 checks / 0 failures**
+- 探针回放：第 1 关 claim `ok=true`、`taken` 3 枚；第 2 关 4 次交付仍全过
+- 出片帧 60：两张 clip 并排，角标分别是 **`0/1`（棕）** 和 **`0/2`（绿，棋盘上已有 2 枚 Ca1）**
+
+**顺带记一笔**：`output/mov/` 被操作者的清理快捷方式清空过，录制原件已不在；
+本轮用 `output/render/take_badge.take.json`（同一次录制的派生件）恢复了一份 take 到
+`output/mov/20261109_160815/`，并重新做了第 2 关的落点迁移（y=7 → y=4、(3,4) → (3,5)）。
+
+### 6.21 交付改成"一枚一枚交"（2026-11-10，操作者第十次改界面）
+
+**操作者原话**：「点击 clip 右键，不再一起算所有的 clip 一起飞了，右键点一下只飞点击的 clip，
+并优先飞第一个任务栏，没有了再飞第 2 个任务栏。」→「clip 交付要单独拖动到任务栏交付……
+拖进去一个，就交对应的，并变换数字和颜色还有图标。如果 1/1 和 2/2 全都满足了，算交付完成。」
+→「再加一个交付方法：右键点击任务栏对应已经变绿可以交付的图标，下面随机飞一个对应的 clip。」
+→「拖到 0/2 这样变绿的才算交付完成，拖到 0/1 这样的再回去……范围就是底色的范围。」
+→「顺便把第一关的 Json 里的 0/2 改成 0/4。」
+
+**三个交付入口，都只推进"一行的一枚"**：
+| 入口 | 行为 |
+|---|---|
+| 右键棋盘棋子 | 找**第一张**卡里还没收满的行（同系列同等级），只飞这一枚；都没有就不飞 |
+| 拖到卡上 | 只认**底板矩形**（`mission_plate_rect`）里、且已经变绿的行；棕色/空白处 = 不收，棋子回原位 |
+| 右键卡上的任务图标 | 同上命中规则，从棋盘**随机挑一枚**对应的，飞进那一行 |
+
+**sim**：
+- `_do_deliver` 支持 `payload.row` 精确指定行；返回 `row / have / need / settled`
+- 每行都收满（`have >= need`）→ `_order_rows_full()` → `_settle_order()`：入账奖励、`done`、
+  关卡完成标记，`out.settled = true`。**交付完成不需要再点卡**
+- `_do_order_claim` 保留原样（没交满时仍可从棋盘取棋，兼容老 take 与老测试），入账部分抽成
+  `_settle_order()` 与交付共用
+- `snapshot()` 的 mission 行第 4 位是 `need`，`completed_cells` 也按 `need` 判断"这行还要不要"——
+  不然交付一枚之后整行会被误判为已满足，棋盘上的同款棋子就不再变绿
+
+**视图**：
+- `order_panel.mission_row_at(point)`：命中区 = 底板矩形，**只返回绿色行**（棕色直接空）
+- `order_panel.mission_row_center(order_id, row)`：飞行落点 = 那一行的底板中心（不是卡中心）
+- 实机 `game_screen`：`_deliver_to()` 统一三个入口；`_deliver_target_for()` / `_random_cell_for()`
+  负责选目标；`_play_deliver_flight()` 只飞一枚；`_after_settle()` 播放结算
+- 成片 `movie_scene`：新增 `deliver` 分支（飞一枚到行中心）+ `_play_settle_effects()`
+  （`settled` 时才播奖励/缩卡），与实机同一份数据
+
+**数据**：第 1 关 `mission = [{Ca lv2, count 1}, {Ca lv1, count 4}]`；棋盘补到 6 枚 Ca1
+（合并吃掉 2 枚后还剩 4 枚，正好付 0/4）。新补的两枚放在 (2,2)/(3,2)——**不能放在 lock 格子上**，
+否则 `completed_cells` 把它们当"被障碍盖住"，`0/4` 会一直显示棕色。
+
+**顺带修的"飘棋子"**（操作者看到第 2 关总有一枚 clip 飘来飘去，还带四个选中角标）：
+交付/结算只清了 `ghost`，没清 `board.drag_chip_visible` 和 `_selected`——
+被交走的那一格仍是"选中"，拖拽层又把棋子画在最后的位置上，看起来就是一枚飘着的棋子。
+新增 `_clear_drag_art()`：`set_drag_state({})` + `drag_chip_visible = true` + `ghost.clear()`
++ `_selected = (-1,-1)` + `apply_state(selected/completed)`，拖拽交付、右键交付、拖到卡上结算三条路统一调它。
+
+**验证**：
+- 测试 **3205 checks / 0 failures**（新增：底板命中/棕色拒收/落点=行中心、逐行交付、自动结算、行号精确指定）
+- take 改成"合并 → 5 次 deliver（1 枚 Ca2 + 4 枚 Ca1）→ level_next"，回放 `rejected=0`
+- 出片：帧 130 = `1/1` 绿+叹号 与 `0/4` 绿；帧 168 = `3/4` 绿、第三枚在空中；帧 186 = 第二枚飞行中
+
+### 6.22 交付落地统一动作 + 两个 Bug（2026-11-10）
+
+**操作者报的 Bug**：第 1 关 `2/4` 明明棋盘上有对应棋子却一直是**棕色**（先绿过、合成掉之后又变褐，
+再等生成器出新棋子也不变绿）。
+
+**根因**：`ready` 写成了 `棋盘枚数 + have >= need` —— 2 + 1 = 3 < 4，所以永远不够。
+**正解**：绿色 = **这一行还没收满（have < need）且棋盘上现在有 ≥1 枚对应的**；
+"够不够凑满整行"不是绿色的判据（那一行可以继续一枚一枚交）。
+`order_rows` 里改成 `int(slot.have) < need and int(ready_keys[key]) >= 1`。
+
+**反向验证**：`t_order_rows` 用手搓的 snapshot（have=2 / need=4 / 棋盘 1 枚）钉死这条；
+把公式改回 `have + 棋盘 >= need` → 1 条红，恢复后 **3205 / 0**。
+
+**帧 1129 那枚"飘着的棋子"**：`TakeIo.drag_at()` 只要 `t` 落在整段 drag 采样的首尾之间就插值返回，
+而采样只在真正拖拽的瞬间密集 —— 两次手势之间的空档会把**上一次拖拽的棋子**一直画在原地
+（还带四边白角框）。修法：相邻样本间隔 > 0.25s 视为空档，直接返回 `{}`。
+复检帧 1129：干净，没有残留。
+
+**交付落地动作统一（A 方案，操作者拍板）**：
+| 拍 | 内容 |
+|---|---|
+| 起飞 | 拖拽 → 从**松手点**；右键棋子/右键任务图标 → 从**棋子那一格** |
+| 落点 | 那一行的**底板中心**（`mission_row_center`） |
+| 落袋 | 底板 `1.10 → 1.00` 弹回（`order_panel.punch_row()`，0.18s） |
+| 记账 | 角标 `have/need` 跟着变，颜色/叹号按三态刷新 |
+
+时长统一按距离：`FlyAnim.deliver_duration(from, to) = clamp(距离/2400, 0.16, 0.42)`
+（实机与成片共用同一个函数），短距离就是"啪"一下，远距离速度一致不拖沓。
+
+**拖拽高亮**：拖动时指针落在可交付行 → 该行底板 `1.04` 微放大（`order_panel.set_hover_row`），
+松手命中后回到 1.0 并接"吞一下"。不可交付的行不响应，避免无效拖拽。
+
+**左键点卡整单结算 —— 已屏蔽（2026-11-10 操作者要求）**：
+`game_screen` 顶部加 `const CLICK_CARD_CLAIMS := false`，两处调用点都挂上它：
+1. `_free_click_at()` 里"点订单卡 → `order_claim`"那条（点一下就把整单的行全收掉）
+2. 双击同一枚棋子触发 `_claim_from_cell()` 的那条
+要恢复整单结算，把常量改回 `true` 即可。交付仍走三条逐枚入口（右键棋子 / 拖到卡上 / 右键任务格子）。
 
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
@@ -655,7 +771,7 @@ manifest（253 条 / 256 行）、assets_local（71 条）、PROVENANCE、主题
 ### 7.1 当前锚点
 
 - 分支 `main` @ `0df30ea`（tag `录屏内容基本完成` 仍在 4943b0e）：§6.10 金币落点 / §6.11 交付枚数 / §6.12 卡面装饰（a50ff3c）、§6.13 / §6.14 新底图 + 钻石 + 体力奖励（2465f32）、§6.15 / §6.16 4 个任务图标 + 两个新系列 + 立绘放大（a4a20d1）、**§6.17 / §6.18 / §6.19 角标三态 + 完成叹号 + 第 2 关棋盘重排（0df30ea）** 均已提交；之后的改动按 §7.3-6 等操作者说「提」再提
-- 测试 **3189 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
+- 测试 **3192 checks / 0 failures**（`t_sim.gd` 222、`t_layout_parity` 106、`t_claim_flight` 17）；`check_portability.ps1` blocking = none
 - 玩 540×960 / 录 1080×1920（`stretch=viewport` + `window_width_override/height_override`）
 - 一次录制 = `output/mov/<stamp>/`（take / film.mp4 / frames / manifest 同目录）
 

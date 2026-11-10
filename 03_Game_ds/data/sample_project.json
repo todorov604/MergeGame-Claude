@@ -236,6 +236,18 @@
         "slots": [
           {
             "x": 2,
+            "y": 2,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
+            "x": 3,
+            "y": 2,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
+            "x": 2,
             "y": 3,
             "entity": "CleanSet_Ca",
             "level": 1
@@ -253,15 +265,15 @@
             "level": 1
           },
           {
-            "x": 5,
-            "y": 5,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          },
-          {
             "x": 3,
             "y": 4,
             "entity": "CleanBox_C",
+            "level": 1
+          },
+          {
+            "x": 5,
+            "y": 5,
+            "entity": "CleanSet_Ca",
             "level": 1
           }
         ]
@@ -576,7 +588,13 @@
           "mission": [
             {
               "entity": "CleanSet_Ca",
-              "level": 2
+              "level": 2,
+              "count": 1
+            },
+            {
+              "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 4
             }
           ],
           "coin": 5,

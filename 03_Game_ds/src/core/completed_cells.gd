@@ -24,7 +24,9 @@ static func from_snapshot(snap: Dictionary) -> Array:
 				if typeof(item) != TYPE_ARRAY or (item as Array).size() < 3:
 					continue
 				var slot: Array = item
-				if int(slot[2]) >= 1:
+				# 2026-11-10：一行可能要多枚（快照第 4 位是 need），收满才停。
+				var need := int(slot[3]) if slot.size() >= 4 else 1
+				if int(slot[2]) >= maxi(need, 1):
 					continue
 				wanted["%s@%d" % [String(slot[0]), int(slot[1])]] = true
 

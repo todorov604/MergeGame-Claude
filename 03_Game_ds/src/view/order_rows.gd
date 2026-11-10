@@ -47,14 +47,17 @@ static func build(snap: Dictionary, model) -> Array:
 				var entity_id := String(slot["entity"])
 				var level := int(slot["level"])
 				var visual := _visual(model, entity_id)
-				var need := 1
+				# 2026-11-10：一行可以要多枚（JSON 的 count），角标分母就是它
+				var need := maxi(int(slot.get("count", 1)), 1)
 				var key := "%s@%d" % [entity_id, level]
 				mission.append({
 					"entity": entity_id,
 					"level": level,
 					"have": int(slot["have"]),
 					"need": need,
-					"ready": ready_keys.has(key),
+					# 2026-11-10：绿色 = **这一行还能交、且棋盘上现在有货**。
+					# 早先写成 have + 棋盘 ≥ need，导致 2/4 时棋盘上有 1 枚也不算"能交"（一直是棕色）。
+					"ready": int(slot.get("have", 0)) < need and int(ready_keys.get(key, 0)) >= 1,
 					"hue": Color.from_string(String(visual.get("hue", "")), DEFAULT_HUE),
 					"label": String(visual.get("label", entity_id.left(3))),
 				})
@@ -82,6 +85,8 @@ static func _mission_slot(raw) -> Dictionary:
 			"entity": String(row[0]),
 			"level": int(row[1]),
 			"have": int(row[2]) if row.size() >= 3 else 0,
+			# 2026-11-10：数组形式第 4 位可选 = 需要几枚
+			"count": int(row[3]) if row.size() >= 4 else 1,
 		}
 	if typeof(raw) == TYPE_DICTIONARY:
 		var m: Dictionary = raw
@@ -89,6 +94,8 @@ static func _mission_slot(raw) -> Dictionary:
 			"entity": String(m.get("entity", "")),
 			"level": int(m.get("level", 1)),
 			"have": int(m.get("have", 0)),
+			# 快照里的行用的是 need（sim 已经把 count 折成 need），关卡 JSON 里是 count
+			"count": int(m.get("count", m.get("need", 1))),
 		}
 	return {}
 
@@ -115,7 +122,8 @@ static func _ready_keys(snap: Dictionary) -> Dictionary:
 		var cell: Array = raw_cell
 		var key := String(by_pos.get("%d@%d" % [int(cell[0]), int(cell[1])], ""))
 		if not key.is_empty():
-			keys[key] = true
+			# 2026-11-10：改成**计数**——"要 2 枚"的任务得看棋盘上真的有 2 枚
+			keys[key] = int(keys.get(key, 0)) + 1
 	return keys
 
 

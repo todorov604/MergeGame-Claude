@@ -1659,6 +1659,8 @@ func _sync_live_band() -> void:
 		_live_fly.set_clock(_t)
 	_push_live_top()
 	_live_band.set_clock(_t)
+	if _live_band.has_method("set_board_snapshot"):
+		_live_band.set_board_snapshot(_snap)
 	_live_band.sync_orders(OrderRows.build(_snap, _model))
 	# 2026-11-09：库存状态读快照（take 里的 stockpile_tap 已回放进 sim）。
 	var stock = _snap.get("stockpile", {})

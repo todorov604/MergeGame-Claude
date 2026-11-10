@@ -55,9 +55,11 @@ static func build(snap: Dictionary, model) -> Array:
 					"level": level,
 					"have": int(slot["have"]),
 					"need": need,
-					# 2026-11-10：绿色 = **这一行还能交、且棋盘上现在有货**。
-					# 早先写成 have + 棋盘 ≥ need，导致 2/4 时棋盘上有 1 枚也不算"能交"（一直是棕色）。
-					"ready": int(slot.get("have", 0)) < need and int(ready_keys.get(key, 0)) >= 1,
+					# 2026-11-10（交付改版）：角标数字 = **棋盘上全部符合的枚数**，不封顶
+					# （操作者："假设后面还有小人儿有饼干的子任务，可以显示 6/4，可以有盈余"）。
+					# 绿色 = 棋盘上有货；小叹号 = 数字 ≥ 需求；整卡全满才出大绿底对号。
+					"board": int(ready_keys.get(key, 0)),
+					"ready": int(ready_keys.get(key, 0)) >= 1,
 					"hue": Color.from_string(String(visual.get("hue", "")), DEFAULT_HUE),
 					"label": String(visual.get("label", entity_id.left(3))),
 				})

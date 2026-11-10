@@ -154,7 +154,7 @@ func _coin_anchor_matches(t) -> void:
 func _card_decor_matches(t) -> void:
 	# 绿对号：默认隐藏，但开关还在（随时能开回来）
 	var panel = OrderPanel.new()
-	t.eq(panel.draw_confirm_badge, false, "卡片绿对号默认隐藏")
+	t.ok(panel.draw_confirm_badge, "大绿底对号开关打开（逐卡按整卡是否全满出现）")
 	panel.draw_confirm_badge = true
 	t.eq(panel.draw_confirm_badge, true, "开关可以打开（不是删代码）")
 	panel.free()

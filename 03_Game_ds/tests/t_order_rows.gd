@@ -27,6 +27,7 @@ func run(t) -> void:
 	_single_order_level(t)
 	_ready_follows_the_board(t)
 	_obstacle_cell_is_never_ready(t)
+	_board_count_ignores_blocked_and_surplus(t)
 	_done_mirrors_the_sim(t)
 	_panel_consumes_the_rows(t)
 
@@ -328,3 +329,28 @@ func _as_array(value) -> Array:
 	if typeof(value) == TYPE_ARRAY:
 		return value
 	return []
+
+
+## 需求（2026-11-10 交付改版）：
+## 角标数字 = 棋盘上**能交的**棋子枚数（被冰/网/盒子盖住的不算），允许盈余（6/4）。
+func _board_count_ignores_blocked_and_surplus(t) -> void:
+	var Rows = load("res://src/view/order_rows.gd")
+	var snap := {
+		"orders": [{
+			"id": "o1", "character": "", "coin": 0, "gem": 0, "energy": 0, "done": false,
+			"mission": [["CleanSet_Ca", 1, 0, 4]],
+		}],
+		"board": {
+			"cells": [
+				[1, 1, "CleanSet_Ca", 1], [2, 1, "CleanSet_Ca", 1], [3, 1, "CleanSet_Ca", 1],
+				[4, 1, "CleanSet_Ca", 1], [5, 1, "CleanSet_Ca", 1], [6, 1, "CleanSet_Ca", 1],
+				[1, 2, "CleanSet_Ca", 1], [2, 2, "CleanSet_Ca", 1],
+			],
+			"obstacles": [[[1, 2, ["ice"]] if false else [1, 2, ["ice"]]][0], [2, 2, ["web"]]],
+		},
+	}
+	var rows: Array = Rows.build(snap, null)
+	var m: Dictionary = (rows[0]["mission"] as Array)[0]
+	t.eq(int(m.get("board", -1)), 6, "只数露在外面的 6 枚（冰里/网下不算）")
+	t.eq(int(m.get("need", -1)), 4, "需求仍是 4")
+	t.ok(int(m.get("board", 0)) > int(m.get("need", 1)), "允许盈余（6/4）")

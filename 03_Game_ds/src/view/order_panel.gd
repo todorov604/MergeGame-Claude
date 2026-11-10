@@ -70,12 +70,14 @@ var draw_portraits: bool = true
 var draw_page_strip: bool = true
 ## 卡片上的绿色对号（可交付/已完成确认标）。2026-11-09 操作者要求**先隐藏**；
 ## 留成开关而不是删代码，随时能开回来。顶层开关，实机与成片共用同一份。
-var draw_confirm_badge: bool = false
+## 2026-11-10：大绿底对号 = 唯一的交付按钮；只在**整卡全满**时出现。
+var draw_confirm_badge: bool = true
 ## 任务带左侧的库存面板状态（-1 表示本关没有库存）。
 ## 队列重排：每张卡的目标 x 和当前 x（换位时用 0.25s 缓动滑过去）。
 var _target_x: Dictionary = {}
 var _x_now: Dictionary = {}
 ## Claimed cards shrink away before the queue closes the gap.
+const CompletedCells = preload("res://src/core/completed_cells.gd")
 const DONE_SHRINK := 0.35
 var _clock_now: float = 0.0
 var _done_at: Dictionary = {}
@@ -165,8 +167,43 @@ func is_holding(order_id: String) -> bool:
 	return _hold.has(order_id) and _clock_now < float(_hold[order_id])
 
 
+## 2026-11-10（交付改版）：角标数字**只认棋盘**。
+## 每个子任务各算各的（entity@level），允许盈余、允许回退；被冰/网/盒子盖住的不算。
+## 面板不再依赖"行数据里带的 board"（那条路会被 done/claim_pending 冻住）。
+var _board_counts: Dictionary = {}
+
+
+func set_board_snapshot(snap: Dictionary) -> void:
+	# 2026-11-10（交付改版，第三版）：
+	# 数字 = **棋盘上露在外面的该 entity@level 棋子数量**，与"这一行是否收满、是否已交"无关。
+	# 早先借 CompletedCells（绿勾）来数，行一旦满足就不再数，导致 3 枚 lv2 只显示 1/1。
+	var counts := {}
+	var board = snap.get("board", null)
+	if typeof(board) == TYPE_DICTIONARY:
+		var blocked := {}
+		for row in (board as Dictionary).get("obstacles", []):
+			if typeof(row) == TYPE_ARRAY and (row as Array).size() >= 2:
+				blocked["%d@%d" % [int((row as Array)[0]), int((row as Array)[1])]] = true
+		for raw in (board as Dictionary).get("cells", []):
+			if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 4:
+				continue
+			var c: Array = raw
+			if blocked.has("%d@%d" % [int(c[0]), int(c[1])]):
+				continue
+			var key := "%s@%d" % [String(c[2]), int(c[3])]
+			counts[key] = int(counts.get(key, 0)) + 1
+	if counts != _board_counts:
+		_board_counts = counts
+		queue_redraw()
+
+
+func board_count(entity: String, level: int) -> int:
+	return int(_board_counts.get("%s@%d" % [entity, level], 0))
+
+
 func set_clock(t: float) -> void:
 	_clock_now = t
+	_promote_full_cards()
 	_reorder_cards()
 	var moving := false
 	for cid in _target_x.keys():
@@ -314,17 +351,17 @@ func sync_orders(rows: Array) -> void:
 		var items: Array = card["mission"]
 		# 2026-11-09：交任务那一刻起（含交付动画的 hold 期）角标就要读成 1/1 绿，
 		# 所以 claim_pending 也算"已交付"；sim 里的 have 仍是 0，这里只是显示推导。
-		var done := bool(card["done"]) or bool(card.get("claim_pending", false))
+		# 2026-11-10（交付改版）：**不再因为 done/claim_pending 就冻结任务行**。
+		# 数字永远跟棋盘走（允许 6/4、也允许从 6/4 掉回 2/4）；
+		# 只有"正在缩卡结算"（claim_pending）时才把 have 顶到 need 给一次完成观感。
+		var claiming := bool(card["done"]) or bool(card.get("claim_pending", false))
 		for i in range(items.size()):
-			# A claimed order reads as satisfied even though the sim zeroes `have`
-			# on claim; that is a display derivation, the sim data stays untouched.
-			if done:
-				items[i]["have"] = int(items[i]["need"])
-				continue
 			if typeof(mission_rows) != TYPE_ARRAY or i >= (mission_rows as Array).size():
 				continue
 			var item: Dictionary = items[i]
 			_sync_mission_item(item, (mission_rows as Array)[i])
+			if claiming:
+				item["have"] = int(item.get("need", 1))
 	if is_inside_tree():
 		queue_redraw()
 
@@ -337,6 +374,9 @@ func _sync_mission_item(item: Dictionary, m) -> void:
 		item["have"] = int(row.get("have", item.get("have", 0)))
 		item["need"] = maxi(int(row.get("need", item.get("need", 1))), 1)
 		item["ready"] = bool(row.get("ready", false))
+		# 2026-11-10：角标数字读的是**棋盘上的枚数**（允许 6/4 盈余），必须跟着行数据一起转，
+		# 漏这一行就会出现"棋盘明明有一堆，面板还写 0/4"（操作者截图报的）。
+		item["board"] = int(row.get("board", item.get("board", 0)))
 		var hue = row.get("hue", null)
 		if hue is Color:
 			item["hue"] = hue
@@ -404,6 +444,29 @@ func clear_stockpile() -> void:
 
 ## 每帧按“能交的排前面”做稳定分区：不插队、不改变各自相对顺序；
 ## 正在缩小消失的卡（done）钉在原位，等缩完再补位。
+## 2026-11-10（交付改版）：整卡全满 → 提到最前；但如果前面已经有"全满但还没点对号"的卡，
+## 就排在这些卡**后面**（操作者："如果最前也是完成状态，只是没点大绿底对号，那就向后顺延"）。
+func _promote_full_cards() -> void:
+	if cards.size() < 2 or is_animating():
+		return
+	var last_full := -1
+	for i in cards.size():
+		if bool((cards[i] as Dictionary).get("claim_pending", false)):
+			last_full = i
+			continue
+		if _card_full(cards[i]):
+			last_full = i
+	for i in range(cards.size() - 1, -1, -1):
+		var card: Dictionary = cards[i]
+		if bool(card.get("claim_pending", false)) or not _card_full(card):
+			continue
+		if i <= last_full:
+			continue
+		cards.remove_at(i)
+		cards.insert(last_full + 1, card)
+		last_full += 1
+
+
 func _reorder_cards() -> void:
 	# 2026-11-06: no reshuffling while a claimed card is still shrinking — the queue
 	# waits for it to be gone, then the survivors slide forward in one go.
@@ -658,12 +721,14 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 		var item: Dictionary = items[i]
 		var chip: Rect2 = chips[i]
 		var hue: Color = item.get("hue", Color("#94A3B8"))
-		var ready := int(item.get("have", 0)) >= int(item.get("need", 1))
+		# 2026-11-10：角标看**棋盘枚数**（允许 6/4 这种盈余），不看已交付数。
+		var board_n := board_count(String(item.get("entity", "")), int(item.get("level", 1)))
+		var need_n := int(item.get("need", 1))
+		var ready := board_n > 0
 		# 2026-11-05: the mission slot shows the real chip icon when the loader can
 		# resolve it; the procedural tile stays as the no-asset fallback.
 		var icon := _chip_texture(String(item.get("entity", "")), int(item.get("level", 1)))
-		var done_chip := mission_badge_done(int(item.get("have", 0)),
-				int(item.get("need", 1)), bool(item.get("ready", false)))
+		var done_chip := board_n > 0
 		# 2026-11-09：底板改成贴图（九宫格，倒角不缩放）：完成 = 浅绿框，未完成 = 米色框。
 		var plate_rect := mission_plate_rect(chip)
 		# 交付成功那一刻底板"吞一下"（以底板中心为锚点缩放）
@@ -687,11 +752,10 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 			_rounded_outline(chip, 14, hue.darkened(0.22), 2)
 			_text_center(chip, String(item.get("label", "?")), 24, Color.WHITE)
 		# 2026-11-09：**只有真正收齐**（1/1、2/2）才加叹号；棋盘上刚合出来的 0/1 不给。
-		if mission_bang_visible(int(item.get("have", 0)), int(item.get("need", 1))):
+		if board_n >= need_n:
 			_draw_mission_bang(chip)
 		# 每个任务棋子右下角带 "已收集/需要" 角标，完成时整块换成绿色。
-		_draw_mission_badge(chip, int(item.get("have", 0)), int(item.get("need", 1)),
-				bool(item.get("ready", false)))
+		_draw_mission_badge(chip, board_n, need_n, board_n > 0)
 
 
 	_draw_reward_row(r, int(card.get("coin", 0)), 0.0)
@@ -703,11 +767,12 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 	# blinking out on click and popping back during the animation.
 	# 2026-11-09: 操作者要求先隐藏（draw_confirm_badge=false）；开关在文件顶部。
 	if draw_confirm_badge and (bool(card.get("done", false)) \
-			or bool(card.get("claim_pending", false)) or _card_ready(card)):
+			or bool(card.get("claim_pending", false)) or _card_full(card)):
 		# 2026-11-05: no green rim, no small check — one confirm badge centred on the card.
 		var confirm := _ui_texture("confirm")
 		var size := Vector2(126.0, 74.0)
-		var at := Rect2(r.get_center() - size * 0.5, size)
+		# 2026-11-10：大对号挂到卡片**上沿**，不再压住两行任务的角标。
+		var at := Rect2(Vector2(r.get_center().x - size.x * 0.5, r.position.y - size.y * 0.62), size)
 		if confirm != null:
 			draw_texture_rect(confirm, at, false)
 		else:
@@ -843,6 +908,40 @@ static func mission_chip_rects(card_rect: Rect2, count: int) -> Array:
 ## 2026-11-06: a card is only ready when EVERY mission row can be paid right now.
 ## Returning true on the first satisfiable row lit up cards whose other row was still
 ## missing (the "last card is green but cannot be claimed" bug).
+## 整卡全满：每一行棋盘上都凑够了需求枚数（允许盈余 6/4）。
+func _card_full(card: Dictionary) -> bool:
+	var items: Array = card.get("mission", [])
+	if items.is_empty():
+		return false
+	for raw in items:
+		var item: Dictionary = raw
+		var have := board_count(String(item.get("entity", "")), int(item.get("level", 1)))
+		var need := int(item.get("need", 1))
+		if have < need:
+			return false
+	return true
+
+
+## 对号贴图的矩形（订单带控件内的局部坐标；调用方自己处理 position）。
+func confirm_badge_rect(order_id: String) -> Rect2:
+	var r := card_rect(order_id)
+	if r.size.x <= 0.0:
+		return Rect2()
+	var size := Vector2(126.0, 74.0)
+	return Rect2(Vector2(r.get_center().x - size.x * 0.5, r.position.y - size.y * 0.62), size)
+
+
+## 这张卡现在能不能点对号交付（整卡全满、且没在结算/已完成）。
+func card_awaiting_confirm(order_id: String) -> bool:
+	for card in cards:
+		if String(card.get("id", "")) != order_id:
+			continue
+		if bool(card.get("done", false)) or bool(card.get("claim_pending", false)):
+			return false
+		return _card_full(card)
+	return false
+
+
 func _card_ready(card: Dictionary) -> bool:
 	var items := _as_mission(card)
 	if items.is_empty():
@@ -1284,7 +1383,8 @@ func _draw_mission_badge(chip: Rect2, have: int, need: int, ready: bool) -> void
 	if font == null:
 		return
 	var want := maxi(need, 1)
-	var text := "%d/%d" % [clampi(have, 0, want), want]
+	# 2026-11-10：不封顶 —— 棋盘上 5 枚就写 5/4、3 枚就写 3/1（操作者明确要求）。
+	var text := "%d/%d" % [maxi(have, 0), want]
 	var done := mission_badge_done(have, want, ready)
 	var text_w := _text_width(font, text, MISSION_BADGE_PX)
 	var label := mission_badge_rect(chip, text_w)

@@ -1575,6 +1575,9 @@ func _refresh_order_ready() -> void:
 	if not orders.has_method("sync_orders"):
 		return
 	var snap: Dictionary = evaluator.sim.snapshot()
+	# 2026-11-10：角标数字由面板自己从这份棋盘快照算（每帧一份，绝对不冻）。
+	if orders.has_method("set_board_snapshot"):
+		orders.set_board_snapshot(snap)
 	orders.sync_orders(OrderRows.build(snap, model))
 
 
@@ -2014,12 +2017,13 @@ func _input(event: InputEvent) -> void:
 		if mouse.button_index == MOUSE_BUTTON_RIGHT:
 			# 2026-11-06: right-click on a green chip delivers it too.
 			if mouse.pressed:
-				# 2026-11-10：先看是不是点在订单带的任务格子上（第三种交付入口）
-				if _deliver_from_card(mouse.position):
-					return
+				# 2026-11-10（交付改版）：**右键点任务行交付已废除**，保留代码备查。
+				# if _deliver_from_card(mouse.position):
+				# 	return
 				var rcell := _cell_at(mouse.position)
-				# 右键 = 交**这一枚**（不再是整单结算、一次飞好几枚）
-				if rcell.x >= 0:
+				# 2026-11-10（交付改版）：**右键点 clip 交付已废除**，保留代码备查。
+				rcell = Vector2i(-1, -1)
+				if false and rcell.x >= 0:
 					var ritem: Dictionary = evaluator.sim.board.item(rcell) 							if evaluator.sim.board.has_item(rcell) else {}
 					var rtarget := _deliver_target_for(ritem)
 					if not rtarget.is_empty() 							and _deliver_to(String(rtarget["order"]), int(rtarget["row"]), rcell):
@@ -2179,7 +2183,8 @@ func _end_press(release_point: Vector2) -> void:
 	if _dragging:
 		var to := _cell_at(point)
 		# Dropping a chip onto the order band delivers it instead of a board action.
-		if _deliver_drop(point, _drag_from):
+		# 2026-11-10（交付改版）：**拖动到任务栏交付已废除**，保留代码备查。
+		if false and _deliver_drop(point, _drag_from):
 			board.set_drag_state({})
 			if ghost != null:
 				ghost.clear()
@@ -2453,9 +2458,51 @@ func _free_click() -> void:
 ## Same click, at an explicit page-space point. Split out so a headless probe can
 ## exercise the real click path (the window mouse position is not available there).
 ## Returns {"kind", "ok", "cell"} — the entry written to the take's click log.
+## 大对号命中：整卡全满 → 所有相关 clip 依次飞进各自任务行 → 结算缩卡。
+func _confirm_badge_hit(point: Vector2) -> bool:
+	var local: Vector2 = point - orders.position
+	for card in orders.cards:
+		var oid := String(card.get("id", ""))
+		if not orders.card_awaiting_confirm(oid):
+			continue
+		if not orders.confirm_badge_rect(oid).has_point(local):
+			continue
+		_confirm_order(oid)
+		_last_click_at = _clock
+		_last_click_point = _mouse_canvas_point()
+		_record_click(point, {"kind": "confirm", "ok": true})
+		return true
+	return false
+
+
+## 逐行把棋盘上属于该行的棋子飞过去（行里要几枚就飞几枚），sim 落地即记账。
+func _confirm_order(order_id: String) -> void:
+	var snap: Dictionary = evaluator.sim.snapshot()
+	for raw_order in snap.get("orders", []):
+		var order: Dictionary = raw_order
+		if String(order.get("id", "")) != order_id:
+			continue
+		var mission: Array = order.get("mission", [])
+		for i in mission.size():
+			var row: Array = mission[i]
+			var need := int(row[3]) if row.size() >= 4 else 1
+			var k := 0
+			while k < need:
+				var cell := _random_cell_for(order_id, i)
+				if cell.x < 0:
+					break
+				if not _deliver_to(order_id, i, cell, Vector2(-1, -1), 0.05 * float(k), "check"):
+					break
+				k += 1
+		return
+
+
 func _free_click_at(point: Vector2) -> Dictionary:
 	if STOCKPILE_RECT.has_point(point) and _stockpile_tap():
 		return {"ok": true, "type": "stockpile"}
+	# 2026-11-10（交付改版）：点**大绿底对号**才交任务 —— 整卡全满才会出现这块。
+	if orders != null and _confirm_badge_hit(point):
+		return {"kind": "confirm", "ok": true, "cell": null}
 	if evaluator == null or evaluator.sim == null:
 		return {"kind": "none", "ok": false, "cell": null}
 	_last_click_at = _clock

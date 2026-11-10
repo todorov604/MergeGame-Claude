@@ -30,6 +30,13 @@ static func chip(project: Dictionary, cell: Vector2i) -> Dictionary:
 	}
 
 
+## 指定区间（秒）的确定性起始值：盒子开出来的冰用 5~10 分钟。
+static func start_seconds_between(cell: Vector2i, lo: int, hi: int) -> int:
+	var span := maxi(hi - lo + 1, 1)
+	var hash_value := int(abs(cell.x * 733 + cell.y * 977 + cell.x * cell.y * 31))
+	return lo + hash_value % span
+
+
 ## 10:00 <= start <= 19:59, fixed for a given cell.
 static func start_seconds(cell: Vector2i) -> int:
 	var span := MAX_SECONDS - MIN_SECONDS + 1

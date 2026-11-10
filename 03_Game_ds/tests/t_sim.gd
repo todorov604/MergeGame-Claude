@@ -36,6 +36,7 @@ func run(t) -> void:
 	_test_deliver(t)
 	_test_claim(t)
 	_test_claim_consumes_the_clicked_cell(t)
+	_test_blast_radius_from_json(t)
 	_test_claim_reports_consumed_cells(t)
 	_test_claim_unsatisfied_is_pure(t)
 	_test_level_flow(t)
@@ -620,6 +621,68 @@ func _test_claim_consumes_the_clicked_cell(t) -> void:
 	t.ok(s2.board.has_item(Vector2i(2, 0)), "(2,0) untouched by o2 claim")
 
 
+## 2026-11-10：合并炸开半径来自 JSON 的 blast（1 = 上下左右；2 = 曼哈顿距离再外一层）。
+## 反向验证：把 blast 固定成 1（或在 _unlock_neighbours 里只用 4 邻格），这两条会红。
+func _test_blast_radius_from_json(t) -> void:
+	var m1 = ProjectModel.new()
+	t.ok(m1.load_data(_blast_project(1)), "blast=1 project loads")
+	var s1 = Sim.new()
+	s1.setup(m1, 1)
+	t.eq(s1.blast_radius(), 1, "blast 半径读自 JSON（1）")
+	var r1: Dictionary = s1.apply({"type": "merge", "payload": {"from": [3, 2], "to": [2, 2]}})
+	t.ok(bool(r1.get("ok", false)), "merge at (2,2) ok", str(r1))
+	t.ok(not s1.board.obstacle_types(Vector2i(2, 3)).has("lock"),
+			"blast=1 时邻格的蓝盒子被砸开", str(s1.board.obstacle_types(Vector2i(2, 3))))
+	var touched: Array = s1.board.obstacle_types(Vector2i(2, 3))
+	t.ok(touched.has("web") or touched.has("icebox"),
+			"蓝盒子变成网或冰（二选一）", str(touched))
+	t.ok(s1.board.obstacle_types(Vector2i(1, 1)).has("web"),
+			"blast=1 不动第二层（1,1 的网还在）", str(s1.board.obstacle_types(Vector2i(1, 1))))
+	t.ok(s1.board.obstacle_types(Vector2i(3, 3)).has("web"), "blast=1 不动第二层（3,3 的网还在）")
+
+	var m2 = ProjectModel.new()
+	t.ok(m2.load_data(_blast_project(2)), "blast=2 project loads")
+	var s2 = Sim.new()
+	s2.setup(m2, 1)
+	t.eq(s2.blast_radius(), 2, "blast 半径读自 JSON（2）")
+	var r2: Dictionary = s2.apply({"type": "merge", "payload": {"from": [3, 2], "to": [2, 2]}})
+	t.ok(bool(r2.get("ok", false)), "merge at (2,2) ok (blast=2)", str(r2))
+	t.ok(not s2.board.obstacle_types(Vector2i(1, 1)).has("web"),
+			"blast=2 炸到第二层（1,1 的网开了）", str(s2.board.obstacle_types(Vector2i(1, 1))))
+	t.ok(not s2.board.obstacle_types(Vector2i(3, 3)).has("web"),
+			"blast=2 炸到第二层（3,3 的网开了）", str(s2.board.obstacle_types(Vector2i(3, 3))))
+
+
+func _blast_project(radius: int) -> Dictionary:
+	return {
+		"version": 2,
+		"hud": _hud(),
+		"entities": _entities(),
+		"generators": {},
+		"characters": {"CH": {"display": "T"}},
+		"levels": [
+			{
+				"id": "b1",
+				"blast": radius,
+				"board": {"width": 5, "height": 5, "slots": [
+					{"x": 2, "y": 2, "entity": "A", "level": 1},
+					{"x": 3, "y": 2, "entity": "A", "level": 1},
+				]},
+				"obstacles": [
+					{"slot": [1, 1], "type": "web"},
+					{"slot": [3, 3], "type": "web"},
+					{"slot": [2, 3], "type": "lock"},
+				],
+				"orders": [
+					{"id": "bo1", "character": "CH",
+						"mission": [{"entity": "A", "level": 2}], "star": 1, "coin": 4},
+				],
+			},
+		],
+		"seed": 5,
+	}
+
+
 func _clicked_cell_project() -> Dictionary:
 	return {
 		"version": 2,
@@ -752,7 +815,8 @@ func _test_sample_run(t) -> void:
 	t.ok(not s.board_full_pending, "the sample never fills the board")
 	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 138,
 			"level_2 stock mirrors the energy bar at level load (88 - 3 taps + 53)")
-	t.eq(int(s.board.item_count()), 10, "10 items left on the level_2 board (3 claims eat 7 chips)")
+	# 2026-11-10：blast=2 之后第 2 关多炸开一格盒子/冰，棋盘上多出 1 枚棋子（10 → 11）。
+	t.eq(int(s.board.item_count()), 11, "11 items left on the level_2 board (3 claims eat 7 chips)")
 	t.ok(s.board.item_count() < 16, "claimed mission items were consumed")
 
 	var before: String = s.digest()

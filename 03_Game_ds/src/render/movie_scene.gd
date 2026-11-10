@@ -48,6 +48,8 @@ const FRAME_TEXTURE := "res://assets/ui/board_frame.png"
 ## the hand's fingertip lands exactly on the recorded click point.
 const CURSOR_ID := "ui_cursor_hand"
 const CURSOR_TEXTURE := "res://assets/ui/cursor_hand.png"
+## 按下时手整体下沉多少像素（看得见的"点下去"）。
+const CURSOR_PRESS_DIP := 7.0
 const CURSOR_HOTSPOT_RATIO := Vector2(0.135, 0.004)
 const CURSOR_SIZE := 96.0
 
@@ -473,19 +475,59 @@ func _draw_cursor() -> void:
 
 
 ## 光标画到指定 CanvasItem（成片里必须画在最上层 overlay，否则被托管组件盖住）。
+## 拖拽中的棋子：画在**最上层**（订单带之上），几何与实机 DragGhost 一致 —— 起点格
+## 那枚棋子跟着指针走，源格只留白角框（由棋盘画）。数据来自 take 的 drag 采样。
+func _paint_drag(target: CanvasItem) -> void:
+	if _live_board == null or _take.is_empty() or target == null:
+		return
+	var drag: Dictionary = TakeIo.drag_at(_take, _t)
+	if drag.is_empty():
+		return
+	var raw = drag.get("from", [])
+	if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 2:
+		return
+	var from := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
+	var it := _item_at_cell(from)
+	if it.is_empty():
+		return
+	var entity_id := String(it.get("entity", ""))
+	var kind := "generator" if _live_board.is_generator_entity(entity_id) else "chip"
+	var tex: Texture2D = _live_board.item_texture(kind, entity_id, int(it.get("level", 1)))
+	if tex == null:
+		return
+	# 几何只有一份：直接问棋盘要"拖拽棋子的矩形"，别在这里再算一遍
+	var rect: Rect2 = _live_board.drag_chip_rect()
+	if rect.size.x <= 0.0:
+		return
+	target.draw_texture_rect(tex, rect, false)
+	# 白角框：和棋子同一个矩形四角外扩一点（实机 DragGhost 也画这个框）
+	var frame: Texture2D = _live_board.drag_frame_texture()
+	if frame != null:
+		# 白角框画在棋子**可见本体**外面一圈：棋子贴图自带留白，所以框比矩形小
+		# （0.72 是量着实机拖拽框与棋子的比例定的，和游戏一致）。
+		# 2026-11-10：生成器贴图留白少，框按 0.72 会显得太小（操作者："白框加大一点儿"）。
+		var frame_ratio := 1.05 if kind == "generator" else 0.72
+		var fr := Rect2(rect.get_center() - rect.size * frame_ratio * 0.5,
+				rect.size * frame_ratio)
+		target.draw_texture_rect(frame, fr, false)
+
+
 func _paint_cursor(target: CanvasItem) -> void:
 	if no_cursor or _take.is_empty() or _cursor_tex == null or target == null:
 		return
 	var pos: Dictionary = TakeIo.cursor_at(_take, _t)
 	if not bool(pos.get("visible", false)):
 		return
-	var press := 1.0
-	if not TakeIo.click_at(_take, _t).is_empty():
-		press = TakeIo.PRESS_SCALE
+	# 2026-11-10：手"按下去"要有看得见的幅度 ——
+	# 拖拽期间一直保持按下，松手才回弹；点击（含右键）后 0.22s 内也是按下。
+	var pressed: bool = not TakeIo.drag_at(_take, _t).is_empty() 			or not TakeIo.click_at(_take, _t).is_empty()
+	var press: float = TakeIo.PRESS_SCALE if pressed else 1.0
+	var dip: float = CURSOR_PRESS_DIP if pressed else 0.0
 	var size := Vector2(CURSOR_SIZE, CURSOR_SIZE) * press
-	var origin := Vector2(float(pos["x"]), float(pos["y"])) - CURSOR_HOTSPOT_RATIO * size
-	_paint_press_ring(target)
+	var origin := Vector2(float(pos["x"]), float(pos["y"])) 			- CURSOR_HOTSPOT_RATIO * size + Vector2(0.0, dip)
 	target.draw_texture_rect(_cursor_tex, Rect2(origin, size), false)
+	# 涟漪画在手之上：右键交付时指针压在卡片上，画在下面会被盖住
+	_paint_press_ring(target)
 
 
 ## 按下反馈：以点击点为中心扩散的白环（0.25s），与实机同一套参数。
@@ -846,15 +888,21 @@ func _advance_to(t: float) -> void:
 			if typeof(d_from) == TYPE_ARRAY and (d_from as Array).size() >= 2:
 				# 2026-11-10：拖拽交付时棋子跟着手走，成片用**当时的光标位置**当起点，
 				# 时长 0.16s；右键交付（光标不在订单带上）仍从棋子那一格飞 0.55s。
-				var cursor_pos: Dictionary = TakeIo.cursor_at(_take, at_now)
-				var from_point := Vector2(-1, -1)
-				if not cursor_pos.is_empty():
-					var cp := Vector2(float(cursor_pos.get("x", -1.0)), float(cursor_pos.get("y", -1.0)))
-					if cp.x >= 0.0 and _band_contains(cp):
-						from_point = cp
-				_play_deliver_flight(d_order, d_row,
-						Vector2i(int((d_from as Array)[0]), int((d_from as Array)[1])),
-						at_now, from_point, 0.0)
+				# 2026-11-10：**只有拖拽**（via=drag）才从光标位置起飞；
+				# 右键棋子 / 右键卡上任务格时指针就在订单带上，若也用光标位置，
+				# 起点≈终点，看起来就是"棋子直接消失没有飞行"。
+				var d_cell := Vector2i(int((d_from as Array)[0]), int((d_from as Array)[1]))
+				# 2026-11-10：拖拽交付**不飞棋子**（棋子本来就在手上），只做落袋反馈；
+				# 右键棋子 / 右键任务格才从棋盘飞过来。
+				var d_delay := 0.0
+				if _live_band != null:
+					d_delay = _live_band.reveal_card(d_order, 0.26)
+				if not _deliver_is_drag(d_payload, at_now, d_cell):
+					_play_deliver_flight(d_order, d_row, d_cell, at_now + d_delay,
+							_deliver_origin(d_payload, at_now, d_cell), 0.0)
+				if _live_band != null:
+					_live_band.punch_row(d_order, d_row, d_delay)
+					_live_band.hold_sort(d_order, d_delay + 0.75)
 			if bool(d_sim.get("settled", false)):
 				_play_settle_effects(d_order, float(r.get("at", t)))
 		if channel == "sim" and bool(r.get("ok", false)) \
@@ -910,7 +958,8 @@ func _advance_to(t: float) -> void:
 				if typeof(cr) != TYPE_ARRAY or (cr as Array).size() < 2:
 					continue
 				_live_board.unlock(Vector2i(int((cr as Array)[0]), int((cr as Array)[1])),
-						String((row as Dictionary).get("kind", "")), float(r.get("at", t)))
+						String((row as Dictionary).get("kind", "")), float(r.get("at", t)),
+						String((row as Dictionary).get("became", "")))
 		if channel == "sim" and bool(r.get("ok", false)) and String(r.get("type", "")) == "tap":
 			var spawn: Dictionary = _evaluator.sim.last_spawn
 			if not spawn.is_empty():
@@ -1064,10 +1113,54 @@ func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, at: float,
 		payload["dur"] = dur if dur > 0.0 else FlyAnimScene.deliver_duration(from_point, target)
 	else:
 		var cell_centre: Vector2 = _live_board.cell_rect(cell.x, cell.y).get_center() 				+ _live_board.position
+		payload["from_point"] = [cell_centre.x, cell_centre.y]
 		payload["dur"] = dur if dur > 0.0 else FlyAnimScene.deliver_duration(cell_centre, target)
 	_live_fly.play_event({"type": "deliver_chip", "at": at, "payload": payload})
-	if _live_band != null:
-		_live_band.punch_row(order_id, row)
+
+
+## 这一枚该从哪儿起飞。
+## 1) 事件带 `via`（新 take）：只有 `drag` 用光标位置；
+## 2) 老 take 没有 `via`：看**录制里的拖拽采样** —— 交付前 1.2s 内有过一次从同一格开始的
+##    拖拽，就说明这一枚是"拖过去的"，从**松手时的光标位置**飞；否则从棋子那一格飞。
+## 不这么判的话，拖拽交付会从**已经被拖空的那一格**凭空冒出一枚飞过去。
+func _deliver_is_drag(payload: Dictionary, at: float, cell: Vector2i) -> bool:
+	var via := String(payload.get("via", ""))
+	if not via.is_empty():
+		return via == "drag"
+	return _dragged_from(cell, at)
+
+
+func _deliver_origin(payload: Dictionary, at: float, cell: Vector2i) -> Vector2:
+	var cursor_pos: Dictionary = TakeIo.cursor_at(_take, at)
+	var cp := Vector2(-1.0, -1.0)
+	if not cursor_pos.is_empty():
+		cp = Vector2(float(cursor_pos.get("x", -1.0)), float(cursor_pos.get("y", -1.0)))
+	var via := String(payload.get("via", ""))
+	var dragged := via == "drag"
+	if via.is_empty():
+		dragged = _dragged_from(cell, at)
+	if dragged and cp.x >= 0.0:
+		return cp
+	return Vector2(-1, -1)
+
+
+## 交付前 1.2s 内，有没有一次从 `cell` 起手的拖拽（老 take 的兜底判据）。
+func _dragged_from(cell: Vector2i, at: float) -> bool:
+	var rows = _take.get("drag", [])
+	if typeof(rows) != TYPE_ARRAY or (rows as Array).is_empty():
+		return false
+	var best_t := -99999.0
+	var best_from := Vector2i(-1, -1)
+	for row in rows:
+		if typeof(row) != TYPE_ARRAY or (row as Array).size() < 5:
+			continue
+		var t := float((row as Array)[0])
+		if t <= at + 0.05 and t > best_t:
+			best_t = t
+			best_from = Vector2i(int((row as Array)[1]), int((row as Array)[2]))
+	if best_from != cell:
+		return false
+	return at - best_t <= 1.2
 
 
 ## 页面坐标点是否落在订单带上（用来判断这次交付是不是"拖到卡上"）。
@@ -1091,11 +1184,24 @@ func _play_settle_effects(order_id: String, at: float) -> void:
 	var stamina_gain := _order_energy(order_id)
 	if stamina_gain > 0:
 		_queue_energy_ticks(stamina_gain, at)
-	var centre := orders_anchor(order_id)
+	# 起点 = 这一张卡的金币图标（不是卡片中心）
+	var centre: Vector2 = _live_band.position + _live_band.reward_origin(order_id, "coin") 			if _live_band != null else orders_anchor(order_id)
 	if gained > 0:
 		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.55, "payload": {
 			"from_point": [centre.x, centre.y], "amount": gained,
 			"count": clampi(gained / 5, 3, 8), "texture": _ui("coin_big")}})
+	# 2026-11-10：逐枚交付的结算也要播钻石 / 体力螺旋（原来只播金币，
+	# 交付改成一枚一枚之后这条路不再经过 _play_claim_effects，两个奖励就丢了）。
+	var gem_from: Vector2 = _live_band.position + _live_band.reward_origin(order_id, "gem") 			if _live_band != null else orders_anchor(order_id)
+	var energy_from: Vector2 = _live_band.position + _live_band.reward_origin(order_id, "energy") 			if _live_band != null else orders_anchor(order_id)
+	if gem_gain > 0:
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.67, "payload": {
+			"from_point": [gem_from.x, gem_from.y], "amount": gem_gain,
+			"count": clampi(gem_gain, 1, 5), "texture": _ui("gem"), "spin": -1.0}})
+	if stamina_gain > 0:
+		_live_fly.play_event({"type": "coin_spiral", "at": at + 0.61, "payload": {
+			"from_point": [energy_from.x, energy_from.y], "amount": stamina_gain,
+			"count": 3, "texture": _ui("energy"), "spin": 1.0}})
 	if _live_band != null:
 		_live_band.hold_done(order_id, 1.55)
 
@@ -1257,25 +1363,43 @@ func _sync_live_board() -> void:
 		if not level.is_empty():
 			_live_board.build_from_level_data(level, _model.project.get("entities", {}), {})
 	_live_board.set_clock(_t)
+	# 2026-11-10：障碍逐帧同步（解锁 / 盒子换型要立刻显示，否则画面上是空白格）
+	var bsnap: Dictionary = (_snap.get("board", {}) as Dictionary)
+	_live_board.set_obstacles(bsnap.get("obstacles", []))
 	# FlyAnim 的起点/落点全部来自实机几何：每帧刷新，芯片才会从"被点的那个格子"起飞。
 	_refresh_flight_anchors()
 	# 拖动回放：手拖着棋子走，起点格保留四边选中框（与实机同一套绘制）
 	var drag_now: Dictionary = TakeIo.drag_at(_take, _t)
 	if drag_now.is_empty():
 		_live_board.set_drag_state({})
-		_live_board.drag_chip_visible = true
+		_live_board.drag_chip_visible = false
 	else:
-		# 实机把棋子交给上层 ghost 画（含白角框）；成片没有 ghost 层，
-		# 所以让棋盘自己画棋子+白角框（common_main_frame_s / ui_select_frame）。
-		_live_board.drag_chip_visible = true
+		# 2026-11-10：拖拽中的棋子**不能**由棋盘画 —— 棋盘在订单带下面，
+		# 拖到任务栏上时棋子会被卡片盖住。改成由最上层的 FilmOverlay 画
+		# （和实机的 DragGhost 层同一层级语义），棋盘只保留源格的白角框。
+		_live_board.drag_chip_visible = false
 		_live_board.set_drag_state(drag_now)
 	var cells_now = (_snap.get("board", {}) as Dictionary).get("cells", [])
+	# 2026-11-10：拖拽中，源格的棋子已经被"拿在手上"，棋盘不该再画它
+	# （否则会和上层那枚叠成两枚）。实机同样在拖拽时把源格留空。
+	if typeof(cells_now) == TYPE_ARRAY and not drag_now.is_empty():
+		var keep: Array = []
+		var dfrom = drag_now.get("from", [])
+		for row in cells_now:
+			if typeof(row) == TYPE_ARRAY and (row as Array).size() >= 2 					and typeof(dfrom) == TYPE_ARRAY and (dfrom as Array).size() >= 2 					and int((row as Array)[0]) == int((dfrom as Array)[0]) 					and int((row as Array)[1]) == int((dfrom as Array)[1]):
+				continue
+			keep.append(row)
+		cells_now = keep
 	if typeof(cells_now) == TYPE_ARRAY:
 		_live_board.set_chips(cells_now)
+
 	_live_board.apply_state({"selected": [-1, -1],
 			"completed": CompletedCells.from_snapshot(_snap)})
 	if _live_board.has_method("set_safeboxes") and _evaluator != null and _evaluator.sim != null:
 		_live_board.set_safeboxes(_evaluator.sim.safeboxes)
+	# 2026-11-10：必须放在**所有** board 状态写入之后 —— set_chips / apply_state 都会把
+	# drag_chip_visible 复位成 true，棋盘就会再画一枚拖拽棋子（上层那枚 + 这枚 = 两枚）。
+	_live_board.drag_chip_visible = false
 
 
 func _setup_live_band() -> void:
@@ -2597,4 +2721,5 @@ class FilmOverlay extends Control:
 	func _draw() -> void:
 		if host == null:
 			return
+		host._paint_drag(self)
 		host._paint_cursor(self)

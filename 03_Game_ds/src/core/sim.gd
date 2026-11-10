@@ -541,32 +541,52 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
 
 
+## 合并炸开的半径：来自关卡 JSON 的 `blast`（1 = 上下左右四个邻格；2 = 曼哈顿距离再外一层）。
+func blast_radius() -> int:
+	var raw = model.level(int(level_index)).get("blast", 1)
+	return clampi(int(raw), 1, 3)
+
+
 func _unlock_neighbours(centre: Vector2i) -> Array:
 	var out: Array = []
-	for step in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
-		var cell: Vector2i = centre + step
-		if not board.in_bounds(cell):
-			continue
-		var kinds: Array = board.obstacle_types(cell)
-		if kinds.is_empty():
-			continue
-		for kind in kinds:
-			var k := String(kind)
-			# 2026-11-06: the box (lock) stays put for now — only ice, web and the "?"
-			# bag are cleared by a neighbouring merge.
-			if k == "safe" or k == "lock":
+	var radius := blast_radius()
+	for dx in range(-radius, radius + 1):
+		for dy in range(-radius, radius + 1):
+			if dx == 0 and dy == 0:
 				continue
-			if board.remove_obstacle(cell, k):
-				if k == "ice" or k == "web":
-					var frozen := IceCell.chip(model.project, cell)
-					if not frozen.is_empty() and not board.has_item(cell):
-						board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
-								int(frozen.get("level", 1)))
-				elif not board.has_item(cell):
-					var picked := _sample_generator_output()
-					if not picked.is_empty():
-						board.put(cell, String(picked["entity"]), int(picked["level"]))
-				out.append({"cell": [cell.x, cell.y], "kind": k})
+			if absi(dx) + absi(dy) > radius:
+				continue
+			var cell: Vector2i = centre + Vector2i(dx, dy)
+			if not board.in_bounds(cell):
+				continue
+			var kinds: Array = board.obstacle_types(cell)
+			if kinds.is_empty():
+				continue
+			for kind in kinds:
+				var k := String(kind)
+				if k == "safe":
+					continue
+				# 2026-11-10：蓝盒子（lock）不再是死物 —— 砸开后变成**网 + 棋子**
+				# 或 **冰 + 棋子（倒计时 5~10 分钟）**，二选一按格子坐标定死（成片可复现）。
+				if k == "lock":
+					if board.remove_obstacle(cell, k):
+						# 用高位混一下，别让整片菱形都落在同一种（13x+7y 的奇偶性在局部会相关）
+						var h := absi(cell.x * 73856093 ^ cell.y * 19349663)
+						var rolled := "icebox" if (h >> 5) % 2 == 1 else "web"
+						board.add_obstacle(cell, rolled)
+						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": rolled})
+					continue
+				if board.remove_obstacle(cell, k):
+					if k == "ice" or k == "web" or k == "icebox":
+						var frozen := IceCell.chip(model.project, cell)
+						if not frozen.is_empty() and not board.has_item(cell):
+							board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
+									int(frozen.get("level", 1)))
+					elif not board.has_item(cell):
+						var picked := _sample_generator_output()
+						if not picked.is_empty():
+							board.put(cell, String(picked["entity"]), int(picked["level"]))
+					out.append({"cell": [cell.x, cell.y], "kind": k})
 	return out
 
 

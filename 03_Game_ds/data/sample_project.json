@@ -612,7 +612,8 @@
         "count": 9,
         "entity": "",
         "level": 0
-      }
+      },
+      "blast": 2
     },
     {
       "id": "level_2",
@@ -932,7 +933,8 @@
         "count": 9,
         "entity": "",
         "level": 0
-      }
+      },
+      "blast": 2
     }
   ],
   "timeline": [

@@ -59,6 +59,11 @@ var _font_bold: Font = null
 var _anchors: Array = []
 ## Horizontal offset of the whole queue while the player drags it (rubber band).
 var _row_offset: float = 0.0
+## 2026-11-10：交付前把目标卡"弹"进可见槽位（橡皮筋），交付必须在画面里发生。
+var _pinned_id: String = ""
+## 最近一次被 reveal_card 提到最前的卡；屏上的卡不会被记录（原地收集）
+var _promoted_id: String = ""
+var _pinned_until: float = -1.0
 ## 立绘是否由本组件绘制（成片端关掉，改由成片自己画，好保持"顶栏压在立绘上"的层级）。
 var draw_portraits: bool = true
 ## 是否铺不透明底条：实机需要（盖住棋盘标题行），成片不用（成片自己画背景）。
@@ -202,6 +207,35 @@ func is_animating() -> bool:
 	return false
 
 
+
+
+## 这张卡当前排第几（0 = 最左边）。找不到返回 -1。
+func card_index(order_id: String) -> int:
+	for i in cards.size():
+		if String((cards[i] as Dictionary).get("id", "")) == order_id:
+			return i
+	return -1
+
+
+## 把目标卡**提到最前**（橡皮筋效果由 _x_now 的缓动给出：所有卡从旧位置滑到新位置）。
+## 已经在首位就返回 0；否则返回滑行需要的秒数，调用方据此延迟飞行/落袋。
+func reveal_card(order_id: String, seconds: float = 0.26) -> float:
+	var idx := card_index(order_id)
+	if idx < 0 or idx == 0:
+		return 0.0
+	# 2026-11-10：**已经在画面里的前几张不换位** —— 原地收集，收集完再按完成度重排。
+	# 否则会出现"第 2 张先跑到第 1 位收集、收集完又跳回去"的来回晃动（操作者报的）。
+	if idx < VISIBLE_CARDS:
+		return 0.0
+	var moved: Dictionary = cards[idx]
+	cards.remove_at(idx)
+	cards.insert(0, moved)
+	_pinned_id = order_id
+	_promoted_id = order_id
+	_pinned_until = _clock_now + maxf(seconds, 0.18) + 0.30
+	_layout()
+	queue_redraw()
+	return maxf(seconds, 0.18)
 
 
 func set_row_offset(dx: float) -> void:
@@ -375,8 +409,14 @@ func _reorder_cards() -> void:
 		return
 	var slots: Array = []
 	for i in cards.size():
-		if not bool((cards[i] as Dictionary).get("done", false)):
-			slots.append(i)
+		var cd: Dictionary = cards[i]
+		if bool(cd.get("done", false)):
+			continue
+		# 2026-11-10：**结算中的卡（claim_pending）钉在原地** —— 它要么原地缩掉、后面的补位，
+		# 不许"先和第 2 张换位再消失"（操作者帧 974 报的）。
+		if bool(cd.get("claim_pending", false)):
+			continue
+		slots.append(i)
 	if slots.size() < 2:
 		return
 	var ready_cards: Array = []
@@ -386,7 +426,36 @@ func _reorder_cards() -> void:
 			ready_cards.append(cards[i])
 		else:
 			rest.append(cards[i])
-	var ordered: Array = ready_cards + rest
+	# 2026-11-10：先按"这单交了多少枚"降序 —— 快交付的卡排在前面，
+	# 同分保持原顺序（操作者：1/2 与 0/1+0/1+1/1 都是 1 分，先来的留在前面）。
+	var scored: Array = []
+	for i in slots.size():
+		var c: Dictionary = cards[int(slots[i])]
+		var score := 0
+		for m in (c.get("mission", []) as Array):
+			score += int((m as Dictionary).get("have", 0))
+		scored.append([score, i, c])
+	# 2026-11-10：**同分不换位** —— 比较器第二关键字是"当前相对顺序"，
+	# 分数相等时保持原样；只有分数真的更高才往前挪。
+	scored.sort_custom(func(a, b):
+		var sa := int(a[0])
+		var sb := int(b[0])
+		if sa != sb:
+			return sa > sb
+		return int(a[1]) < int(b[1]))
+	var ordered: Array = []
+	for row in scored:
+		ordered.append(row[2])
+	# 揭示过的卡在钉住期内固定在第一位（否则排序会立刻把它挤回后面）
+	if not _pinned_id.is_empty() and _clock_now < _pinned_until:
+		for k in ordered.size():
+			if String((ordered[k] as Dictionary).get("id", "")) == _pinned_id:
+				var pin: Dictionary = ordered[k]
+				ordered.remove_at(k)
+				ordered.insert(0, pin)
+				break
+	elif not _pinned_id.is_empty():
+		_pinned_id = ""
 	var changed := false
 	for k in slots.size():
 		if cards[int(slots[k])] != ordered[k]:
@@ -1045,8 +1114,9 @@ func set_hover_row(order_id: String, row: int) -> void:
 func _hover_hit(order_id: String, row: int) -> bool:
 	return not _hover.is_empty() and String(_hover.get("order", "")) == order_id 			and int(_hover.get("row", -1)) == row
 
-func punch_row(order_id: String, row: int) -> void:
-	_punch = {"order": order_id, "row": row, "started": _clock_now}
+func punch_row(order_id: String, row: int, delay: float = 0.0) -> void:
+	# delay：飞过来的那枚要等它落到才"吞一下"（拖拽交付同类传 0）
+	_punch = {"order": order_id, "row": row, "started": _clock_now + maxf(delay, 0.0)}
 
 
 func _punch_scale(order_id: String, row: int) -> float:
@@ -1061,10 +1131,70 @@ func _punch_scale(order_id: String, row: int) -> float:
 	return 1.0 + 0.10 * (1.0 - p)
 
 
+## 奖励飞行的**起点**：金币取卡片上方"+N"那个药丸里的金币图标中心；
+## 闪电 / 钻石取卡片蓝条里各自图标中心。订单卡是哪张就取哪张 —— 起点是动态的。
+## 返回**页面坐标**（卡片矩形本身就是页面坐标）。
+## 交付动画还在跑的时候别排序：把这张卡钉在第一位的时长往后延。
+## 顺序永远是「提到第一位 → 棋子飞 → 落袋 → **再**按完成度排序」。
+func hold_sort(order_id: String, seconds: float) -> void:
+	if order_id.is_empty():
+		return
+	# 只有 reveal_card 真把它提上来过才钉住；屏上的卡原地收集，不许被钉到第一位
+	if order_id != _promoted_id:
+		return
+	_pinned_until = maxf(_pinned_until, _clock_now + maxf(seconds, 0.0))
+
+
+## 这张卡的**稳定位置**（滑行结束后停在哪儿）。交付飞行、奖励起点都用它，
+## 不能用 card_rect() 的动画中 x —— 卡片刚被"提到最前"时还在滑动，
+## 用中间值会让飞行/奖励从**原来的地方**出发（操作者报过两次）。
+func settled_rect(order_id: String) -> Rect2:
+	if not _rects.has(order_id) or not _target_x.has(order_id):
+		_layout()
+	var r: Rect2 = card_rect(order_id)
+	if r.size.x <= 0.0:
+		return r
+	var settled_x = _target_x.get(order_id, null)
+	if settled_x != null:
+		r.position.x = float(settled_x) + _row_offset
+	return r
+
+
+func reward_origin(order_id: String, kind: String) -> Vector2:
+	var card: Dictionary = _card_by_id(order_id)
+	if card.is_empty():
+		return Vector2.ZERO
+	var r: Rect2 = settled_rect(order_id)
+	if r.size.x <= 0.0:
+		return Vector2.ZERO
+	if kind == "coin":
+		var icon_size := Vector2(132.0, 49.0)
+		var icon_rect := Rect2(Vector2(r.end.x - icon_size.x, r.position.y - 54.0), icon_size)
+		var coin_at: Vector2 = icon_rect.position + Vector2(24.0, icon_size.y * 0.5)
+		coin_at.x = clampf(coin_at.x, 24.0, 1080.0 - 24.0)
+		return coin_at
+	var energy := int(card.get("energy", 0))
+	var gems := int(card.get("gem", 0))
+	var font: Font = _font_display()
+	if font == null:
+		font = _font
+	var energy_w := _text_width(font, str(energy), REWARD_LABEL_PX) if energy > 0 else 0.0
+	var gem_w := _text_width(font, str(gems), REWARD_LABEL_PX) if gems > 0 else 0.0
+	var rects := reward_row_rects(r, energy_w, gem_w)
+	var key := kind + "_icon"
+	var rect: Rect2 = rects.get(key, Rect2())
+	var out: Vector2 = rect.get_center() if rect.size.x > 0.0 else r.get_center()
+	# 2026-11-10：奖励起点必须落在**画面内**（卡片被排到屏外时也不能从屏幕外冒出来）
+	out.x = clampf(out.x, 24.0, 1080.0 - 24.0)
+	out.y = clampf(out.y, 24.0, 1920.0 - 24.0)
+	return out
+
+
 ## 某张卡第 row 个任务格子的**底板中心**（面板局部坐标）。飞行落点用它，
 ## 让棋子飞进"那一行"而不是卡片中心。
 func mission_row_center(order_id: String, row: int) -> Vector2:
-	var rect: Rect2 = card_rect(order_id)
+	# 落点用**稳定位置**：棋子是等卡片滑到位之后才起飞的
+	var rect: Rect2 = settled_rect(order_id)
 	if rect.size == Vector2.ZERO:
 		return Vector2.ZERO
 	var card: Dictionary = _card_by_id(order_id)

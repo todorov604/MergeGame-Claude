@@ -573,8 +573,8 @@ class Cursor extends Control:
 	## page pixels. Ratios keep this correct if the cursor art is replaced again.
 	const HOTSPOT := Vector2(0.135, 0.004)
 	const SIZE := 96.0
-	const PRESS_SECONDS := 0.10
-	const PRESS_SCALE := 0.86
+	const PRESS_SECONDS := TakeIo.PRESS_SECONDS
+	const PRESS_SCALE := TakeIo.PRESS_SCALE
 
 	var host = null
 
@@ -584,12 +584,17 @@ class Cursor extends Control:
 		if host._freeze or not host._free_mode:
 			return
 		var point := _canvas_point()
-		var press := 1.0
-		if host._clock - float(host._last_click_at) <= PRESS_SECONDS:
-			press = PRESS_SCALE
+		# 2026-11-10：按下状态 = "拖拽中 / 鼠标按住 / 刚点过 0.22s 内"，
+		# 幅度放大（0.80 + 下沉 7px），右键也能看清"下去再上来"。
+		var pressed: bool = bool(host._pressing) or bool(host._dragging) 				or host._clock - float(host._last_click_at) <= PRESS_SECONDS
+		var press := PRESS_SCALE if pressed else 1.0
+		var dip := (7.0 if pressed else 0.0)
 		var size := Vector2(SIZE, SIZE) * press
+		# 涟漪画在**手之上** —— 右键交付时指针压在卡片上，
+		# 画在手下面会被手和卡片盖掉，看着像"没有这个特效"。
+		draw_texture_rect(host._cursor_tex,
+				Rect2(point - HOTSPOT * size + Vector2(0.0, dip), size), false)
 		_draw_press_ring()
-		draw_texture_rect(host._cursor_tex, Rect2(point - HOTSPOT * size, size), false)
 
 
 	## 按下白环：与成片同一套参数（0.25s，18 -> 150px）。
@@ -1439,7 +1444,8 @@ func _play_unlocks() -> void:
 		if typeof(cell_ref) != TYPE_ARRAY or (cell_ref as Array).size() < 2:
 			continue
 		board.unlock(Vector2i(int((cell_ref as Array)[0]), int((cell_ref as Array)[1])),
-				String((row as Dictionary).get("kind", "")), _clock)
+				String((row as Dictionary).get("kind", "")), _clock,
+				String((row as Dictionary).get("became", "")))
 
 
 ## The ready badge must follow the board, not a stale snapshot: after a claim eats the
@@ -1644,8 +1650,8 @@ func _play_coin_reward(order_id: String) -> void:
 			break
 	if amount <= 0:
 		return
-	var local: Rect2 = orders.card_rect(order_id)
-	var centre := Vector2(local.position + orders.position) + local.size * 0.5
+	# 起点 = 这张卡上方"+N"药丸里的**金币图标**中心（不是卡片中心）
+	var centre: Vector2 = orders.position + orders.reward_origin(order_id, "coin")
 	var count := clampi(amount / 5, 3, 8)
 	fly.play_event({
 		"type": "coin_spiral",
@@ -1669,15 +1675,13 @@ func _play_energy_reward(order_id: String) -> void:
 	var amount := _order_energy_amount(order_id)
 	if amount <= 0:
 		return
-	var local: Rect2 = orders.card_rect(order_id)
-	var strip := local
-	strip.position += orders.position + Vector2(0.0, local.size.y * (1.0 - OrderPanel.GEM_STRIP_RATIO))
-	strip.size = Vector2(local.size.x, local.size.y * OrderPanel.GEM_STRIP_RATIO)
+	# 起点 = 这张卡蓝条里的**闪电图标**中心
+	var origin: Vector2 = orders.position + orders.reward_origin(order_id, "energy")
 	fly.play_event({
 		"type": "coin_spiral",
 		"at": _clock + 0.06,
 		"payload": {
-			"from_point": [strip.get_center().x - strip.size.x * 0.18, strip.get_center().y],
+			"from_point": [origin.x, origin.y],
 			"amount": amount,
 			"count": clampi(int(round(float(amount) / 10.0)), 3, 10),
 			"texture": _ui("energy"),
@@ -1696,15 +1700,13 @@ func _play_gem_reward(order_id: String) -> void:
 	var amount := _order_gem_amount(order_id)
 	if amount <= 0:
 		return
-	var local: Rect2 = orders.card_rect(order_id)
-	var strip := local
-	strip.position += orders.position + Vector2(0.0, local.size.y * (1.0 - OrderPanel.GEM_STRIP_RATIO))
-	strip.size = Vector2(local.size.x, local.size.y * OrderPanel.GEM_STRIP_RATIO)
+	# 起点 = 这张卡蓝条里的**钻石图标**中心（哪张卡结算就从哪张卡飞）
+	var origin: Vector2 = orders.position + orders.reward_origin(order_id, "gem")
 	fly.play_event({
 		"type": "coin_spiral",
 		"at": _clock + 0.12,
 		"payload": {
-			"from_point": [strip.get_center().x, strip.get_center().y],
+			"from_point": [origin.x, origin.y],
 			"amount": amount,
 			"count": clampi(amount, 1, 5),
 			"texture": _ui("gem"),
@@ -2207,21 +2209,30 @@ func _claim_from_cell(cell: Vector2i) -> bool:
 ## 2026-11-10：**一枚一枚交**。三种入口（右键棋子 / 拖到卡上 / 右键卡上任务格子）
 ## 都落到这里：只推进一行的一枚，不再是"整单一次结算"。
 func _deliver_to(order_id: String, row: int, cell: Vector2i,
-		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0) -> bool:
+		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0,
+		via: String = "chip") -> bool:
 	if evaluator == null or evaluator.sim == null:
 		return false
 	if not evaluator.sim.board.has_item(cell):
 		return false
 	var item: Dictionary = evaluator.sim.board.item(cell)
+	# via 记录"从哪个入口交的"，成片据此决定飞行起点（拖拽=光标，其余=棋子所在格）。
 	var result: Dictionary = _apply_free("deliver",
-			{"order": order_id, "from": [cell.x, cell.y], "row": row})
+			{"order": order_id, "from": [cell.x, cell.y], "row": row, "via": via})
 	if not bool(result.get("ok", false)):
 		return false
 	var taken_row := int(result.get("row", row))
-	_play_deliver_flight(order_id, taken_row, cell, item, from_point, dur)
-	# 到货反馈：那一行底板吞一下（拖拽交付尤其明显——棋子已经在指针上，不该再"从棋盘飞"）
+	# 目标卡如果还在画面外，先把它弹进可见槽位 —— 交付必须在画面里发生。
+	var reveal_delay: float = orders.reveal_card(order_id, 0.26) if orders != null else 0.0
+	# 2026-11-10：拖拽交付时棋子已经在手上，"飞"是多余的 —— 直接落袋。
+	# 只有右键棋子 / 右键任务格这两种"从棋盘起飞"的入口才播飞行。
+	if via != "drag":
+		_play_deliver_flight(order_id, taken_row, cell, item, from_point, dur, reveal_delay)
+	# 到货反馈：那一行底板吞一下（"白圈扩散"是光标点击涟漪，不属于交付，别加到这里）
 	if orders != null:
-		orders.punch_row(order_id, taken_row)
+		orders.punch_row(order_id, taken_row, reveal_delay)
+		# 动画全跑完再放开排序（操作者：先换位、再飞、动画完成之后才重排）
+		orders.hold_sort(order_id, reveal_delay + 0.75)
 	if bool(result.get("settled", false)):
 		_after_settle(order_id)
 	return true
@@ -2273,7 +2284,7 @@ func _random_cell_for(order_id: String, row: int) -> Vector2i:
 
 ## 交付一枚的飞行：起点 = 那一格，落点 = **那一行的底板中心**（不是卡中心）。
 func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, item: Dictionary,
-		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0) -> void:
+		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0, delay: float = 0.0) -> void:
 	if fly == null or orders == null:
 		return
 	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
@@ -2292,7 +2303,8 @@ func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, item: Dict
 		# 右键交付：起点是被点的那一格，时长同样按距离算（公式与成片共用）
 		var cell_centre: Vector2 = board.cell_rect(cell.x, cell.y).get_center() 				+ board.position
 		payload["dur"] = dur if dur > 0.0 else FlyAnim.deliver_duration(cell_centre, target)
-	fly.play_event({"type": "deliver_chip", "at": _clock, "payload": payload})
+	# at 加延迟：卡片先滑到位，棋子再起飞（操作者：先换位、再飞）
+	fly.play_event({"type": "deliver_chip", "at": _clock + maxf(delay, 0.0), "payload": payload})
 
 
 ## 整单收满之后的结算表现（奖励飞行 + 卡片 hold 后缩掉），与点卡结算同一套。
@@ -2317,7 +2329,7 @@ func _deliver_from_card(point: Vector2) -> bool:
 	var cell := _random_cell_for(String(hit["order"]), int(hit["row"]))
 	if cell.x < 0:
 		return false
-	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell):
+	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell, Vector2(-1, -1), 0.0, "card"):
 		return false
 	_last_click_at = _clock
 	_last_click_point = point
@@ -2334,7 +2346,7 @@ func _deliver_drop(point: Vector2, cell: Vector2i) -> bool:
 	var hit: Dictionary = orders.mission_row_at(point - orders.position)
 	if hit.is_empty() or not bool(hit.get("ready", false)):
 		return false
-	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell, point, 0.16):
+	if not _deliver_to(String(hit["order"]), int(hit["row"]), cell, point, 0.16, "drag"):
 		return false
 	_clear_drag_art()
 	_last_click_at = _clock

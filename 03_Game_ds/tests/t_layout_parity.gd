@@ -223,6 +223,87 @@ func _card_decor_matches(t) -> void:
 	solo.free()
 
 	# 2026-11-09：每个任务棋子右下角带 have/need 角标；完成前后两套颜色（取色自参考图）
+	# 2026-11-10：交付前要把目标卡弹进可见槽位（交必须在画面里发生）
+	var rp = OrderPanel.new()
+	rp.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	var lv := {"id": "rv", "orders": []}
+	for k in 4:
+		lv["orders"].append({"id": "rv_%d" % k, "character": "char_blonde",
+			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
+	rp.build_from_level(lv)
+	rp.size = Vector2(1080.0, 250.0)
+	rp.set_clock(0.0)
+	t.ok(rp.card_index("rv_3") == 3, "第四张卡排在第 4 位", str(rp.card_index("rv_3")))
+	var wait := rp.reveal_card("rv_3", 0.26)
+	t.ok(wait > 0.0, "画面外的卡需要先弹进来（返回等待时间）", str(wait))
+	t.eq(rp.card_index("rv_3"), 0, "揭示 = 把目标卡提到最前，不再整排滑动")
+	# 缓动是逐帧 lerp，跑满 30 帧再看落位（实机/成片也是每帧调 set_clock）
+	var tick := 0.0
+	for i in 30:
+		tick += 0.016
+		rp.set_clock(tick)
+	var r3: Rect2 = rp.card_rect("rv_3")
+	t.ok(r3.position.x < 1080.0 and r3.end.x > 0.0, "弹完之后目标卡在画面内", str(r3))
+	t.ok(r3.position.x <= Layout.QUEUE_ORIGIN_X + 1.0, "提到最前就停在队列起点", str(r3))
+	t.eq(rp.reveal_card("rv_3", 0.26), 0.0, "已经在首位就不再弹")
+	# 屏上的卡（前 VISIBLE_CARDS 张）交付时**不换位**：原地收集
+	var onp = OrderPanel.new()
+	onp.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	var lvo := {"id": "onp", "orders": []}
+	for k in 3:
+		lvo["orders"].append({"id": "onp_%d" % k, "character": "char_blonde",
+			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
+	onp.build_from_level(lvo)
+	onp.size = Vector2(1080.0, 250.0)
+	onp.set_clock(0.0)
+	t.eq(onp.reveal_card("onp_0", 0.26), 0.0, "第 1 张在屏上：不换位")
+	t.eq(onp.card_index("onp_0"), 0, "第 1 张留在原位")
+	t.eq(onp.reveal_card("onp_1", 0.26), 0.0, "第 2 张在屏上：不换位")
+	t.eq(onp.card_index("onp_1"), 1, "第 2 张留在原位")
+	onp.hold_sort("onp_1", 0.75)
+	t.eq(onp.card_index("onp_1"), 1, "hold 不会把屏上的卡钉到第一位")
+	t.ok(onp.reveal_card("onp_2", 0.26) > 0.0, "第 3 张在屏外：仍然要提上来")
+	t.eq(onp.card_index("onp_2"), 0, "第 3 张被提到第一位")
+	onp.free()
+
+	# 同分不换位：三张卡分数相同 → 顺序原样不动
+	var eq = OrderPanel.new()
+	eq.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	var lve := {"id": "eq", "orders": []}
+	# id 故意不按字母序：同分如果按 id 排就会换位，这条才抓得住
+	var eq_ids := ["eq_c", "eq_a", "eq_b"]
+	for k in 3:
+		lve["orders"].append({"id": eq_ids[k], "character": "char_blonde",
+			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
+	eq.build_from_level(lve)
+	eq.size = Vector2(1080.0, 250.0)
+	eq.set_clock(0.0)
+	t.eq(eq.card_index("eq_c"), 0, "同分时第 1 张不动")
+	t.eq(eq.card_index("eq_a"), 1, "同分时第 2 张不动")
+	t.eq(eq.card_index("eq_b"), 2, "同分时第 3 张不动")
+	# 让第 3 张分数变高（1 枚已交）→ 它才该往前挪
+	var rows_eq: Array = eq.cards
+	for i in rows_eq.size():
+		if String((rows_eq[i] as Dictionary).get("id", "")) == "eq_b":
+			(rows_eq[i] as Dictionary)["mission"] = [
+				{"entity": "CleanSet_Ca", "level": 1, "have": 1, "need": 2}]
+	var tp := 0.0
+	for i in 8:
+		tp += 0.016
+		eq.set_clock(tp)
+	t.eq(eq.card_index("eq_b"), 0, "分数更高才排到最前")
+	eq.free()
+
+	# 交付动画期间不许重排：钉住时间被 hold_sort 延长，动画结束后才按完成度排
+	rp.hold_sort("rv_3", 0.75)
+	t.eq(rp.card_index("rv_3"), 0, "hold 期间目标卡仍在第一位")
+	var t2 := tick
+	for i in 40:
+		t2 += 0.016
+		rp.set_clock(t2)
+	t.ok(rp.card_index("rv_3") >= 0, "动画结束后卡片仍在队列里", str(rp.card_index("rv_3")))
+	rp.free()
+
 	# 2026-11-10：交付命中区 = **底板矩形**，且只认绿色（可交付）的行。
 	# 用独立的 panel 夹具，别碰上面已经 free() 掉的那个。
 	var hit_panel = OrderPanel.new()

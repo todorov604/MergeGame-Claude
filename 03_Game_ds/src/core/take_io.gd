@@ -22,11 +22,12 @@ extends RefCounted
 
 const SCHEMA := 1
 ## How long the hand reads as "pressed" after a click, and how much it shrinks.
-const PRESS_SECONDS := 0.10
+## 2026-11-10：按下状态保持更久（右键是一闪而过，看不出"下去再上来"）。
+const PRESS_SECONDS := 0.22
 ## 按下白环：0.25s 内从 0 扩散到 RING_RADIUS，透明度线性淡出。
 const RING_SECONDS := 0.25
 const RING_RADIUS := 150.0
-const PRESS_SCALE := 0.86
+const PRESS_SCALE := 0.80
 
 const EventModel = preload("res://src/core/event_model.gd")
 

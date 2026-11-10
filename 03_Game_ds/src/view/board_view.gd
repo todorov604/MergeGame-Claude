@@ -135,7 +135,9 @@ const FONT_INK := 30
 const FONT_CAPS := 22
 const FONT_COUNTER := 26
 
-const OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice"]
+# 2026-11-10：`icebox` = 蓝盒子开出来的冰（倒计时 5~10 分钟），必须进白名单，
+# 否则 sim 里已经挡住了、画面上却什么都不显示（操作者报"炸开后什么都没有、还拖不进去"）。
+const OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice", "icebox"]
 const DEFAULT_SELECTED := [3, 3]
 const DEFAULT_COMPLETED := [[1, 4]]
 
@@ -758,13 +760,23 @@ func _inner_cell_rect(r: Rect2) -> Rect2:
 
 ## Item draw with the running merge/settle pulse, if this is the pulsing cell.
 ## A neighbour obstacle just broke: draw it growing and fading, then drop it.
-func unlock(cell: Vector2i, kind: String, started_at: float = -1.0) -> void:
+func unlock(cell: Vector2i, kind: String, started_at: float = -1.0, became: String = "") -> void:
 	if cell.x < 0 or kind == "safe":
 		return
-	_unlocks.append({"cell": cell, "kind": kind,
+	# 2026-11-10：蓝盒子被砸开时闪的图标应该是**它变成的东西**（网 / 冰），
+	# 不是问号袋子 —— 未知 kind 落到 UI_SAFE_UNKNOWN 会闪一下 "?"（操作者报过）。
+	var shown := kind
+	if kind == "box":
+		shown = became if not became.is_empty() else "web"
+	_unlocks.append({"cell": cell, "kind": kind, "shown": shown,
 			"started": _clock if started_at < 0.0 else started_at})
 	set_process(true)
 	queue_redraw()
+
+
+## 正在播放的解锁动画行（测试用；只读副本）。
+func unlock_rows() -> Array:
+	return _unlocks.duplicate(true)
 
 
 func _draw_unlocks() -> void:
@@ -780,8 +792,14 @@ func _draw_unlocks() -> void:
 		var base := cell_rect(cell.x, cell.y).grow(-float(CELL_GAP) * 0.5)
 		var scale: float = 1.0 + 0.6 * t
 		var alpha: float = clampf(1.0 - t, 0.0, 1.0)
-		var tex := _ui_texture(UI_LOCK if kind == "lock" else
-				(UI_WEB if kind == "web" else (UI_ICE if kind == "ice" else UI_SAFE_UNKNOWN)))
+		var shown := String((row as Dictionary).get("shown", kind))
+		var tex: Texture2D = null
+		match shown:
+			"lock": tex = _ui_texture(UI_LOCK)
+			"web": tex = _ui_texture(UI_WEB)
+			"ice", "icebox": tex = _ui_texture(UI_ICE)
+			"bag", "bubble": tex = _ui_texture(UI_SAFE_UNKNOWN)
+			_: tex = null
 		draw_set_transform(base.get_center(), 0.0, Vector2(scale, scale))
 		var local := Rect2(-base.size * 0.5, base.size)
 		if tex != null:
@@ -884,6 +902,22 @@ func chip_texture(entity_id: String, level: int) -> Texture2D:
 	return _chip_texture({"entity": entity_id, "level": level})
 
 
+## 2026-11-10：这一格的贴图 —— 生成器用生成器图，棋子用棋子图。
+## 成片拖拽 ghost 以前只认 chip，拖生成器时查不到贴图 → 没有 ghost（操作者报"直接就移过去了"）。
+func item_texture(kind: String, entity_id: String, level: int) -> Texture2D:
+	var chip := chip_texture(entity_id, level)
+	if chip != null:
+		return chip
+	# 生成器（名字不一定在 generators 表里）兜底用生成器图，别让 ghost 直接消失
+	return _ui_texture(UI_GENERATOR)
+
+
+## 这一格是不是生成器（成片判断要不要补体力角标）。
+func is_generator_entity(entity_id: String) -> bool:
+	var meta: Dictionary = _as_dict(_generators.get(entity_id, {}))
+	return not meta.is_empty()
+
+
 func _chip_texture(item: Dictionary) -> Texture2D:
 	if _asset_loader == null or not _asset_loader.has_method("chip_texture"):
 		return null
@@ -984,6 +1018,32 @@ func _draw_special(r: Rect2, item: Dictionary) -> void:
 ## Obstacle semantics are unchanged (one type per cell, same four types); only the
 ## art source changes: themed texture when it resolves, procedural art otherwise.
 ## An ice cell freezes a deterministic chip and labels its level (project font).
+## 用 sim 快照覆盖障碍表：`[[x, y, [kinds...]], ...]`。
+## 解锁、蓝盒子变成网/冰这类**运行时变化**必须每帧同步，否则画面上还是旧的（甚至空白）。
+func set_obstacles(rows: Array) -> void:
+	var next := {}
+	for raw in rows:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 3:
+			continue
+		var pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
+		if not _in_bounds(pos):
+			continue
+		var kinds: Array = (raw as Array)[2]
+		if kinds.is_empty():
+			continue
+		next[pos] = String(kinds[0])
+	if next.size() == _obstacles.size():
+		var same := true
+		for k in next.keys():
+			if String(_obstacles.get(k, "")) != String(next[k]):
+				same = false
+				break
+		if same:
+			return
+	_obstacles = next
+	queue_redraw()
+
+
 func _draw_obstacle(key: Vector2i, type: String) -> void:
 	var r := cell_rect(key.x, key.y).grow(-float(CELL_GAP) * 0.5)
 	match type:
@@ -1010,7 +1070,7 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 		"bag":
 			if not _draw_ui_art(UI_SAFE_UNKNOWN, r):
 				_draw_bubble(r.get_center())
-		"ice":
+		"ice", "icebox":
 			# 2026-11-05: a deterministic chip is frozen under the ice and the timer
 			# placeholder is replaced by a real label (project display font).
 			var frozen := IceCell.chip(_asset_project, key)
@@ -1029,6 +1089,11 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 
 ## Countdown on an ice cell: mm:ss between 10:00 and 19:59, ticking once per second
 ## of level time, drawn with the project display font (江城圆体 700W).
+## 这一格的障碍是不是 `kind`（渲染时判断 icebox 用）。
+func obstacles_has_kind(key: Vector2i, kind: String) -> bool:
+	return String(_obstacles.get(key, "")) == kind
+
+
 func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
 	if frozen.is_empty():
 		return
@@ -1037,7 +1102,11 @@ func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
 	if _font_display == null:
 		return
 	var font := _font_display
-	var left := IceCell.remaining_seconds(key, ice_elapsed)
+	# 2026-11-10：盒子开出来的冰（icebox）倒计时 5~10 分钟，关卡自带的冰仍是 10~20 分钟
+	var start := IceCell.start_seconds(key)
+	if obstacles_has_kind(key, "icebox"):
+		start = IceCell.start_seconds_between(key, 5 * 60, 10 * 60)
+	var left := clampi(start - int(floor(maxf(ice_elapsed, 0.0))), 0, IceCell.MAX_SECONDS)
 	var text := IceCell.format_clock(left)
 	var size := 26
 	var baseline := Vector2(r.position.x, r.end.y - 8.0)
@@ -1308,6 +1377,23 @@ func drag_scale_now() -> float:
 	return Pulse.drag_scale(_drag_started, _clock)
 
 
+## 拖拽棋子的矩形（页面坐标）。上层 ghost / 成片叠加层用它画棋子和白角框，
+## 保证和棋盘自己的绘制**逐像素同一份几何**（§8 不许有第二份）。
+func drag_chip_rect() -> Rect2:
+	if _drag.is_empty():
+		return Rect2()
+	var from := Vector2i(_drag.get("from", Vector2i(-1, -1)))
+	# 拖拽时源格可能已经从 _items 里摘掉（成片就这么做，避免和上层叠成两枚），
+	# 所以这里**不能**用 _items.has(from) 当判据，只看 _drag 有没有合法坐标。
+	if from.x < 0 or from.y < 0:
+		return Rect2()
+	var cell := cell_rect(from.x, from.y)
+	var base := cell.grow(-float(CELL_GAP) * 0.5)
+	var s := Pulse.drag_scale(_drag_started, _clock)
+	var pos: Vector2 = _drag.get("pos", Vector2.ZERO)
+	return Rect2(pos - base.size * s * 0.5, base.size * s)
+
+
 func _draw_drag() -> void:
 	var from := Vector2i(_drag.get("from", Vector2i(-1, -1)))
 	if not _items.has(from):
@@ -1324,6 +1410,9 @@ func _draw_drag() -> void:
 	if _completed.has(from):
 		_draw_complete_mark_at(pos, drag_scale)
 	if drag_chip_visible:
+		# 2026-11-10：生成器和棋子用**同一个**白框比例 —— 上一版给生成器单独放大到 1.62，
+		# 实机里框比棋盘格还大（操作者截图报"游戏里白框太大"）。成片那边是 1.05 的矩形比例，
+		# 看着正常，实机就按棋子这套走。
 		_draw_selection_at(pos, Vector2.ZERO, DRAG_FRAME_GROW)
 	# 2026-11-05: the stamina badge is the top-most layer of a dragged generator, so it
 	# is painted after the white frame instead of underneath it.
@@ -1389,7 +1478,7 @@ func _legend_color(kind: String) -> Color:
 			return Color(0.65, 0.72, 0.80)
 		"bubble":
 			return Color(0.72, 0.86, 1.0)
-		"ice":
+		"ice", "icebox":
 			return Color(0.93, 0.97, 1.0)
 		_:
 			return Color("#F2A65A")

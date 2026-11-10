@@ -38,6 +38,8 @@ func run(t) -> void:
 	_chip_icons(t)
 	_ui_theme(t)
 	_degraded(t)
+	_box_ice(t)
+	_box_flash(t)
 
 
 ## The numbers themselves, so a future edit that rounds them "to taste" fails here
@@ -334,3 +336,34 @@ func _project() -> Dictionary:
 	if typeof(parsed) == TYPE_DICTIONARY:
 		return parsed
 	return {}
+
+
+## 2026-11-10：蓝盒子开出来的 `icebox` 必须被视图认下来 ——
+## 否则 sim 里那一格已经挡住了，画面上却什么都没有（操作者报"炸开之后什么都没有、还拖不进去"）。
+func _box_ice(t) -> void:
+	t.ok(BoardView.OBSTACLE_TYPES.has("icebox"), "OBSTACLE_TYPES 认识 icebox")
+	var v = BoardView.new()
+	var level := {
+		"id": "bv",
+		"board": {"width": 3, "height": 3, "slots": []},
+		"obstacles": [
+			{"slot": [0, 0], "type": "icebox"},
+			{"slot": [1, 1], "type": "web"},
+			{"slot": [2, 2], "type": "lock"},
+		],
+	}
+	var out: Dictionary = v.build_from_level_data(level, {}, {})
+	t.eq(int(out.get("obstacles", 0)), 3, "三种障碍都被接受（含 icebox）")
+	t.ok(v.obstacles_has_kind(Vector2i(0, 0), "icebox"), "icebox 落到格子上")
+	t.ok(not v.obstacles_has_kind(Vector2i(0, 0), "ice"), "icebox 不会误判成普通 ice")
+
+
+## 2026-11-10：蓝盒子砸开时闪的图标 = 它变成的东西，不能是问号袋子。
+func _box_flash(t) -> void:
+	var v = BoardView.new()
+	v.unlock(Vector2i(1, 1), "box", 0.0, "icebox")
+	v.unlock(Vector2i(2, 2), "box", 0.0, "web")
+	var shown: Array = []
+	for row in v.unlock_rows():
+		shown.append(String((row as Dictionary).get("shown", "")))
+	t.eq(str(shown), str(["icebox", "web"]), "盒子炸开闪的是冰/网，不是问号")

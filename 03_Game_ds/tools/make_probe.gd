@@ -67,13 +67,17 @@ func _init() -> void:
 		t += 0.02
 	band.append([snappedf(drag_end + 0.02, 0.001), 0.0])
 
-	var timeline: Array = [{
-		"id": "probe_merge",
-		"type": "merge",
-		"channel": "sim",
-		"at": 1.2,
-		"payload": {"from": [MERGE_FROM.x, MERGE_FROM.y], "to": [MERGE_TO.x, MERGE_TO.y]},
-	}]
+	var timeline: Array = [
+		{
+			"id": "probe_merge",
+			"type": "merge",
+			"channel": "sim",
+			"at": 1.2,
+			"payload": {"from": [MERGE_FROM.x, MERGE_FROM.y], "to": [MERGE_TO.x, MERGE_TO.y]},
+		},
+		# 2026-11-10：库存面板投高级生成器 —— 出片后看飞行图标与落地那格。
+		{"id": "probe_stockpile", "type": "stockpile_tap", "channel": "sim", "at": 4.4, "payload": {}},
+	]
 	var take := {
 		"schema": 1,
 		"seed": 20261110,

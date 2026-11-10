@@ -4061,6 +4061,22 @@
       "nine_slice": "14",
       "animation": "static",
       "notes": "2026-11-09 任务棋子底板；1:1 复制，sha256 133eb167ee6f73ce…"
+    },
+    {
+      "id": "ui_generator_premium",
+      "category": "图标",
+      "use": "高级生成器图标（icon_20002010），库存面板投放的生成器用",
+      "priority": "P0",
+      "status": "完成",
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "file": "E:\\北京Icon\\常用资产汇总\\棋子icon\\icon_20002010.png",
+      "target_size": "182×182",
+      "actual_size": "182×182",
+      "fit": "exact",
+      "nine_slice": "n/a",
+      "animation": "static",
+      "notes": "2026-11-10 新增：库存面板改投高级生成器；sha256 fef0836ee4b0f31c。"
     }
   ]
 }

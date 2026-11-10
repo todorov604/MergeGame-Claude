@@ -84,6 +84,7 @@ const LOCAL_IDS := [
 	"ui_gem_bar",
 	"ui_gem_icon",
 	"ui_generator_icon",
+	"ui_generator_premium",
 	"ui_icon_finish",
 	"ui_items_bar",
 	"ui_level_badge_bg",
@@ -163,6 +164,7 @@ const LOCAL_FILES := {
 	"ui_cursor_hand": "cursor_hand.png",
 	"ui_exit_button": "exit_button.png",
 	"ui_generator_icon": "generator_icon.png",
+	"ui_generator_premium": "generator_premium.png",
 	"ui_icon_finish": "main_icon_finish.png",
 	"ui_red_dot": "red_dot_bg.png",
 	"ui_stockpile_arrows": "stockpile_arrows.png",
@@ -373,7 +375,7 @@ func _test_registry_loads(t) -> void:
 
 	var ids: Array = guard.local_ids()
 	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 251, "index = 180 snapshot records + 71 local records")
+	t.eq(guard.index.size(), 252, "index = 180 snapshot records + 72 local records")
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:

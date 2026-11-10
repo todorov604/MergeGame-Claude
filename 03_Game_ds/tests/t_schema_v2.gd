@@ -20,7 +20,7 @@ const HUD_FIELDS := [
 	"exp",
 ]
 const VALID_KINDS := ["chip", "generator", "special", "character"]
-const GENERATOR_BEHAVIOR_FIELDS := ["charges", "cooldown", "outputs", "rareOutputs"]
+const GENERATOR_BEHAVIOR_FIELDS := ["charges", "cooldown", "outputs", "rareOutputs", "levelFromItem", "missionPool"]
 const CHANNEL_PRIORITY := {"sim": 0, "view": 1, "audio": 2}
 
 

@@ -918,6 +918,19 @@
       "fit": "exact",
       "pending_manifest": true,
       "manifest_note": "2026-11-05 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
+    },
+    "ui_generator_premium": {
+      "usage": "PRODUCTION",
+      "license": "公司自有（北京Icon 资产汇总）",
+      "category": "棋子",
+      "use": "高级生成器图标（icon_20002010），库存面板投放用，按 132px 与 chip 同尺寸绘制",
+      "file_name": "generator_premium.png",
+      "source": "北京Icon/常用资产汇总/棋子icon/icon_20002010.png",
+      "target_size": "182×182",
+      "actual_size": "182×182",
+      "fit": "exact",
+      "pending_manifest": true,
+      "manifest_note": "2026-11-10 新增并同步登记 manifest v8；快照 v7 未含，M2 重建后本行可删"
     }
   }
 }

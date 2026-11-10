@@ -741,7 +741,16 @@ func _draw_fly(fly: Dictionary) -> void:
 	var base := cell_rect(b.x, b.y).grow(-float(CELL_GAP) * 0.5)
 	var half := base.size * 0.5
 	var item := {"entity": String(spawn.get("entity", "")), "level": int(spawn.get("level", 1))}
-	var texture := _chip_texture(item)
+	# 2026-11-10：飞下去的若是生成器，图标要用它自己的（和低级生成器区分开）。
+	var eid := String(item["entity"])
+	var kind := String(spawn.get("kind", ""))
+	if kind.is_empty():
+		kind = String(_as_dict(_entities.get(eid, {})).get("kind", "chip"))
+	var texture: Texture2D = null
+	if kind == "generator":
+		texture = _generator_texture(eid)
+	else:
+		texture = _chip_texture(item)
 	draw_set_transform(at, 0.0, Vector2.ONE)
 	if texture != null:
 		_draw_chip_texture(Rect2(-half, base.size), texture)
@@ -977,8 +986,21 @@ func _draw_ui_art(key: String, r: Rect2) -> bool:
 
 ## 2026-11-05: the generator is the project's own icon (猫形置物架) with the small
 ## 体力 lightning in its bottom-left corner. The x<charges> badge is hidden for now.
+## 生成器贴图：实体可以在 `visual.icon` 里指定自己的贴图 id（高级生成器用），
+## 没写的退回主题里的通用生成器图。飞行中的生成器也走这一份（操作者要求飞行图标一致）。
+func _generator_texture(entity_id: String) -> Texture2D:
+	if not entity_id.is_empty():
+		var ent: Dictionary = _as_dict(_entities.get(entity_id, {}))
+		var icon_id := String(_as_dict(ent.get("visual", {})).get("icon", ""))
+		if not icon_id.is_empty() and _asset_loader != null 				and _asset_loader.has_method("texture_for"):
+			var tex = _asset_loader.texture_for(icon_id)
+			if tex is Texture2D:
+				return tex
+	return _ui_texture(UI_GENERATOR)
+
+
 func _draw_generator(r: Rect2, item: Dictionary) -> void:
-	var icon := _ui_texture(UI_GENERATOR)
+	var icon := _generator_texture(String(item.get("entity", "")))
 	if icon != null:
 		_draw_chip_texture(r, icon)
 		_draw_stamina_badge(r)

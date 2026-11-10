@@ -385,6 +385,25 @@ func stockpile_preview() -> Dictionary:
 	if not want.is_empty() and lvl > 0:
 		stockpile_chip = {"entity": want, "level": lvl}
 		return stockpile_chip
+	# 2026-11-10：库存面板改投**高级生成器**（操作者要求）。
+	# 级别 = 本关单个子任务 clip 级别 - 1（例如任务要 lv2 → 生成器出 lv1）。
+	var gen := String(cfg.get("generator", ""))
+	if not gen.is_empty():
+		# 口径：取第一张未完成订单的**第一个子任务 clip** 的级别 - 1
+		# （与旧的面板预览同一条规则，只是产物从棋子换成了生成器）。
+		var best := 0
+		for order in orders:
+			if bool(order.get("done", false)):
+				continue
+			var mission: Array = order.get("mission", [])
+			if not mission.is_empty():
+				best = int((mission[0] as Dictionary).get("level", 1))
+			break
+		if best <= 0:
+			best = 2
+		stockpile_chip = {"kind": "generator", "entity": gen,
+				"level": clampi(best - 1, 1, _level_cap(gen))}
+		return stockpile_chip
 	for order in orders:
 		if bool(order.get("done", false)):
 			continue
@@ -426,8 +445,12 @@ func _do_stockpile_tap(_payload: Dictionary) -> Dictionary:
 	var spawn_entity := String(pick["entity"])
 	var spawn_level: int = clampi(int(pick["level"]), 1, _level_cap(spawn_entity))
 	board.put(free, spawn_entity, spawn_level)
+	# 2026-11-10：库存面板现在投的是**生成器**（带小闪电），不是固定棋子。
+	var spawn_kind := String(pick.get("kind", ""))
+	if spawn_kind.is_empty():
+		spawn_kind = String(model.entity(spawn_entity).get("kind", "chip"))
 	last_spawn = {"from": [-1, -1], "to": [free.x, free.y],
-			"entity": spawn_entity, "level": spawn_level}
+			"entity": spawn_entity, "level": spawn_level, "kind": spawn_kind}
 	stockpile_count = int(cfg.get("count", 0)) - 1
 	return _ok("stockpile spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
 
@@ -486,7 +509,14 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 		board_full_pending = true
 		return _err("SIM_BOARD_FULL", "board is full; charge kept")
 	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
-	var pool: Array = tap_pool(entity_id)
+	# 2026-11-10：高级生成器按**本关任务**出东西（`missionPool`）：
+	# 每张未完成订单的每个子任务都进池子，产出 entity = 任务要的系列，
+	# level = 该子任务级别 - 1（"更好一级"但不越级）。这样连点也不会只出一种。
+	var pool: Array = []
+	if bool(cfg.get("missionPool", false)):
+		pool = _mission_pool()
+	if pool.is_empty():
+		pool = tap_pool(entity_id)
 	if pool.is_empty():
 		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no usable output")
 	var idx: int = rng.pick_weighted(pool)
@@ -494,7 +524,12 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 		return _err("SIM_TAP_NO_GENERATOR", "weighted output pick failed")
 	var picked: Dictionary = pool[idx]
 	var spawn_entity := String(picked["entity"])
-	var spawn_level: int = clampi(int(picked["level"]), 1, _level_cap(spawn_entity))
+	var spawn_level: int = int(picked["level"])
+	# 2026-11-10：高级生成器的产出级别由**它自己的 level** 决定
+	# （库存面板投放时按"任务 clip 级别 - 1"定死），棋盘上的老生成器不受影响。
+	if bool(cfg.get("levelFromItem", false)) and not bool(cfg.get("missionPool", false)):
+		spawn_level = int(item.get("level", spawn_level))
+	spawn_level = clampi(spawn_level, 1, _level_cap(spawn_entity))
 	board.put(free, spawn_entity, spawn_level)
 	last_spawn = {"from": [pos.x, pos.y], "to": [free.x, free.y],
 			"entity": spawn_entity, "level": spawn_level}
@@ -646,6 +681,26 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 							board.put(cell, String(picked["entity"]), int(picked["level"]))
 					out.append({"cell": [cell.x, cell.y], "kind": k})
 	return out
+
+
+## 高级生成器的产出池：本关未完成订单的子任务行（entity 跟任务，level = 任务级别 - 1）。
+func _mission_pool() -> Array:
+	var pool: Array = []
+	for order in orders:
+		if bool(order.get("done", false)):
+			continue
+		for m in order.get("mission", []):
+			var entity := String((m as Dictionary).get("entity", ""))
+			if entity.is_empty():
+				continue
+			var need_lv := int((m as Dictionary).get("level", 1))
+			pool.append({
+				"entity": entity,
+				"level": clampi(need_lv - 1, 1, _level_cap(entity)),
+				"weight": 1.0,
+				"rare": false,
+			})
+	return pool
 
 
 ## A deterministic chip from any generator's pool (the box payout).
@@ -941,6 +996,7 @@ func snapshot() -> Dictionary:
 			"count": stockpile_remaining(),
 			"entity": String(stockpile_preview().get("entity", "")),
 			"level": int(stockpile_preview().get("level", 1)),
+			"kind": String(stockpile_preview().get("kind", "chip")),
 		},
 		"level_id": current_level_id(),
 		"hud": hud_snap,

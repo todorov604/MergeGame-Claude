@@ -115,5 +115,6 @@
       "9": "chip_clean_cd_lv09",
       "10": "chip_clean_cd_lv10"
     }
-  }
+  },
+  "generator_premium": "ui_generator_premium"
 }

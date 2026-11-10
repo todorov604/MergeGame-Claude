@@ -166,6 +166,15 @@
         "hue": "#F2C14E",
         "label": "Cd"
       }
+    },
+    "CleanBox_P": {
+      "kind": "generator",
+      "maxLevel": 3,
+      "visual": {
+        "hue": "#7E57C2",
+        "label": "Box+",
+        "icon": "ui_generator_premium"
+      }
     }
   },
   "generators": {
@@ -190,6 +199,19 @@
           "directOrder": true
         }
       ]
+    },
+    "CleanBox_P": {
+      "charges": 10,
+      "cooldown": 0.08,
+      "levelFromItem": true,
+      "missionPool": true,
+      "outputs": [
+        {
+          "entity": "CleanSet_Ca",
+          "weight": 100
+        }
+      ],
+      "rareOutputs": []
     }
   },
   "characters": {
@@ -610,8 +632,7 @@
       "stockpile": {
         "enabled": true,
         "count": 9,
-        "entity": "",
-        "level": 0
+        "generator": "CleanBox_P"
       },
       "blast": 2,
       "ice_seconds": 45
@@ -932,8 +953,7 @@
       "stockpile": {
         "enabled": true,
         "count": 9,
-        "entity": "",
-        "level": 0
+        "generator": "CleanBox_P"
       },
       "blast": 2
     }

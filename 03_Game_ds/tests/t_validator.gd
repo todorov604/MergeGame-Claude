@@ -45,11 +45,11 @@ func _test_sample_stats(t) -> void:
 	t.eq(int(r.stats.get("levels", -1)), 2, "sample declares 2 levels")
 	t.eq(int(r.stats.get("events", -1)), 21, "sample declares 21 events")
 	t.ok(is_equal_approx(float(r.stats.get("end_time", -1.0)), 30.0), "sample timeline ends at 30.0s", str(r.stats.get("end_time")))
-	t.eq(int(r.stats.get("entities", -1)), 17, "sample declares 17 entities")
+	t.eq(int(r.stats.get("entities", -1)), 18, "sample declares 18 entities")
 	# M1: data/themes/default ships chip_icons for CleanSet_Ca and CleanSet_Cb, ten
 	# levels each (20 refs), plus the icons.ui layout block (21 refs) the visual
 	# fidelity goal added, so the usage rule must see 41 theme asset refs.
-	t.eq(int(r.stats.get("asset_refs", -1)), 100, "default theme references its 40 chip icons + 60 layout icons")
+	t.eq(int(r.stats.get("asset_refs", -1)), 101, "default theme references its 40 chip icons + 61 layout icons")
 
 
 func _test_broken_fixtures(t) -> void:

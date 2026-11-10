@@ -182,3 +182,11 @@ v7 manifest 已把 `01_icon` 公司自研素材全部登记为 `PRODUCTION`（`R
 | `assets/ui/main_icon_exclamation1.png` | `ui_exclamation` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/exclamation.png` | `f64d3fefca1ff3f5e70602400ae1b462a86332accbb9ef1842c1d25b56a66616` |
 | `assets/ui/main_menu_frame1.png` | `ui_mission_frame_done` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/mission_frame_done.png` | `5f8e40d36b172f0d0d170506643f2d97bf499cb456e9ceb9225459bbc4acb5b9` |
 | `assets/ui/main_menu_frame2.png` | `ui_mission_frame_todo` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/剩余图标/mission_frame_todo.png` | `133eb167ee6f73ce0591fc344323bc8ca682edb585c6e2a0b4aa235f7585dd97` |
+
+## 2026-11-10 `ui_generator_premium`（generator_premium.png）
+
+- 来源：`北京Icon/常用资产汇总/棋子icon/icon_20002010.png`（182×182 RGBA）
+- 归档：`01_icon/HotelManor_icon/剩余图标/generator_premium.png`
+- 工程副本：`assets/ui/generator_premium.png`（1:1 复制，未裁切）
+- sha256：`fef0836ee4b0...`
+- 用途：库存面板（左上角）投放的高级生成器图标

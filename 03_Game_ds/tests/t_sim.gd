@@ -362,7 +362,7 @@ func _test_model(t) -> void:
 	t.ok(m.entity("nope").is_empty(), "unknown entity -> empty dict")
 	t.eq(int(m.generator("CleanBox_C").get("charges", -1)), 10, "generator charges are readable")
 	t.ok(m.generator("CleanSet_Ca").is_empty(), "a chip has no generator behaviour")
-	t.eq(m.entity_ids().size(), 17, "entity_ids lists 17 sample entities (8 chips + 9 characters)")
+	t.eq(m.entity_ids().size(), 18, "entity_ids lists 18 sample entities (8 chips + 9 characters + 1 generator)")
 	var hud: Dictionary = m.hud_initial()
 	for key in ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star", "gem", "exp"]:
 		t.ok(hud.has(key), "hud_initial carries " + key)

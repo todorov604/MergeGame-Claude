@@ -86,6 +86,8 @@ var _hold: Dictionary = {}
 var _stockpile_on: bool = false
 var _stockpile_count: int = 0
 var _stockpile_entity: String = ""
+## 2026-11-10：库存投的是棋子还是生成器（生成器用高级生成器图标）。
+var _stockpile_kind: String = "chip"
 var _stockpile_level: int = 0
 
 
@@ -375,13 +377,15 @@ func set_mission_have(order_id: String, index: int, have: int) -> bool:
 
 
 ## 库存面板的实时状态（次数 + 面板里那枚棋子）。启用库存就画，次数为 0 也照画。
-func set_stockpile(count: int, entity: String, level: int) -> void:
+func set_stockpile(count: int, entity: String, level: int, kind: String = "chip") -> void:
 	var changed := (not _stockpile_on) or _stockpile_count != count \
-			or _stockpile_entity != entity or _stockpile_level != level
+			or _stockpile_entity != entity or _stockpile_level != level \
+			or _stockpile_kind != kind
 	_stockpile_on = true
 	_stockpile_count = count
 	_stockpile_entity = entity
 	_stockpile_level = level
+	_stockpile_kind = kind
 	if changed and is_inside_tree():
 		queue_redraw()
 
@@ -872,7 +876,11 @@ func _draw_stockpile() -> void:
 	var rect := _stockpile_local_rect()
 	if not _draw_ui_fit("stockpile_frame", rect):
 		draw_rect(rect, Color("#DCE6F2"), true)
-	var chip := _chip_texture(_stockpile_entity, _stockpile_level)
+	var chip: Texture2D = null
+	if _stockpile_kind == "generator":
+		chip = _ui_texture("generator_premium")
+	if chip == null:
+		chip = _chip_texture(_stockpile_entity, _stockpile_level)
 	if chip != null:
 		draw_texture_rect(chip, rect.grow(-10.0), false)
 	# 参照设计图：绿箭头 46×56 贴右下，红点 62×62 压在面板上沿并往内收。

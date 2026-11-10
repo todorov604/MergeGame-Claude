@@ -33,7 +33,8 @@ const EventModel = preload("res://src/core/event_model.gd")
 
 
 static func build(seed_value: int, fps: int, duration: float, cursor: Array,
-		clicks: Array, timeline: Array, project_path: String, drag: Array = []) -> Dictionary:
+		clicks: Array, timeline: Array, project_path: String, drag: Array = [],
+		band: Array = []) -> Dictionary:
 	return {
 		"schema": SCHEMA,
 		"seed": seed_value,
@@ -43,8 +44,43 @@ static func build(seed_value: int, fps: int, duration: float, cursor: Array,
 		"cursor": cursor.duplicate(true),
 		"clicks": clicks.duplicate(true),
 		"drag": drag.duplicate(true),
+		# 2026-11-10：订单带拖拽的**真实偏移** ⟨t, dx⟩，成片直接回放，不做任何猜测
+		"band": band.duplicate(true),
 		"timeline": timeline.duplicate(true),
 	}
+
+
+## 订单带偏移：[[t, dx], ...]，按时间线性插值；没有记录就返回 0（成片**不猜**手势）。
+static func band_at(take: Dictionary, t: float) -> float:
+	var rows = take.get("band", [])
+	if typeof(rows) != TYPE_ARRAY or (rows as Array).is_empty():
+		return 0.0
+	var arr: Array = rows
+	var prev_t := -1.0
+	var prev_dx := 0.0
+	for raw in arr:
+		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 2:
+			continue
+		var at := float((raw as Array)[0])
+		var dx := float((raw as Array)[1])
+		if at <= t:
+			prev_t = at
+			prev_dx = dx
+			continue
+		if prev_t < 0.0:
+			# 2026-11-10：第一条采样**之前**必须归位。以前直接返回首条采样的值，
+			# 成片从第 0 帧起整排就被推开（操作者："完全跟不上游戏的节奏"）。
+			return 0.0
+		# 2026-11-10：采样之间隔得久（> 0.12s）说明那段是**静止**（手没碰任务栏）。
+		# 跨空档做线性插值会让整排在没拖的时候慢慢漂移 —— 操作者报"完全跟不上游戏的节奏"。
+		# 所以空档内一律保持上一个值，到下一条采样的时刻直接跳到新值（拖动本身采样很密，
+		# 真正的拖动过程仍然是平滑插值）。
+		var span := at - prev_t
+		if span > 0.12:
+			return prev_dx
+		var k := clampf((t - prev_t) / maxf(span, 0.0001), 0.0, 1.0)
+		return lerpf(prev_dx, dx, k)
+	return prev_dx
 
 
 ## 拖动轨迹取样：{from: [x,y], pos: Vector2} 或 {}（不在拖动中）。

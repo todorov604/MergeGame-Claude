@@ -229,7 +229,7 @@ var _energy_ticks: Array = []
 var _energy_display: float = -1.0
 var _energy_pop_at: float = -1000.0
 var _board_level := -1
-var _band_level := -1
+var _band_dx := 0.0
 var _guard_blocked: Array = []
 var _rejected: Array = []
 var _colors: Dictionary = {}
@@ -1363,6 +1363,10 @@ func _sync_live_board() -> void:
 		if not level.is_empty():
 			_live_board.build_from_level_data(level, _model.project.get("entities", {}), {})
 	_live_board.set_clock(_t)
+	# 2026-11-10：冰块倒计时必须跟成片时钟走 —— 以前成片从不调 `set_ice_elapsed`，
+	# 所有冰（关卡自带 + 蓝盒子炸出来的）都停在起始值不动（操作者报"倒计时不跳"）。
+	_live_board.set_ice_elapsed(_t)
+	_sync_band_drag()
 	# 2026-11-10：障碍逐帧同步（解锁 / 盒子换型要立刻显示，否则画面上是空白格）
 	var bsnap: Dictionary = (_snap.get("board", {}) as Dictionary)
 	_live_board.set_obstacles(bsnap.get("obstacles", []))
@@ -1606,12 +1610,28 @@ func _setup_live_bottom() -> void:
 	_live_bottom.set_asset_theme(_theme_loader, _model.project)
 
 
+## 订单带拖拽回放：**只认 take 里记的真实偏移**（`band: [[t, dx], ...]`），
+## 实机在拖动和回弹的每一帧都会记一行，成片按时间插值直接套上去。
+## 没有 `band` 记录 = 这一版录制里根本没拖过任务栏 → **一点都不动**。
+## （之前用"光标在区域里 + 横向位移"反推，结果光标只是划过就整排跟着走，操作者报了两次。）
+func _sync_band_drag() -> void:
+	if _live_band == null or _take.is_empty():
+		return
+	var dx: float = TakeIo.band_at(_take, _t)
+	if absf(dx - _band_dx) <= 0.05:
+		return
+	_band_dx = dx
+	_live_band.set_row_offset(_band_dx)
+
+
+
+
 func _sync_live_band() -> void:
 	if _live_band == null or _snap.is_empty():
 		return
 	var idx := int(_snap.get("level_index", 0))
-	if idx != _band_level:
-		_band_level = idx
+	if idx != _board_level:
+		_board_level = idx
 		var level: Dictionary = _model.level(idx)
 		if not level.is_empty():
 			_live_band.build_from_level(level)

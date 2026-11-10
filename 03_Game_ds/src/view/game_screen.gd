@@ -686,6 +686,8 @@ var _rec_clicks: Array = []
 var _rec_events: Array = []
 ## 拖动轨迹：[[t, from_x, from_y, pos_x, pos_y], ...]，成片按它回放"手拖着棋子走"。
 var _rec_drag: Array = []
+## 2026-11-10：订单带拖拽的**真实偏移**（成片直接回放，不再靠光标猜手势）
+var _rec_band: Array = []
 var _rec_last: Vector2 = Vector2(-1.0e9, -1.0e9)
 var _take_path: String = ""
 var _cursor_layer = null
@@ -1259,6 +1261,17 @@ func _refresh_anchors() -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+		_record_band(_row_dx)
+	elif not _row_dragging and not is_zero_approx(_row_dx) and orders != null:
+		# 2026-11-10：回弹收尾必须**归零并记一行**，否则 take 最后一条是 0.4~0.6 的残余，
+		# 成片会一直停在偏一点的位置。
+		_row_dx = 0.0
+		orders.set_row_offset(0.0)
+		_record_band(0.0)
+	# 2026-11-10：兜底 —— 每帧把**画面上真正用的偏移**记一次，不管是谁改的
+	# （拖动 / 回弹 / 以后新增的路径），成片永远和实机同拍。
+	if _recording and orders != null:
+		_record_band(orders.row_offset())
 	if _preview_pending > 0.0 and _window_fix_frames < 176:
 		_cycle_preview(_preview_pending)
 		_preview_pending = 0.0
@@ -1806,6 +1819,17 @@ func _process(delta: float) -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+		_record_band(_row_dx)
+	elif not _row_dragging and not is_zero_approx(_row_dx) and orders != null:
+		# 2026-11-10：回弹收尾必须**归零并记一行**，否则 take 最后一条是 0.4~0.6 的残余，
+		# 成片会一直停在偏一点的位置。
+		_row_dx = 0.0
+		orders.set_row_offset(0.0)
+		_record_band(0.0)
+	# 2026-11-10：兜底 —— 每帧把**画面上真正用的偏移**记一次，不管是谁改的
+	# （拖动 / 回弹 / 以后新增的路径），成片永远和实机同拍。
+	if _recording and orders != null:
+		_record_band(orders.row_offset())
 	if _preview_pending > 0.0 and _window_fix_frames < 176:
 		_cycle_preview(_preview_pending)
 		_preview_pending = 0.0
@@ -1951,6 +1975,9 @@ func _input(event: InputEvent) -> void:
 		if _row_dragging and orders != null:
 			_row_dx = dx * ROW_RUBBER
 			orders.set_row_offset(_row_dx)
+			# 2026-11-10：**跟手这一段必须进 take**。之前只在回弹里 record，
+			# 成片要等松手后才看到任务栏动（操作者："鼠标飞出去老远才跟着动"）。
+			_record_band(_row_dx)
 	if not _free_mode or _freeze:
 		return
 	if event is InputEventMouseButton:
@@ -2005,6 +2032,18 @@ func _begin_press(point: Vector2) -> void:
 ## A press on a chip that moves more than DRAG_THRESHOLD becomes a drag: the chip and
 ## its white frame follow the pointer (board_view renders both), selection is dropped.
 ## 记一帧拖动位置（时间 + 起点格 + 当前中心点）。
+## 订单带偏移取样：只在录制中、且值真的变了才记一行。
+func _record_band(dx: float) -> void:
+	if not _recording:
+		return
+	var at := _rec_offset()
+	if not _rec_band.is_empty():
+		var last: Array = _rec_band[_rec_band.size() - 1]
+		if absf(float(last[1]) - dx) < 0.05 and at - float(last[0]) < 0.008:
+			return
+	_rec_band.append([snappedf(at, 0.001), snappedf(dx, 0.1)])
+
+
 func _rec_drag_sample(at: Vector2) -> void:
 	if not _recording or not _dragging:
 		return
@@ -2585,7 +2624,7 @@ func _stop_recording() -> void:
 	_recording = false
 	_sample_cursor(true)
 	var take := TakeIo.build(_seed, TAKE_FPS, _rec_offset(), _rec_cursor, _rec_clicks,
-			_rec_events, SAMPLE_PROJECT, _rec_drag)
+			_rec_events, SAMPLE_PROJECT, _rec_drag, _rec_band)
 	var check: Dictionary = TakeIo.validate(take)
 	if not bool(check.get("ok", false)):
 		print("[game] take invalid: " + str(check.get("errors", [])))
@@ -2658,6 +2697,17 @@ func _reset_run() -> void:
 		# rubber band: the row eases back to its home position in ~0.25 s at 60 fps
 		_row_dx = lerpf(_row_dx, 0.0, 0.22)
 		orders.set_row_offset(_row_dx)
+		_record_band(_row_dx)
+	elif not _row_dragging and not is_zero_approx(_row_dx) and orders != null:
+		# 2026-11-10：回弹收尾必须**归零并记一行**，否则 take 最后一条是 0.4~0.6 的残余，
+		# 成片会一直停在偏一点的位置。
+		_row_dx = 0.0
+		orders.set_row_offset(0.0)
+		_record_band(0.0)
+	# 2026-11-10：兜底 —— 每帧把**画面上真正用的偏移**记一次，不管是谁改的
+	# （拖动 / 回弹 / 以后新增的路径），成片永远和实机同拍。
+	if _recording and orders != null:
+		_record_band(orders.row_offset())
 	if _preview_pending > 0.0 and _window_fix_frames < 176:
 		_cycle_preview(_preview_pending)
 		_preview_pending = 0.0

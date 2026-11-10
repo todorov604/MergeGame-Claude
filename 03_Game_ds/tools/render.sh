@@ -168,8 +168,10 @@ PYEOF
 fi
 case "$FRAMES" in ''|*[!0-9]*) fail "invalid frame count: '$FRAMES'" ;; esac
 [ "$FRAMES" -gt 0 ] || fail "frame count must be > 0"
-if [ "$FRAMES" -gt 3600 ]; then
-	fail "frame count $FRAMES exceeds the 60 s M0 guard (fix the timeline, not the guard)"
+# 60 s M0 护栏：默认仍然拦，但**长录制（操作者的真实 take）**可以显式放行：
+#   RENDER_ALLOW_LONG=1 bash tools/render.sh --take <长 take>
+if [ "$FRAMES" -gt 3600 ] && [ "${RENDER_ALLOW_LONG:-0}" != "1" ]; then
+	fail "frame count $FRAMES exceeds the 60 s M0 guard (set RENDER_ALLOW_LONG=1 for a real long take)"
 fi
 
 # Determinism needs two takes. Short takes are cheap, so they always get one;

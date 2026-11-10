@@ -37,6 +37,7 @@ func run(t) -> void:
 	_test_claim(t)
 	_test_claim_consumes_the_clicked_cell(t)
 	_test_blast_radius_from_json(t)
+	_test_ice_waits_for_its_own_timer(t)
 	_test_claim_reports_consumed_cells(t)
 	_test_claim_unsatisfied_is_pure(t)
 	_test_level_flow(t)
@@ -926,3 +927,47 @@ class StateDigestProbe:
 	static func of(value) -> String:
 		var StateDigest := load("res://src/core/state_digest.gd")
 		return StateDigest.of(value)
+
+
+## 2026-11-10：冰**不受合并爆炸影响**，只能等自己的倒计时到点化掉。
+## 第 1 关的冰块时长由关卡 JSON 的 `ice_seconds` 决定（45 秒 → 显示 00:45）。
+func _test_ice_waits_for_its_own_timer(t) -> void:
+	var PM = load("res://src/core/project_model.gd")
+	var Sim = load("res://src/core/sim.gd")
+	var m = PM.new()
+	var data := {
+		"entities": {"CleanSet_Ca": {"kind": "chip", "max_level": 7}},
+		"generators": {},
+		"hud": {"coin": 0, "gem": 0, "energy": 0},
+		"levels": [{
+			"id": "ice_level",
+			"level_number": 1,
+			"blast": 2,
+			"ice_seconds": 45,
+			"board": {"width": 7, "height": 9, "slots": [
+				{"slot": [2, 3], "entity": "CleanSet_Ca", "level": 1},
+				{"slot": [3, 3], "entity": "CleanSet_Ca", "level": 1},
+				{"slot": [3, 4], "entity": "CleanSet_Ca", "level": 1},
+			]},
+			"obstacles": [{"slot": [3, 5], "type": "ice"}],
+			"orders": [],
+		}],
+	}
+	m.load_data(data)
+	var sim = Sim.new()
+	sim.setup(m, 1)
+	var ice_cell := Vector2i(3, 5)
+	t.ok(sim.board.obstacle_types(ice_cell).has("ice"), "冰在棋盘上")
+	t.eq(sim.ice_remaining(ice_cell), 45, "第 1 关的冰剩 45 秒（JSON 的 ice_seconds）")
+
+	# 在冰旁边合并：爆炸半径 2 覆盖到它，但冰不许被炸开
+	var res: Dictionary = sim.apply({"type": "merge", "payload": {"from": [2, 3], "to": [3, 3]}})
+	t.ok(bool(res.get("ok", false)), "合并成功 " + str(res.get("code", "")))
+	t.ok(sim.board.obstacle_types(ice_cell).has("ice"), "爆炸不波及冰块")
+	t.eq(sim.tick_to(44.0).size(), 0, "44 秒还没到点，不化")
+	t.eq(sim.ice_remaining(ice_cell), 1, "44 秒时剩 1 秒")
+
+	# 到点：自己化掉，并放出里面的棋子
+	sim.tick_to(45.05)
+	t.ok(not sim.board.obstacle_types(ice_cell).has("ice"), "45 秒到点自动化掉")
+	t.ok(sim.board.has_item(ice_cell), "化掉后格子里有棋子")

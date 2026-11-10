@@ -613,7 +613,8 @@
         "entity": "",
         "level": 0
       },
-      "blast": 2
+      "blast": 2,
+      "ice_seconds": 45
     },
     {
       "id": "level_2",

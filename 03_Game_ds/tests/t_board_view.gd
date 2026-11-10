@@ -40,6 +40,7 @@ func run(t) -> void:
 	_degraded(t)
 	_box_ice(t)
 	_box_flash(t)
+	_melt_effect(t)
 
 
 ## The numbers themselves, so a future edit that rounds them "to taste" fails here
@@ -367,3 +368,15 @@ func _box_flash(t) -> void:
 	for row in v.unlock_rows():
 		shown.append(String((row as Dictionary).get("shown", "")))
 	t.eq(str(shown), str(["icebox", "web"]), "盒子炸开闪的是冰/网，不是问号")
+
+
+## 2026-11-10：冰到点自己化掉 → 播"扩大消失"（melt），倒计时数字用 sim 给的剩余秒数。
+func _melt_effect(t) -> void:
+	var v = BoardView.new()
+	v.melt(Vector2i(2, 3), "ice", 0.0)
+	var rows: Array = v.unlock_rows()
+	t.eq((rows as Array).size(), 1, "融化动画进队")
+	t.ok(bool((rows[0] as Dictionary).get("melt", false)), "标记成 melt（放大到 1.9 倍）")
+	t.eq(String((rows[0] as Dictionary).get("shown", "")), "ice", "画的是冰")
+	v.set_ice_remaining_map({Vector2i(2, 3): 45})
+	t.eq(int(v.ice_remaining_for(Vector2i(2, 3))), 45, "倒计时读 sim 给的 45 秒")

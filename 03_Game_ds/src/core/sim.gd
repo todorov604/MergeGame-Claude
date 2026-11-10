@@ -40,6 +40,8 @@ var hud: Dictionary = {}
 var orders: Array = []
 var generator_state: Dictionary = {}
 var level_complete_pending: bool = false
+## 2026-11-10：冰只按**自己的倒计时**融化（爆炸不再波及）。这里记每格冰出现的关卡时刻。
+var ice_since: Dictionary = {}
 var board_full_pending: bool = false
 var log_events: Array = []
 var seed_value: int = 0
@@ -79,6 +81,12 @@ func _load_level(index: int) -> void:
 	# 2026-11-05: the badge number comes from the level data, not from its index.
 	_apply_level_number(lvl, index)
 	board.load_level(lvl)
+	# 2026-11-10：关卡自带的冰从关卡开始计时。
+	ice_since = {}
+	for cell in board.obstacles.keys():
+		var kinds0: Array = board.obstacle_types(cell)
+		if kinds0.has("ice") or kinds0.has("icebox"):
+			ice_since[cell] = 0.0
 	# Multi-cell safeboxes: the level declares the sizes it wants (e.g. ["1x7","2x4"]);
 	# their cells are blocked for the whole level, so no spawn/drop/merge lands there.
 	safeboxes = []
@@ -541,6 +549,51 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
 
 
+## 冰的倒计时长度（秒）。关卡 JSON 的 `ice_seconds` 是**关卡自带冰**的时长
+## （第 1 关配成 45 秒，显示 00:45）；盒子开出来的 `icebox` 仍按 5~10 分钟。
+func ice_seconds(kind: String, cell: Vector2i) -> int:
+	if kind == "icebox":
+		return IceCell.start_seconds_between(cell, 5 * 60, 10 * 60)
+	var raw = model.level(int(level_index)).get("ice_seconds", 0)
+	if typeof(raw) == TYPE_INT or typeof(raw) == TYPE_FLOAT:
+		var v := int(raw)
+		if v > 0:
+			return v
+	return IceCell.start_seconds(cell)
+
+
+## 某格冰还剩多少秒（给视图显示用，和融化判定同一份算法）。
+func ice_remaining(cell: Vector2i) -> int:
+	if not ice_since.has(cell):
+		return 0
+	var kinds: Array = board.obstacle_types(cell)
+	var kind := "icebox" if kinds.has("icebox") else "ice"
+	var start := float(ice_since[cell])
+	return maxi(ice_seconds(kind, cell) - int(floor(maxf(time - start, 0.0))), 0)
+
+
+## 时间推进到 `t`：到点的冰**自己化掉**（这是冰唯一的解锁方式）。
+## 返回 [{"cell": [x, y], "kind": "ice"/"icebox", "melt": true}, ...]，实机与成片各播一次。
+func tick_to(t: float) -> Array:
+	time = maxf(time, t)
+	var out: Array = []
+	for cell in ice_since.keys():
+		var kinds: Array = board.obstacle_types(cell)
+		if not kinds.has("ice") and not kinds.has("icebox"):
+			continue
+		if ice_remaining(cell) > 0:
+			continue
+		var kind := "icebox" if kinds.has("icebox") else "ice"
+		if board.remove_obstacle(cell, kind):
+			var frozen := IceCell.chip(model.project, cell)
+			if not frozen.is_empty() and not board.has_item(cell):
+				board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
+						int(frozen.get("level", 1)))
+			ice_since.erase(cell)
+			out.append({"cell": [cell.x, cell.y], "kind": kind, "melt": true})
+	return out
+
+
 ## 合并炸开的半径：来自关卡 JSON 的 `blast`（1 = 上下左右四个邻格；2 = 曼哈顿距离再外一层）。
 func blast_radius() -> int:
 	var raw = model.level(int(level_index)).get("blast", 1)
@@ -566,6 +619,9 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 				var k := String(kind)
 				if k == "safe":
 					continue
+				# 2026-11-10：冰**只能等时间到**自己化掉，合并的爆炸不许波及。
+				if k == "ice" or k == "icebox":
+					continue
 				# 2026-11-10：蓝盒子（lock）不再是死物 —— 砸开后变成**网 + 棋子**
 				# 或 **冰 + 棋子（倒计时 5~10 分钟）**，二选一按格子坐标定死（成片可复现）。
 				if k == "lock":
@@ -574,6 +630,8 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 						var h := absi(cell.x * 73856093 ^ cell.y * 19349663)
 						var rolled := "icebox" if (h >> 5) % 2 == 1 else "web"
 						board.add_obstacle(cell, rolled)
+						if rolled == "icebox":
+							ice_since[cell] = time
 						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": rolled})
 					continue
 				if board.remove_obstacle(cell, k):

@@ -176,6 +176,8 @@ var _font_display: Font = null
 ## Level time used by the ice countdown; the screen feeds its own clock, the film
 ## feeds frame/FPS. Same input -> same label, so preview and film stay identical.
 var ice_elapsed: float = 0.0
+## 2026-11-10：每格冰剩余秒数由 **sim** 算好推进来（`ice_seconds` 可配成 45 秒）。
+var _ice_left: Dictionary = {}
 ## Spawn flight: {"spawn": sim.last_spawn, "started": level time}. While it runs the
 ## produced chip is drawn on the arc instead of its slot.
 ## Spawn flights, one per accepted tap: [{"spawn", "started"}]. Rapid taps each get
@@ -783,14 +785,18 @@ func _draw_unlocks() -> void:
 	var alive: Array = []
 	for row in _unlocks:
 		var started := float((row as Dictionary).get("started", 0.0))
-		var t := (_clock - started) / 0.35
+		var dur := 0.45 if bool((row as Dictionary).get("melt", false)) else 0.35
+		var t := (_clock - started) / dur
 		if t >= 1.0:
 			continue
 		alive.append(row)
 		var cell: Vector2i = (row as Dictionary).get("cell", Vector2i(-1, -1))
 		var kind := String((row as Dictionary).get("kind", ""))
 		var base := cell_rect(cell.x, cell.y).grow(-float(CELL_GAP) * 0.5)
-		var scale: float = 1.0 + 0.6 * t
+		var melt := bool((row as Dictionary).get("melt", false))
+		# 2026-11-10：冰是"时间到 → 自己化掉"，效果做成**扩大消失**
+		# （1.0 → 1.9 倍，同时淡到 0），比爆炸解锁的 1.6 倍更明显。
+		var scale: float = 1.0 + (1.9 - 1.0) * t if melt else 1.0 + 0.6 * t
 		var alpha: float = clampf(1.0 - t, 0.0, 1.0)
 		var shown := String((row as Dictionary).get("shown", kind))
 		var tex: Texture2D = null
@@ -1094,6 +1100,21 @@ func obstacles_has_kind(key: Vector2i, kind: String) -> bool:
 	return String(_obstacles.get(key, "")) == kind
 
 
+## sim 给的每格剩余秒数：{cell: seconds}。没有条目时退回旧的按时间推算。
+func set_ice_remaining_map(rows: Dictionary) -> void:
+	_ice_left = rows.duplicate()
+
+
+## 冰到点自己化掉：播一次"扩大消失"（实机与成片同一套绘制）。
+func melt(cell: Vector2i, kind: String, started_at: float = -1.0) -> void:
+	if cell.x < 0:
+		return
+	_unlocks.append({"cell": cell, "kind": kind, "shown": kind, "melt": true,
+			"started": _clock if started_at < 0.0 else started_at})
+	set_process(true)
+	queue_redraw()
+
+
 func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
 	if frozen.is_empty():
 		return
@@ -1103,10 +1124,14 @@ func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
 		return
 	var font := _font_display
 	# 2026-11-10：盒子开出来的冰（icebox）倒计时 5~10 分钟，关卡自带的冰仍是 10~20 分钟
-	var start := IceCell.start_seconds(key)
-	if obstacles_has_kind(key, "icebox"):
-		start = IceCell.start_seconds_between(key, 5 * 60, 10 * 60)
-	var left := clampi(start - int(floor(maxf(ice_elapsed, 0.0))), 0, IceCell.MAX_SECONDS)
+	var left := -1
+	if _ice_left.has(key):
+		left = int(_ice_left[key])
+	if left < 0:
+		var start := IceCell.start_seconds(key)
+		if obstacles_has_kind(key, "icebox"):
+			start = IceCell.start_seconds_between(key, 5 * 60, 10 * 60)
+		left = clampi(start - int(floor(maxf(ice_elapsed, 0.0))), 0, IceCell.MAX_SECONDS)
 	var text := IceCell.format_clock(left)
 	var size := 26
 	var baseline := Vector2(r.position.x, r.end.y - 8.0)
@@ -1723,3 +1748,8 @@ func build_from_level_data(level_data: Dictionary, entities: Dictionary,
 	out["obstacles"] = _obstacles.size()
 	out["obstacle_types"] = obstacle_types()
 	return out
+
+
+## 测试用：视图里这一格显示的剩余秒数（-1 = 没数据）。
+func ice_remaining_for(cell: Vector2i) -> int:
+	return int(_ice_left.get(cell, -1))

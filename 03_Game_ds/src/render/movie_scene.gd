@@ -1366,10 +1366,29 @@ func _sync_live_board() -> void:
 	# 2026-11-10：冰块倒计时必须跟成片时钟走 —— 以前成片从不调 `set_ice_elapsed`，
 	# 所有冰（关卡自带 + 蓝盒子炸出来的）都停在起始值不动（操作者报"倒计时不跳"）。
 	_live_board.set_ice_elapsed(_t)
+	# 2026-11-10：冰到点自己化掉（和实机同一条 sim 路径），成片播"扩大消失"。
+	if _evaluator != null and _evaluator.sim != null:
+		for row in _evaluator.sim.tick_to(_t):
+			var mc = (row as Dictionary).get("cell", [])
+			if typeof(mc) == TYPE_ARRAY and (mc as Array).size() >= 2:
+				_live_board.melt(Vector2i(int((mc as Array)[0]), int((mc as Array)[1])),
+						String((row as Dictionary).get("kind", "ice")), _t)
 	_sync_band_drag()
 	# 2026-11-10：障碍逐帧同步（解锁 / 盒子换型要立刻显示，否则画面上是空白格）
 	var bsnap: Dictionary = (_snap.get("board", {}) as Dictionary)
 	_live_board.set_obstacles(bsnap.get("obstacles", []))
+	# 倒计时数字 = sim 的剩余秒数（第 1 关从 00:45 起跳）
+	if _evaluator != null and _evaluator.sim != null:
+		var left := {}
+		for row in (bsnap.get("obstacles", []) as Array):
+			if typeof(row) != TYPE_ARRAY or (row as Array).size() < 3:
+				continue
+			var kinds: Array = (row as Array)[2]
+			if not (kinds.has("ice") or kinds.has("icebox")):
+				continue
+			var icell := Vector2i(int((row as Array)[0]), int((row as Array)[1]))
+			left[icell] = _evaluator.sim.ice_remaining(icell)
+		_live_board.set_ice_remaining_map(left)
 	# FlyAnim 的起点/落点全部来自实机几何：每帧刷新，芯片才会从"被点的那个格子"起飞。
 	_refresh_flight_anchors()
 	# 拖动回放：手拖着棋子走，起点格保留四边选中框（与实机同一套绘制）

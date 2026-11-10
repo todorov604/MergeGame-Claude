@@ -1151,6 +1151,18 @@ func _sync_from_sim() -> void:
 			_generators_live(snap))
 	board.apply_state({"selected": _to_array(_selected), "completed": _completed_cells(snap)})
 	board.set_clock(_clock)
+	# 2026-11-10：倒计时数字用 sim 的剩余秒数（第 1 关的冰 45 秒，显示 00:45）。
+	if evaluator != null and evaluator.sim != null and board.has_method("set_ice_remaining_map"):
+		var left := {}
+		for row in (snap.get("board", {}) as Dictionary).get("obstacles", []):
+			if typeof(row) != TYPE_ARRAY or (row as Array).size() < 3:
+				continue
+			var kinds: Array = (row as Array)[2]
+			if not (kinds.has("ice") or kinds.has("icebox")):
+				continue
+			var icell := Vector2i(int((row as Array)[0]), int((row as Array)[1]))
+			left[icell] = evaluator.sim.ice_remaining(icell)
+		board.set_ice_remaining_map(left)
 	if board.has_method("set_safeboxes") and evaluator != null and evaluator.sim != null:
 		board.set_safeboxes(evaluator.sim.safeboxes)
 	hud.build_from_hud(_as_dict(snap.get("hud", {})))
@@ -1788,6 +1800,16 @@ func _process(delta: float) -> void:
 	_clock += delta
 	if board != null and board.has_method("set_ice_elapsed"):
 		board.set_ice_elapsed(_clock)
+	# 2026-11-10：冰到点自己化掉（唯一的解锁方式）。先推进 sim，再播"扩大消失"。
+	if evaluator != null and evaluator.sim != null:
+		var melts: Array = evaluator.sim.tick_to(_clock)
+		if not melts.is_empty():
+			for row in melts:
+				var mc = (row as Dictionary).get("cell", [])
+				if typeof(mc) == TYPE_ARRAY and (mc as Array).size() >= 2:
+					board.melt(Vector2i(int((mc as Array)[0]), int((mc as Array)[1])),
+							String((row as Dictionary).get("kind", "ice")), _clock)
+			_sync_from_sim()
 	if _autoplay:
 		while evaluator.cursor < evaluator.events.size():
 			var ev: Dictionary = evaluator.events[evaluator.cursor]

@@ -602,6 +602,11 @@ func _draw() -> void:
 					continue
 				if _is_fly_target(cell):
 					continue
+				# 2026-11-11：**被障碍盖住的格子不画真实棋子** —— 网 / 冰 自己在障碍层
+				# 画了"被扣住的那一枚"，再画一遍会盖在网上面（操作者：网要在上面）。
+				var kinds_here: Array = _obstacles_for(cell)
+				if kinds_here.has("web") or kinds_here.has("ice") or kinds_here.has("icebox"):
+					continue
 				_draw_item_pulsed(cell, _items[cell])
 
 	for cell in _completed.keys():
@@ -1070,6 +1075,16 @@ func set_obstacles(rows: Array) -> void:
 			return
 	_obstacles = next
 	queue_redraw()
+
+
+## 某格身上的障碍种类（数组）。
+func _obstacles_for(cell: Vector2i) -> Array:
+	if not _obstacles.has(cell):
+		return []
+	var raw = _obstacles[cell]
+	if typeof(raw) == TYPE_ARRAY:
+		return raw
+	return [String(raw)]
 
 
 func _draw_obstacle(key: Vector2i, type: String) -> void:

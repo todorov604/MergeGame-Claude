@@ -2103,6 +2103,11 @@ func _maybe_start_drag(point: Vector2) -> void:
 		return
 	if _press_cell.x < 0 or not evaluator.sim.board.has_item(_press_cell):
 		return
+	# 2026-11-11：**被障碍盖住的棋子不能拖**（网 / 冰 / 锁盒 / 柜子）。
+	# 网下面那枚棋子是"被扣住"的，只能靠拖一枚同款过来解锁；
+	# 以前这里没判断，能把它拖出来，看起来还把蜘蛛网一起拽走了。
+	if evaluator.sim.board.is_blocked(_press_cell):
+		return
 	var item: Dictionary = evaluator.sim.board.item(_press_cell)
 	var entity_id := String(item.get("entity", ""))
 	# 2026-11-05: generators are draggable too — releasing on a free cell moves them.
@@ -2219,8 +2224,16 @@ func _end_press(release_point: Vector2) -> void:
 					board.pulse(to, "merge" if kind == FreeMode.ACTION_MERGE else "settle", _clock)
 				if kind == FreeMode.ACTION_MERGE:
 					_play_unlocks()
-			print("[game] drag %s %s -> %s ok=%s" % [event_type, str(from), str(to),
-					str(result.get("ok", false))])
+			print("[game] drag %s %s -> %s ok=%s code=%s" % [event_type, str(from), str(to),
+					str(result.get("ok", false)), String(result.get("code", ""))])
+			# 2026-11-11：拖到蜘蛛网被拒时，把"网上压的是什么、你拖的是什么"打出来，
+			# 免得操作者以为功能没生效（只有同款同级才解锁 + 升级）。
+			if not bool(result.get("ok", false)) 					and evaluator.sim.board.obstacle_types(to).has("web"):
+				var hidden: Dictionary = evaluator.sim.board.item(to)
+				var dragged: Dictionary = evaluator.sim.board.item(from)
+				print("[web] 网上压的是 %s lv%d，你拖的是 %s lv%d（必须同款同级）" % [
+						String(hidden.get("entity", "?")), int(hidden.get("level", 0)),
+						String(dragged.get("entity", "?")), int(dragged.get("level", 0))])
 			_record_click(point, {"kind": event_type, "ok": bool(result.get("ok", false)),
 					"cell": [to.x, to.y]})
 		else:
@@ -2467,6 +2480,9 @@ func _confirm_badge_hit(point: Vector2) -> bool:
 			continue
 		if not orders.confirm_badge_rect(oid).has_point(local):
 			continue
+		# 先锁住任务栏这一瞬的数字/颜色，再让棋子飞走（操作者要求）。
+		if orders.has_method("lock_row_display"):
+			orders.lock_row_display(oid)
 		_confirm_order(oid)
 		_last_click_at = _clock
 		_last_click_point = _mouse_canvas_point()

@@ -203,8 +203,9 @@ func board_count(entity: String, level: int) -> int:
 
 func set_clock(t: float) -> void:
 	_clock_now = t
-	_promote_full_cards()
-	_reorder_cards()
+	# 2026-11-11（排序重写）：只保留**一套**排序 —— 绿底大对号（整卡全满）靠前，
+	# 组内按"谁先满"（FIFO），非绿组保持原有相对顺序；动画期间完全冻结。
+	_sort_queue()
 	var moving := false
 	for cid in _target_x.keys():
 		var target := float(_target_x[cid])
@@ -259,22 +260,9 @@ func card_index(order_id: String) -> int:
 ## 把目标卡**提到最前**（橡皮筋效果由 _x_now 的缓动给出：所有卡从旧位置滑到新位置）。
 ## 已经在首位就返回 0；否则返回滑行需要的秒数，调用方据此延迟飞行/落袋。
 func reveal_card(order_id: String, seconds: float = 0.26) -> float:
-	var idx := card_index(order_id)
-	if idx < 0 or idx == 0:
-		return 0.0
-	# 2026-11-10：**已经在画面里的前几张不换位** —— 原地收集，收集完再按完成度重排。
-	# 否则会出现"第 2 张先跑到第 1 位收集、收集完又跳回去"的来回晃动（操作者报的）。
-	if idx < VISIBLE_CARDS:
-		return 0.0
-	var moved: Dictionary = cards[idx]
-	cards.remove_at(idx)
-	cards.insert(0, moved)
-	_pinned_id = order_id
-	_promoted_id = order_id
-	_pinned_until = _clock_now + maxf(seconds, 0.18) + 0.30
-	_layout()
-	queue_redraw()
-	return maxf(seconds, 0.18)
+	# 2026-11-11（排序重写）：**不再为了交付把卡提到最前** —— 顺序只由"绿/非绿"决定。
+	# 保留签名（调用方还在用它算延迟），返回值恒 0 表示没有滑行延迟。
+	return 0.0
 
 
 func set_row_offset(dx: float) -> void:
@@ -355,6 +343,18 @@ func sync_orders(rows: Array) -> void:
 		# 数字永远跟棋盘走（允许 6/4、也允许从 6/4 掉回 2/4）；
 		# 只有"正在缩卡结算"（claim_pending）时才把 have 顶到 need 给一次完成观感。
 		var claiming := bool(card["done"]) or bool(card.get("claim_pending", false))
+		# 2026-11-11（操作者要求）：点大对号提交的**那一瞬**，任务栏对应行要锁住当时的
+		# 状态和数字（4/4 就一直是 4/4），不能因为棋子飞走、棋盘变少就当场掉数变色。
+		if claiming and not bool(card.get("display_locked", false)):
+			var frozen: Array = []
+			for i in range(items.size()):
+				var it: Dictionary = (items as Array)[i]
+				var shown := int(it.get("board", -1))
+				if shown < 0:
+					shown = board_count(String(it.get("entity", "")), int(it.get("level", 1)))
+				frozen.append(shown)
+			card["display_locked"] = true
+			card["locked_board"] = frozen
 		for i in range(items.size()):
 			if typeof(mission_rows) != TYPE_ARRAY or i >= (mission_rows as Array).size():
 				continue
@@ -442,97 +442,90 @@ func clear_stockpile() -> void:
 		queue_redraw()
 
 
-## 每帧按“能交的排前面”做稳定分区：不插队、不改变各自相对顺序；
-## 正在缩小消失的卡（done）钉在原位，等缩完再补位。
-## 2026-11-10（交付改版）：整卡全满 → 提到最前；但如果前面已经有"全满但还没点对号"的卡，
-## 就排在这些卡**后面**（操作者："如果最前也是完成状态，只是没点大绿底对号，那就向后顺延"）。
-func _promote_full_cards() -> void:
-	if cards.size() < 2 or is_animating():
-		return
-	var last_full := -1
-	for i in cards.size():
-		if bool((cards[i] as Dictionary).get("claim_pending", false)):
-			last_full = i
-			continue
-		if _card_full(cards[i]):
-			last_full = i
-	for i in range(cards.size() - 1, -1, -1):
-		var card: Dictionary = cards[i]
-		if bool(card.get("claim_pending", false)) or not _card_full(card):
-			continue
-		if i <= last_full:
-			continue
-		cards.remove_at(i)
-		cards.insert(last_full + 1, card)
-		last_full += 1
+## ---------------------------------------------------------------- 顺序（唯一实现）
+##
+## 2026-11-11 重写。口径（操作者原话）：
+##   「排序主要看绿底大对号显示不显示，显示就排到前面；前面也是绿的，就顺延。
+##     绿的变成不显示，后面的向前补。绿的靠前，但是不插队。」
+##   → 两张表：**绿组（整卡全满）按"谁先满"FIFO** + **非绿组保持原有相对顺序**。
+##   「交付动画期间不允许重新排，动画缩卡结束后重新算。」
+var _full_seq: Dictionary = {}   # order_id -> 首次"整卡全满"的流水号（越小越靠前）
+var _seq_counter: int = 0
 
-
-func _reorder_cards() -> void:
-	# 2026-11-06: no reshuffling while a claimed card is still shrinking — the queue
-	# waits for it to be gone, then the survivors slide forward in one go.
-	if is_animating():
-		return
-	if cards.size() < 2:
-		return
-	var slots: Array = []
-	for i in cards.size():
-		var cd: Dictionary = cards[i]
-		if bool(cd.get("done", false)):
-			continue
-		# 2026-11-10：**结算中的卡（claim_pending）钉在原地** —— 它要么原地缩掉、后面的补位，
-		# 不许"先和第 2 张换位再消失"（操作者帧 974 报的）。
-		if bool(cd.get("claim_pending", false)):
-			continue
-		slots.append(i)
-	if slots.size() < 2:
-		return
-	var ready_cards: Array = []
+## 纯函数：给一组 id 和"是否全满 / 首次满分序号"，返回排好的顺序。可单测。
+static func queue_order(ids: Array, is_full: Dictionary, full_seq: Dictionary) -> Array:
+	var green: Array = []
 	var rest: Array = []
-	for i in slots:
-		if _card_ready(cards[i]):
-			ready_cards.append(cards[i])
+	for raw in ids:
+		var id := String(raw)
+		if bool(is_full.get(id, false)):
+			green.append(id)
 		else:
-			rest.append(cards[i])
-	# 2026-11-10：先按"这单交了多少枚"降序 —— 快交付的卡排在前面，
-	# 同分保持原顺序（操作者：1/2 与 0/1+0/1+1/1 都是 1 分，先来的留在前面）。
-	var scored: Array = []
-	for i in slots.size():
-		var c: Dictionary = cards[int(slots[i])]
-		var score := 0
-		for m in (c.get("mission", []) as Array):
-			score += int((m as Dictionary).get("have", 0))
-		scored.append([score, i, c])
-	# 2026-11-10：**同分不换位** —— 比较器第二关键字是"当前相对顺序"，
-	# 分数相等时保持原样；只有分数真的更高才往前挪。
-	scored.sort_custom(func(a, b):
-		var sa := int(a[0])
-		var sb := int(b[0])
+			rest.append(id)
+	green.sort_custom(func(a, b):
+		var sa := int(full_seq.get(a, 0))
+		var sb := int(full_seq.get(b, 0))
 		if sa != sb:
-			return sa > sb
-		return int(a[1]) < int(b[1]))
-	var ordered: Array = []
-	for row in scored:
-		ordered.append(row[2])
-	# 揭示过的卡在钉住期内固定在第一位（否则排序会立刻把它挤回后面）
-	if not _pinned_id.is_empty() and _clock_now < _pinned_until:
-		for k in ordered.size():
-			if String((ordered[k] as Dictionary).get("id", "")) == _pinned_id:
-				var pin: Dictionary = ordered[k]
-				ordered.remove_at(k)
-				ordered.insert(0, pin)
-				break
-	elif not _pinned_id.is_empty():
-		_pinned_id = ""
+			return sa < sb
+		return String(a) < String(b))
+	return green + rest
+
+
+## 每次状态变化刷新"首次变满"的流水号：变满时发号，掉出全满时作废（再满就罚到绿组末尾）。
+func _refresh_full_stamps() -> void:
+	for raw in cards:
+		var card: Dictionary = raw
+		var id := String(card.get("id", ""))
+		if id.is_empty():
+			continue
+		var full := _card_full(card)
+		if full and not _full_seq.has(id):
+			_seq_counter += 1
+			_full_seq[id] = _seq_counter
+		elif not full and _full_seq.has(id):
+			_full_seq.erase(id)
+
+
+## 动画期间冻结：缩卡（is_animating）、交付 hold（飞行/落袋/奖励）、结算中都不许动。
+func _sort_frozen() -> bool:
+	if is_animating():
+		return true
+	for cid in _hold.keys():
+		if _clock_now < float(_hold[cid]):
+			return true
+	for raw in cards:
+		if bool((raw as Dictionary).get("claim_pending", false)):
+			return true
+	return false
+
+
+func _sort_queue() -> void:
+	if cards.size() < 2 or _sort_frozen():
+		return
+	_refresh_full_stamps()
+	var ids: Array = []
+	var is_full: Dictionary = {}
+	for raw in cards:
+		var id := String((raw as Dictionary).get("id", ""))
+		ids.append(id)
+		is_full[id] = _card_full(raw)
+	var want := queue_order(ids, is_full, _full_seq)
 	var changed := false
-	for k in slots.size():
-		if cards[int(slots[k])] != ordered[k]:
+	for i in ids.size():
+		if String(ids[i]) != String(want[i]):
 			changed = true
 			break
 	if not changed:
 		return
-	for k in slots.size():
-		cards[int(slots[k])] = ordered[k]
+	var by_id: Dictionary = {}
+	for raw in cards:
+		by_id[String((raw as Dictionary).get("id", ""))] = raw
+	var ordered: Array = []
+	for id in want:
+		ordered.append(by_id[String(id)])
+	cards = ordered
 	_layout()
+	queue_redraw()
 
 
 func card_rect(order_id: String) -> Rect2:
@@ -722,13 +715,15 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 		var chip: Rect2 = chips[i]
 		var hue: Color = item.get("hue", Color("#94A3B8"))
 		# 2026-11-10：角标看**棋盘枚数**（允许 6/4 这种盈余），不看已交付数。
-		var board_n := board_count(String(item.get("entity", "")), int(item.get("level", 1)))
+		var board_n := _row_board(card, i, item)
 		var need_n := int(item.get("need", 1))
-		var ready := board_n > 0
+		var ready := board_n >= need_n
 		# 2026-11-05: the mission slot shows the real chip icon when the loader can
 		# resolve it; the procedural tile stays as the no-asset fallback.
 		var icon := _chip_texture(String(item.get("entity", "")), int(item.get("level", 1)))
-		var done_chip := board_n > 0
+		# 2026-11-11（操作者口径）：只有**收满**才算完成态；3/4 这种未满的一律按 0/1 显示
+		# （米色底板 + 米白字/暖棕描边），不再"棋盘上有货就变绿"。
+		var done_chip := mission_row_done(board_n, need_n)
 		# 2026-11-09：底板改成贴图（九宫格，倒角不缩放）：完成 = 浅绿框，未完成 = 米色框。
 		var plate_rect := mission_plate_rect(chip)
 		# 交付成功那一刻底板"吞一下"（以底板中心为锚点缩放）
@@ -755,7 +750,7 @@ func _draw_card(card: Dictionary, r: Rect2, retiring: bool = false) -> void:
 		if board_n >= need_n:
 			_draw_mission_bang(chip)
 		# 每个任务棋子右下角带 "已收集/需要" 角标，完成时整块换成绿色。
-		_draw_mission_badge(chip, board_n, need_n, board_n > 0)
+		_draw_mission_badge(chip, board_n, need_n, mission_row_done(board_n, need_n))
 
 
 	_draw_reward_row(r, int(card.get("coin", 0)), 0.0)
@@ -909,13 +904,50 @@ static func mission_chip_rects(card_rect: Rect2, count: int) -> Array:
 ## Returning true on the first satisfiable row lit up cards whose other row was still
 ## missing (the "last card is green but cannot be claimed" bug).
 ## 整卡全满：每一行棋盘上都凑够了需求枚数（允许盈余 6/4）。
+## 某一行任务当前该显示的"棋盘枚数"。
+## 卡一旦进入结算（点大对号之后），这里返回**提交瞬间锁住的值**，直到卡被移除。
+func _row_board(card: Dictionary, row: int, item: Dictionary) -> int:
+	if bool(card.get("display_locked", false)):
+		var frozen = card.get("locked_board", [])
+		if typeof(frozen) == TYPE_ARRAY and row < (frozen as Array).size():
+			return int((frozen as Array)[row])
+	return board_count(String(item.get("entity", "")), int(item.get("level", 1)))
+
+
+## 点大对号的那一瞬调用：把这张卡各行**当前显示的数字**锁住。
+## 之后棋子飞走、棋盘变少，任务栏都不会掉数/变色，直到卡被移除。
+func lock_row_display(order_id: String) -> void:
+	var card := _card_by_id(order_id)
+	if card.is_empty() or bool(card.get("display_locked", false)):
+		return
+	var items: Array = card.get("mission", [])
+	var frozen: Array = []
+	for i in range(items.size()):
+		var it: Dictionary = (items as Array)[i]
+		frozen.append(board_count(String(it.get("entity", "")), int(it.get("level", 1))))
+	card["display_locked"] = true
+	card["locked_board"] = frozen
+	queue_redraw()
+
+
+## 测试/探针用：某张卡某一行现在显示的数字（锁定期返回提交瞬间的值）。
+func row_board_for(order_id: String, row: int) -> int:
+	var card := _card_by_id(order_id)
+	if card.is_empty():
+		return -1
+	var items: Array = card.get("mission", [])
+	if row < 0 or row >= items.size():
+		return -1
+	return _row_board(card, row, (items as Array)[row])
+
+
 func _card_full(card: Dictionary) -> bool:
 	var items: Array = card.get("mission", [])
 	if items.is_empty():
 		return false
-	for raw in items:
-		var item: Dictionary = raw
-		var have := board_count(String(item.get("entity", "")), int(item.get("level", 1)))
+	for i in range(items.size()):
+		var item: Dictionary = (items as Array)[i]
+		var have := _row_board(card, i, item)
 		var need := int(item.get("need", 1))
 		if have < need:
 			return false
@@ -1202,6 +1234,12 @@ static func mission_bang_visible(have: int, need: int) -> bool:
 
 
 ## 角标什么时候算"完成态（绿色）"：棋盘上已经有这枚棋子（ready），或已经交付（have >= need）。
+## 2026-11-11：任务行的"完成态"只有一个判据 —— **收满**（棋盘枚数 ≥ 需求）。
+## 3/4 这类未满的，底板与字体颜色全部按 0/1 处理（操作者口径）。
+static func mission_row_done(board: int, need: int) -> bool:
+	return board >= maxi(need, 1)
+
+
 static func mission_badge_done(have: int, need: int, ready: bool) -> bool:
 	return ready or have >= maxi(need, 1)
 
@@ -1244,12 +1282,8 @@ func _punch_scale(order_id: String, row: int) -> float:
 ## 交付动画还在跑的时候别排序：把这张卡钉在第一位的时长往后延。
 ## 顺序永远是「提到第一位 → 棋子飞 → 落袋 → **再**按完成度排序」。
 func hold_sort(order_id: String, seconds: float) -> void:
-	if order_id.is_empty():
-		return
-	# 只有 reveal_card 真把它提上来过才钉住；屏上的卡原地收集，不许被钉到第一位
-	if order_id != _promoted_id:
-		return
-	_pinned_until = maxf(_pinned_until, _clock_now + maxf(seconds, 0.0))
+	# 2026-11-11：排序不再有"钉住某张卡"的概念，保留空实现兼容调用方。
+	pass
 
 
 ## 这张卡的**稳定位置**（滑行结束后停在哪儿）。交付飞行、奖励起点都用它，

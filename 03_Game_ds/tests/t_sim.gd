@@ -415,7 +415,6 @@ func _test_merge_rules(t) -> void:
 		{"from": [0, 0], "to": [0, 0], "code": "SIM_SAME_CELL", "what": "same cell"},
 		{"from": [0, 0], "to": [7, 0], "code": "SIM_SLOT_OOB", "what": "target out of bounds"},
 		{"from": [5, 0], "to": [0, 0], "code": "SIM_BLOCKED", "what": "source under a web"},
-		{"from": [0, 0], "to": [5, 0], "code": "SIM_BLOCKED", "what": "target under a web"},
 		{"from": [1, 1], "to": [0, 0], "code": "SIM_SOURCE_EMPTY", "what": "empty source"},
 		{"from": [0, 0], "to": [1, 1], "code": "SIM_TARGET_EMPTY", "what": "empty target"},
 		{"from": [0, 0], "to": [2, 0], "code": "SIM_ENTITY_MISMATCH", "what": "different entity"},
@@ -445,6 +444,38 @@ func _test_merge_rules(t) -> void:
 	var drag = _new_sim(_merge_project(), 1)
 	var r3: Dictionary = drag.apply({"type": "drag", "payload": {"from": [0, 0], "to": [1, 0]}})
 	t.ok(bool(r3.get("ok", false)), "drag uses the same merge rules", str(r3))
+
+	# 2026-11-11：拖同款棋子压到蜘蛛网上 = 解锁网 + 合成高一级（不再被挡住）。
+	var web = _new_sim(_merge_project(), 1)
+	t.eq(web.board.obstacle_types(Vector2i(5, 0)), ["web"], "夹具里 (5,0) 被网盖住")
+	t.eq(int(web.board.item(Vector2i(5, 0)).get("level", 0)), 1, "网下压着一枚 lv1 的 A")
+	var rw: Dictionary = web.apply({"type": "merge", "payload": {"from": [0, 0], "to": [5, 0]}})
+	t.ok(bool(rw.get("ok", false)), "同款棋子拖到网上可以合并（解锁网）", str(rw))
+	t.ok(bool(rw.get("web_unlocked", false)), "返回值标明这次合并解锁了蜘蛛网")
+	t.eq(web.board.obstacle_types(Vector2i(5, 0)), [], "网被解锁，格子干净了")
+	t.eq(int(web.board.item(Vector2i(5, 0)).get("level", -1)), 2, "合并结果高一级（lv2）")
+	t.ok(not web.board.has_item(Vector2i(0, 0)), "拖过来的那枚被吃掉")
+
+	# 2026-11-11：**盒子炸出来的网**同样压着一枚棋子（否则拖同款没有比较对象）。
+	var blown = _new_sim(_blast_project(1), 1)
+	var bomb: Dictionary = blown.apply({"type": "merge", "payload": {"from": [3, 2], "to": [2, 2]}})
+	t.ok(bool(bomb.get("ok", false)), "先合一次把邻格的盒子炸开", str(bomb))
+	t.ok(blown.board.obstacle_types(Vector2i(2, 3)).has("web"), "盒子炸开后该格是网")
+	t.ok(blown.board.has_item(Vector2i(2, 3)), "新网下面压着一枚棋子", str(blown.board.item(Vector2i(2, 3))))
+	var under: Dictionary = blown.board.item(Vector2i(2, 3))
+	var nb := Vector2i(0, 3)
+	blown.board.put(nb, String(under.get("entity", "")), int(under.get("level", 1)))
+	var unlock: Dictionary = blown.apply({"type": "merge",
+			"payload": {"from": [nb.x, nb.y], "to": [2, 3]}})
+	t.ok(bool(unlock.get("ok", false)), "拖同款压到炸出来的网上可以解锁并升级", str(unlock))
+	t.eq(blown.board.obstacle_types(Vector2i(2, 3)), [], "网被解锁")
+	t.eq(int(blown.board.item(Vector2i(2, 3)).get("level", -1)),
+			int(under.get("level", 1)) + 1, "结果是高一级")
+
+	var web_bad = _new_sim(_merge_project(), 1)
+	var rb: Dictionary = web_bad.apply({"type": "merge", "payload": {"from": [2, 0], "to": [5, 0]}})
+	t.eq(String(rb.get("code", "")), "SIM_ENTITY_MISMATCH", "不同款的棋子压上去不解锁（先报款式不同）")
+	t.ok(web_bad.board.obstacle_types(Vector2i(5, 0)).has("web"), "网还在")
 
 	var junk = _new_sim(_merge_project(), 1)
 	var r4: Dictionary = junk.apply({"type": "teleport", "payload": {}})
@@ -635,8 +666,8 @@ func _test_blast_radius_from_json(t) -> void:
 	t.ok(not s1.board.obstacle_types(Vector2i(2, 3)).has("lock"),
 			"blast=1 时邻格的蓝盒子被砸开", str(s1.board.obstacle_types(Vector2i(2, 3))))
 	var touched: Array = s1.board.obstacle_types(Vector2i(2, 3))
-	t.ok(touched.has("web") or touched.has("icebox"),
-			"蓝盒子变成网或冰（二选一）", str(touched))
+	# 2026-11-11（操作者改口径）：蓝盒子砸开**只出蜘蛛网**，不再随机出冰块。
+	t.eq(touched, ["web"], "蓝盒子砸开只出蜘蛛网（冰块那条路已去掉）")
 	t.ok(s1.board.obstacle_types(Vector2i(1, 1)).has("web"),
 			"blast=1 不动第二层（1,1 的网还在）", str(s1.board.obstacle_types(Vector2i(1, 1))))
 	t.ok(s1.board.obstacle_types(Vector2i(3, 3)).has("web"), "blast=1 不动第二层（3,3 的网还在）")
@@ -648,10 +679,11 @@ func _test_blast_radius_from_json(t) -> void:
 	t.eq(s2.blast_radius(), 2, "blast 半径读自 JSON（2）")
 	var r2: Dictionary = s2.apply({"type": "merge", "payload": {"from": [3, 2], "to": [2, 2]}})
 	t.ok(bool(r2.get("ok", false)), "merge at (2,2) ok (blast=2)", str(r2))
-	t.ok(not s2.board.obstacle_types(Vector2i(1, 1)).has("web"),
-			"blast=2 炸到第二层（1,1 的网开了）", str(s2.board.obstacle_types(Vector2i(1, 1))))
-	t.ok(not s2.board.obstacle_types(Vector2i(3, 3)).has("web"),
-			"blast=2 炸到第二层（3,3 的网开了）", str(s2.board.obstacle_types(Vector2i(3, 3))))
+	# 2026-11-11：蜘蛛网不再被爆炸炸开 —— 只能靠拖同款棋子解锁。
+	t.ok(s2.board.obstacle_types(Vector2i(1, 1)).has("web"),
+			"blast=2 也不再炸开蜘蛛网（1,1 的网还在）", str(s2.board.obstacle_types(Vector2i(1, 1))))
+	t.ok(s2.board.obstacle_types(Vector2i(3, 3)).has("web"),
+			"blast=2 也不再炸开蜘蛛网（3,3 的网还在）", str(s2.board.obstacle_types(Vector2i(3, 3))))
 
 
 func _blast_project(radius: int) -> Dictionary:
@@ -816,8 +848,10 @@ func _test_sample_run(t) -> void:
 	t.ok(not s.board_full_pending, "the sample never fills the board")
 	t.eq(int(s.generator_state["CleanBox_C"]["charges"]), 138,
 			"level_2 stock mirrors the energy bar at level load (88 - 3 taps + 53)")
-	# 2026-11-10：blast=2 之后第 2 关多炸开一格盒子/冰，棋盘上多出 1 枚棋子（10 → 11）。
-	t.eq(int(s.board.item_count()), 11, "11 items left on the level_2 board (3 claims eat 7 chips)")
+	# 2026-11-11：蜘蛛网下面现在**压着一枚确定的棋子**（拖同款上来才能解锁合并），
+	# 所以棋盘比"网只当遮挡"那版多 1 枚。
+	# 2026-11-11：盒子炸出来的网也压一枚棋子，所以比上一版再多 1 枚。
+	t.eq(int(s.board.item_count()), 12, "12 items left on the level_2 board (3 claims eat 7 chips; 每个网下都压一枚)")
 	t.ok(s.board.item_count() < 16, "claimed mission items were consumed")
 
 	var before: String = s.digest()

@@ -897,6 +897,10 @@ func _advance_to(t: float) -> void:
 				var d_delay := 0.0
 				if _live_band != null:
 					d_delay = _live_band.reveal_card(d_order, 0.26)
+					# 2026-11-11：成片里同样要"提交瞬间锁住任务栏数字"，否则棋子一飞走
+					# 数字就当场掉下来（操作者报的就是这个）。
+					if _live_band.has_method("lock_row_display"):
+						_live_band.lock_row_display(d_order)
 				if not _deliver_is_drag(d_payload, at_now, d_cell):
 					_play_deliver_flight(d_order, d_row, d_cell, at_now + d_delay,
 							_deliver_origin(d_payload, at_now, d_cell), 0.0)

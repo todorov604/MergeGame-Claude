@@ -268,6 +268,11 @@ func _test_drag_action(t) -> void:
 	t.eq(moved.get("payload", {}), {"from": [2, 3], "to": [empty_cell.x, empty_cell.y]},
 			"the swap payload is from -> to")
 
+	# 2026-11-11：被障碍压住的棋子**不能拖**（网下的棋子只能靠拖同款解锁，不能被拽出来）。
+	sim.board.add_obstacle(Vector2i(2, 3), "web")
+	var covered: Dictionary = FreeMode.drag_action(Vector2i(2, 3), empty_cell, sim, model, Vector2i(-1, -1))
+	t.eq(String(covered.get("kind", "")), FreeMode.ACTION_BLOCKED, "网下的棋子拖不动")
+	sim.board.remove_obstacle(Vector2i(2, 3), "web")
 	sim.board.add_obstacle(Vector2i(6, 0), "lock")
 	t.eq(String(FreeMode.drag_action(Vector2i(2, 3), Vector2i(6, 0), sim, model, Vector2i(-1, -1))
 			.get("kind", "")), FreeMode.ACTION_BLOCKED, "dropping on an obstacle is refused")

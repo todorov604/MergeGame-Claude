@@ -81,6 +81,16 @@ func _load_level(index: int) -> void:
 	# 2026-11-05: the badge number comes from the level data, not from its index.
 	_apply_level_number(lvl, index)
 	board.load_level(lvl)
+	# 2026-11-11：蜘蛛网下面**压着一枚确定的棋子**（和视图 `IceCell.chip` 画的是同一枚）。
+	# 这样"拖一枚同款棋子压上去"才有比较对象：解锁网 + 合成高一级。
+	for cell in board.obstacles.keys():
+		if not board.obstacle_types(cell).has("web"):
+			continue
+		if board.has_item(cell):
+			continue
+		var webbed := IceCell.chip(model.project, cell)
+		if not webbed.is_empty():
+			board.put(cell, String(webbed.get("entity", "")), int(webbed.get("level", 1)))
 	# 2026-11-10：关卡自带的冰从关卡开始计时。
 	ice_since = {}
 	for cell in board.obstacles.keys():
@@ -550,7 +560,14 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 		return _err("SIM_SAME_CELL", "from and to are the same cell")
 	if not board.in_bounds(from) or not board.in_bounds(to):
 		return _err("SIM_SLOT_OOB", "merge endpoint is outside the board")
-	if board.is_blocked(from) or board.is_blocked(to):
+	# 2026-11-11：目标格被**蜘蛛网**盖住时不再一律拒绝 —— 拖一枚同款棋子上去
+	# 就是"解锁网 + 合成高一级"。冰/盒子/柜子仍然挡住。
+	var web_unlock := false
+	if board.is_blocked(to):
+		if not board.obstacle_types(to).has("web"):
+			return _err("SIM_BLOCKED", "an obstacle covers one of the cells")
+		web_unlock = true
+	if board.is_blocked(from):
 		return _err("SIM_BLOCKED", "an obstacle covers one of the cells")
 	if not board.has_item(from):
 		return _err("SIM_SOURCE_EMPTY", "source cell is empty")
@@ -576,12 +593,17 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 	var cap := _level_cap(se)
 	if next_level > cap:
 		return _err("SIM_MAX_LEVEL", "lv" + str(next_level) + " exceeds cap " + str(cap))
+	if web_unlock:
+		board.remove_obstacle(to, "web")
 	board.put(to, se, next_level)
 	board.take(from)
 	# 2026-11-06: a merge breaks the obstacles around it (ice/web lock a chip, the
 	# box and the "?" pay out a fresh chip from the generator pool).
 	last_unlocks = _unlock_neighbours(to)
-	return _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
+	var out := _ok("merged " + se + " into lv" + str(next_level) + " at " + str(to))
+	if web_unlock:
+		out["web_unlocked"] = true
+	return out
 
 
 ## 冰的倒计时长度（秒）。关卡 JSON 的 `ice_seconds` 是**关卡自带冰**的时长
@@ -655,19 +677,23 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 				if k == "safe":
 					continue
 				# 2026-11-10：冰**只能等时间到**自己化掉，合并的爆炸不许波及。
-				if k == "ice" or k == "icebox":
+				# 2026-11-11（操作者口径）：蜘蛛网也**不再被爆炸炸开** ——
+				# 只能拖一枚同款棋子压上去，解锁并合成高一级（见 _do_merge）。
+				if k == "ice" or k == "icebox" or k == "web":
 					continue
-				# 2026-11-10：蓝盒子（lock）不再是死物 —— 砸开后变成**网 + 棋子**
-				# 或 **冰 + 棋子（倒计时 5~10 分钟）**，二选一按格子坐标定死（成片可复现）。
+				# 2026-11-11（操作者改口径）：蓝盒子（lock）砸开后**只出蜘蛛网 + 棋子**，
+				# 冰块那条路去掉（冰只保留关卡自己摆的 `ice`，以及老 take 里已有的 `icebox`）。
 				if k == "lock":
 					if board.remove_obstacle(cell, k):
-						# 用高位混一下，别让整片菱形都落在同一种（13x+7y 的奇偶性在局部会相关）
-						var h := absi(cell.x * 73856093 ^ cell.y * 19349663)
-						var rolled := "icebox" if (h >> 5) % 2 == 1 else "web"
-						board.add_obstacle(cell, rolled)
-						if rolled == "icebox":
-							ice_since[cell] = time
-						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": rolled})
+						board.add_obstacle(cell, "web")
+						# 2026-11-11：盒子变出来的网**也要压一枚棋子**（和关卡自带的网一致），
+						# 否则玩家拖"同款"过来没有比较对象 —— `_do_merge` 只会报目标为空。
+						if not board.has_item(cell):
+							var webbed_chip := IceCell.chip(model.project, cell)
+							if not webbed_chip.is_empty():
+								board.put(cell, String(webbed_chip.get("entity", "")),
+										int(webbed_chip.get("level", 1)))
+						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": "web"})
 					continue
 				if board.remove_obstacle(cell, k):
 					if k == "ice" or k == "web" or k == "icebox":

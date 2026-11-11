@@ -103,7 +103,13 @@ static func drag_action(from: Vector2i, to: Vector2i, sim, model, selected: Vect
 		return out
 	if from == to:
 		return out
-	if sim.board.is_blocked(from) or sim.board.is_blocked(to):
+	# 2026-11-11：目标格被蜘蛛网盖住时，只要拖的是**同款棋子**，就当作合并
+	# （= 解锁网 + 合成高一级）；其它障碍照旧算挡路。
+	var web_target: bool = sim.board.obstacle_types(to).has("web")
+	if sim.board.is_blocked(from):
+		out["kind"] = ACTION_BLOCKED
+		return out
+	if sim.board.is_blocked(to) and not web_target:
 		out["kind"] = ACTION_BLOCKED
 		return out
 	if not sim.board.has_item(from):

@@ -223,86 +223,78 @@ func _card_decor_matches(t) -> void:
 	solo.free()
 
 	# 2026-11-09：每个任务棋子右下角带 have/need 角标；完成前后两套颜色（取色自参考图）
-	# 2026-11-10：交付前要把目标卡弹进可见槽位（交必须在画面里发生）
-	var rp = OrderPanel.new()
-	rp.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
-	var lv := {"id": "rv", "orders": []}
+	# 2026-11-11（排序重写）：顺序只由"绿底大对号"（整卡全满）决定 ——
+	# 绿的靠前、先满在前；掉出绿组排到后面；交付动画期间冻结；reveal_card 不再搬卡。
+	var q = OrderPanel.new()
+	q.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	var lvq := {"id": "q", "orders": []}
 	for k in 4:
-		lv["orders"].append({"id": "rv_%d" % k, "character": "char_blonde",
-			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
-	rp.build_from_level(lv)
-	rp.size = Vector2(1080.0, 250.0)
-	rp.set_clock(0.0)
-	t.ok(rp.card_index("rv_3") == 3, "第四张卡排在第 4 位", str(rp.card_index("rv_3")))
-	var wait := rp.reveal_card("rv_3", 0.26)
-	t.ok(wait > 0.0, "画面外的卡需要先弹进来（返回等待时间）", str(wait))
-	t.eq(rp.card_index("rv_3"), 0, "揭示 = 把目标卡提到最前，不再整排滑动")
-	# 缓动是逐帧 lerp，跑满 30 帧再看落位（实机/成片也是每帧调 set_clock）
-	var tick := 0.0
-	for i in 30:
-		tick += 0.016
-		rp.set_clock(tick)
-	var r3: Rect2 = rp.card_rect("rv_3")
-	t.ok(r3.position.x < 1080.0 and r3.end.x > 0.0, "弹完之后目标卡在画面内", str(r3))
-	t.ok(r3.position.x <= Layout.QUEUE_ORIGIN_X + 1.0, "提到最前就停在队列起点", str(r3))
-	t.eq(rp.reveal_card("rv_3", 0.26), 0.0, "已经在首位就不再弹")
-	# 屏上的卡（前 VISIBLE_CARDS 张）交付时**不换位**：原地收集
-	var onp = OrderPanel.new()
-	onp.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
-	var lvo := {"id": "onp", "orders": []}
-	for k in 3:
-		lvo["orders"].append({"id": "onp_%d" % k, "character": "char_blonde",
-			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
-	onp.build_from_level(lvo)
-	onp.size = Vector2(1080.0, 250.0)
-	onp.set_clock(0.0)
-	t.eq(onp.reveal_card("onp_0", 0.26), 0.0, "第 1 张在屏上：不换位")
-	t.eq(onp.card_index("onp_0"), 0, "第 1 张留在原位")
-	t.eq(onp.reveal_card("onp_1", 0.26), 0.0, "第 2 张在屏上：不换位")
-	t.eq(onp.card_index("onp_1"), 1, "第 2 张留在原位")
-	onp.hold_sort("onp_1", 0.75)
-	t.eq(onp.card_index("onp_1"), 1, "hold 不会把屏上的卡钉到第一位")
-	t.ok(onp.reveal_card("onp_2", 0.26) > 0.0, "第 3 张在屏外：仍然要提上来")
-	t.eq(onp.card_index("onp_2"), 0, "第 3 张被提到第一位")
-	onp.free()
+		lvq["orders"].append({"id": "q_%d" % k, "character": "char_blonde",
+			"mission": [{"entity": "E%d" % k, "level": 1, "count": 1}],
+			"coin": 1, "gem": 1, "energy": 1})
+	q.build_from_level(lvq)
+	q.size = Vector2(1080.0, 250.0)
+	q.set_clock(0.0)
+	t.eq(q.card_index("q_3"), 3, "四张卡初始顺序不变")
 
-	# 同分不换位：三张卡分数相同 → 顺序原样不动
-	var eq = OrderPanel.new()
-	eq.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
-	var lve := {"id": "eq", "orders": []}
-	# id 故意不按字母序：同分如果按 id 排就会换位，这条才抓得住
-	var eq_ids := ["eq_c", "eq_a", "eq_b"]
-	for k in 3:
-		lve["orders"].append({"id": eq_ids[k], "character": "char_blonde",
-			"mission": [{"entity": "CleanSet_Ca", "level": 1}], "coin": 1, "gem": 1, "energy": 1})
-	eq.build_from_level(lve)
-	eq.size = Vector2(1080.0, 250.0)
-	eq.set_clock(0.0)
-	t.eq(eq.card_index("eq_c"), 0, "同分时第 1 张不动")
-	t.eq(eq.card_index("eq_a"), 1, "同分时第 2 张不动")
-	t.eq(eq.card_index("eq_b"), 2, "同分时第 3 张不动")
-	# 让第 3 张分数变高（1 枚已交）→ 它才该往前挪
-	var rows_eq: Array = eq.cards
-	for i in rows_eq.size():
-		if String((rows_eq[i] as Dictionary).get("id", "")) == "eq_b":
-			(rows_eq[i] as Dictionary)["mission"] = [
-				{"entity": "CleanSet_Ca", "level": 1, "have": 1, "need": 2}]
-	var tp := 0.0
-	for i in 8:
-		tp += 0.016
-		eq.set_clock(tp)
-	t.eq(eq.card_index("eq_b"), 0, "分数更高才排到最前")
-	eq.free()
+	# 一张都不绿：reveal_card 不再搬卡
+	t.eq(q.reveal_card("q_3", 0.26), 0.0, "reveal_card 返回 0（没有滑行延迟）")
+	t.eq(q.card_index("q_3"), 3, "reveal_card 不再改变顺序")
 
-	# 交付动画期间不许重排：钉住时间被 hold_sort 延长，动画结束后才按完成度排
-	rp.hold_sort("rv_3", 0.75)
-	t.eq(rp.card_index("rv_3"), 0, "hold 期间目标卡仍在第一位")
-	var t2 := tick
-	for i in 40:
-		t2 += 0.016
-		rp.set_clock(t2)
-	t.ok(rp.card_index("rv_3") >= 0, "动画结束后卡片仍在队列里", str(rp.card_index("rv_3")))
-	rp.free()
+	# 棋盘放一枚 E2 → q_2 整卡全满 → 排到最前
+	q.set_board_snapshot({"board": {"cells": [[1, 1, "E2", 1]], "obstacles": []}})
+	q.set_clock(0.032)
+	t.eq(q.card_index("q_2"), 0, "变绿的卡排到最前")
+
+	# 再来一枚 E3 → 后满的接在绿组末尾，不越过先满的
+	q.set_board_snapshot({"board": {"cells": [[1, 1, "E2", 1], [2, 1, "E3", 1]], "obstacles": []}})
+	q.set_clock(0.064)
+	t.eq(q.card_index("q_2"), 0, "先满的仍在第一位")
+	t.eq(q.card_index("q_3"), 1, "后满的顺延到第二位（不插队）")
+
+	# 把 E2 拿掉 → q_2 掉出绿组，排到所有绿卡后面
+	q.set_board_snapshot({"board": {"cells": [[2, 1, "E3", 1]], "obstacles": []}})
+	q.set_clock(0.096)
+	t.eq(q.card_index("q_3"), 0, "仍在绿组里的卡补到最前")
+	t.ok(q.card_index("q_2") > q.card_index("q_3"), "掉出绿组的卡排到绿卡后面",
+			str(q.card_index("q_2")))
+
+	# 交付动画期间冻结：hold 生效时顺序不许动
+	q.hold_done("q_0", 5.0)
+	var before := q.card_index("q_0")
+	q.set_board_snapshot({"board": {"cells": [[1, 1, "E0", 1], [2, 1, "E3", 1]], "obstacles": []}})
+	q.set_clock(0.128)
+	t.eq(q.card_index("q_0"), before, "交付动画（hold）期间不重排")
+	q.free()
+
+	# 2026-11-11（操作者口径）：任务行只有**收满**才算完成态；3/4 与 0/1 同款（米色 + 棕字）。
+	t.ok(not OrderPanel.mission_row_done(0, 1), "0/1 未满 → 米色")
+	t.ok(not OrderPanel.mission_row_done(3, 4), "3/4 未满 → 和 0/1 一样是米色（不再提前变绿）")
+	t.ok(not OrderPanel.mission_row_done(2, 3), "2/3 未满 → 米色")
+	t.ok(OrderPanel.mission_row_done(4, 4), "4/4 收满 → 绿底 + 绿字 + 叹号")
+	t.ok(OrderPanel.mission_row_done(6, 4), "6/4 盈余 → 仍是完成态")
+	t.ok(OrderPanel.mission_row_done(1, 1), "1/1 收满 → 完成态")
+
+	# 2026-11-11（操作者要求）：点大对号提交的那一瞬，任务栏数字要**锁住**，不许当场掉数。
+	var lk = OrderPanel.new()
+	lk.set_metrics({"card_gap": 18.0, "card_radius": 22.0})
+	lk.build_from_level({"id": "lk", "orders": [
+		{"id": "lk_1", "character": "char_blonde",
+			"mission": [{"entity": "CleanSet_Ca", "level": 1, "count": 2}],
+			"coin": 3, "gem": 1, "energy": 5}]})
+	lk.size = Vector2(1080.0, 250.0)
+	lk.set_board_snapshot({"board": {"cells": [
+			[1, 1, "CleanSet_Ca", 1], [2, 1, "CleanSet_Ca", 1]], "obstacles": []}})
+	lk.set_clock(0.0)
+	t.eq(lk.row_board_for("lk_1", 0), 2, "提交前：棋盘上 2 枚 → 2/2")
+	# 提交：sim 把棋子交走，棋盘变空，卡进入结算 hold
+	lk.sync_orders([{"id": "lk_1", "character": "char_blonde", "coin": 3, "star": 0,
+			"gem": 1, "energy": 5, "done": true,
+			"mission": [{"entity": "CleanSet_Ca", "level": 1, "have": 2, "need": 2, "ready": true}]}])
+	lk.set_board_snapshot({"board": {"cells": [], "obstacles": []}})
+	lk.set_clock(0.032)
+	t.eq(lk.row_board_for("lk_1", 0), 2, "提交瞬间锁住：棋子飞走、棋盘空了，仍显示 2/2")
+	lk.free()
 
 	# 2026-11-10：交付命中区 = **底板矩形**，且只认绿色（可交付）的行。
 	# 用独立的 panel 夹具，别碰上面已经 free() 掉的那个。

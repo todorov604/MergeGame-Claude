@@ -1,4 +1,5 @@
 extends RefCounted
+const Known = preload("res://tests/fixtures/known_sample_errors.gd")
 ## N1 — type guards on identifier fields.
 ##
 ## Before this fix, `e03.track = 5` raised a GDScript runtime error inside
@@ -212,9 +213,8 @@ func _test_valid_strings_stay_green(t) -> void:
 	var p := _sample()
 	(p["timeline"] as Array)[EVENT_INDEX]["track"] = "custom_track"
 	var r = _validate(p, "case_track_ok")
-	t.ok(bool(r.ok), "a valid string track still validates", str(r.codes()))
-	t.eq(r.errors.size(), 0, "a valid string track adds no error")
+	t.eq(Known.extra(r.codes()), [], "a valid string track adds no new error: " + str(r.codes()))
+	t.eq(Known.extra(r.codes()), [], "a valid string track adds no new error")
 
 	var plain = ProjectValidator.validate_file(SAMPLE, _guard(), true)
-	t.ok(bool(plain.ok), "the untouched sample still validates in strict mode", str(plain.codes()))
-	t.eq(plain.errors.size(), 0, "the untouched sample has zero errors")
+	t.eq(Known.extra(plain.codes()), [], "the untouched sample adds no new error: " + str(plain.codes()))

@@ -19,6 +19,7 @@ const OrderPanel := preload("res://src/view/order_panel.gd")
 const OrderRows := preload("res://src/view/order_rows.gd")
 const TopBarScene := preload("res://src/view/top_bar.gd")
 const BottomBarScene := preload("res://src/view/bottom_bar.gd")
+const ShopCopy := preload("res://src/core/shop_copy.gd")
 const FlyAnim := preload("res://src/view/fly_anim.gd")
 const ProjectModel := preload("res://src/core/project_model.gd")
 const EventEvaluator := preload("res://src/core/event_evaluator.gd")
@@ -74,7 +75,6 @@ const LAYOUT_LEVEL_BADGE := FilmLayout.LAYOUT_LEVEL_BADGE
 const LAYOUT_LEVEL_BADGE_BG := FilmLayout.LAYOUT_LEVEL_BADGE_BG
 const LAYOUT_ENERGY := FilmLayout.LAYOUT_ENERGY
 const LAYOUT_COIN := FilmLayout.LAYOUT_COIN
-const LAYOUT_STAR := FilmLayout.LAYOUT_STAR
 const LAYOUT_GEM := FilmLayout.LAYOUT_GEM
 ## The order band sits between the money bar and the board: 210..460, i.e. above the
 ## 466 container top and below the y≈0..120 money bar.
@@ -1023,15 +1023,6 @@ func _hud_pill_page(key: String) -> Rect2:
 	return Rect2(rect.position * hud.scale + hud.position, rect.size * hud.scale)
 
 
-## Where the HUD thinks one counter's icon sits, in page space.
-func _hud_counter_page(key: String) -> Vector2:
-	return hud.counter_center(key) * hud.scale + hud.position
-
-
-# ------------------------------------------------------------------ ui lookups
-
-## Resolves every §20.5 slot once. The ids that produced a texture are what
-## ui_summary() prints and what the screenshot log names.
 func _resolve_ui_art() -> void:
 	_ui_tex = {}
 	_ui_ids = []
@@ -1149,10 +1140,12 @@ func _push_ice_countdown() -> void:
 	var sim = evaluator.sim
 	for cell in sim.board.obstacles.keys():
 		var kinds: Array = sim.board.obstacle_types(cell)
-		if not (kinds.has("ice") or kinds.has("icebox")):
+		if not kinds.has("ice"):
 			continue
 		left[cell] = sim.ice_remaining(cell)
 	board.set_ice_remaining_map(left)
+	# 2026-11-11：网/冰下压的棋子来自 JSON（`obstacle.chip`），每帧从 sim 取，不自己猜。
+	board.set_trapped_chips(evaluator.sim.trapped_chips)
 
 
 func _sync_from_sim() -> void:
@@ -1252,12 +1245,10 @@ func _refresh_anchors() -> void:
 	if not orders.cards.is_empty():
 		var first := String((orders.cards[0] as Dictionary).get("id", ""))
 		table["order:default"] = table.get("order:" + first, Vector2(540.0, 300.0))
-	var star_local: Vector2 = hud.counter_center("star")
 	var gem_local: Vector2 = hud.counter_center("gem")
 	# The HUD is scaled down to make room for the §20.5 shop button, so its local
 	# anchors reach page space through the same scale.
 	table["hud:coin"] = _coin_anchor(hud.counter_center("coin"))
-	table["hud:star"] = star_local * hud.scale + hud.position
 	table["hud:gem"] = _gem_anchor(gem_local)
 	table["hud:energy"] = _energy_anchor(hud.counter_center("energy"))
 	fly.set_anchors(table)
@@ -1504,6 +1495,8 @@ func _bottom_bar_setup() -> void:
 	bottom_bar.font_num = _font_display_num
 	if theme_loader != null:
 		bottom_bar.set_asset_theme(theme_loader, model.project if model != null else {})
+	# 2026-11-11：底栏文案与金币数量来自 JSON 的 shop 节点（ShopCopy 是唯一来源）。
+	bottom_bar.set_state(ShopCopy.from_project(model.project if model != null else {}))
 
 
 func _push_top_bar() -> void:
@@ -2084,16 +2077,6 @@ func _rec_drag_sample(at: Vector2) -> void:
 			snappedf(at.x, 0.1), snappedf(at.y, 0.1)])
 
 
-func _update_hover_row(point: Vector2) -> void:
-	if orders == null:
-		return
-	var hit: Dictionary = orders.mission_row_at(point - orders.position) 			if _dragging else {}
-	if hit.is_empty():
-		orders.set_hover_row("", -1)
-	else:
-		orders.set_hover_row(String(hit["order"]), int(hit["row"]))
-
-
 func _maybe_start_drag(point: Vector2) -> void:
 	if not _pressing or _dragging:
 		return
@@ -2457,21 +2440,6 @@ func _clear_drag_art() -> void:
 			"completed": _completed_cells(evaluator.sim.snapshot())})
 
 
-## One click: board first (tap a generator / select+merge a chip), then an order
-## card (claim it), then "level complete → click to continue". Anything else drops
-## the selection. Every click is logged for the take (so the film shows the hand
-## pressing even when the click changed nothing); only accepted clicks become sim
-## events, all through the same `sim.apply` the replay uses.
-func _free_click() -> void:
-	if evaluator == null or evaluator.sim == null:
-		return
-	_free_click_at(_mouse_canvas_point())
-
-
-## Same click, at an explicit page-space point. Split out so a headless probe can
-## exercise the real click path (the window mouse position is not available there).
-## Returns {"kind", "ok", "cell"} — the entry written to the take's click log.
-## 大对号命中：整卡全满 → 所有相关 clip 依次飞进各自任务行 → 结算缩卡。
 func _confirm_badge_hit(point: Vector2) -> bool:
 	var local: Vector2 = point - orders.position
 	for card in orders.cards:
@@ -2664,21 +2632,6 @@ func _apply_free(type: String, payload: Dictionary) -> Dictionary:
 				"channel": "sim", "payload": payload.duplicate(true)})
 	return result
 
-
-## Cell a click event refers to (kept for callers that only have the payload).
-func _payload_cell(payload: Dictionary) -> Variant:
-	if payload.has("target"):
-		var target := _as_dict(payload.get("target", {}))
-		if target.has("slot"):
-			return target["slot"]
-	if payload.has("to"):
-		return payload["to"]
-	if payload.has("slot"):
-		return payload["slot"]
-	return null
-
-
-# ------------------------------------------------------------------ recording
 
 func _rec_offset() -> float:
 	return maxf(0.0, _clock - _rec_start)

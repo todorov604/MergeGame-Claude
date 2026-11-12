@@ -6,6 +6,7 @@ extends RefCounted
 ## on an empty cell (that is exactly how a "blocked but empty" cell looks).
 
 const Ctx = preload("res://src/validate/validate_ctx.gd")
+const Safeboxes = preload("res://src/core/safeboxes.gd")
 
 const KNOWN_OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice"]
 const M0_BOARD_W := 7
@@ -115,5 +116,23 @@ static func check(ctx) -> void:
 				ctx.err("OBSTACLE_DUP", ipath2, "duplicate %s obstacle at (%d,%d)" % [t, ox, oy])
 			else:
 				seen_ob[okey] = ipath2
+		# ---- safeboxes（2026-11-12：JSON 指定坐标，旧的尺寸字符串写法已废弃）----
+		var occupied := {}
+		if typeof(slots) == TYPE_ARRAY:
+			for raw_s in slots:
+				if typeof(raw_s) == TYPE_DICTIONARY:
+					occupied[Vector2i(Ctx.as_int(raw_s.get("x", -1), -1), Ctx.as_int(raw_s.get("y", -1), -1))] = "a chip"
+		if typeof(obs) == TYPE_ARRAY:
+			for raw_o in obs:
+				if typeof(raw_o) == TYPE_DICTIONARY:
+					var oslot = raw_o.get("slot", null)
+					if typeof(oslot) == TYPE_ARRAY and (oslot as Array).size() == 2:
+						occupied[Vector2i(Ctx.as_int(oslot[0], -1), Ctx.as_int(oslot[1], -1))] = "%s obstacle" % str(raw_o.get("type", "an"))
+		var safe_errs: Array = Safeboxes.validate_entries(lv.get("safes", []), w, h, occupied)
+		for raw_e in safe_errs:
+			var e: Dictionary = raw_e
+			var idx := int(e.get("index", -1))
+			var spath := base + ".safes" + (("[%d]" % idx) if idx >= 0 else "")
+			ctx.err(String(e.get("code", "SAFE_INVALID")), spath, String(e.get("msg", "invalid safebox")))
 	# abort gate (N1): reached unless a runtime script error interrupted the loop
 	ctx.rule_done()

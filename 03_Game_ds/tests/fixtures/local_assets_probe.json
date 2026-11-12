@@ -19,8 +19,8 @@
     "probe_local_ok": {
       "usage": "PRODUCTION",
       "license": "公司自有/自研",
-      "file_name": "ui_icon_star.png",
-      "source": "01_icon/HotelManor_icon/剩余图标/ui_icon_star.png",
+      "file_name": "board_frame.png",
+      "source": "01_icon/HotelManor_icon/剩余图标/board_frame.png",
       "pending_manifest": true
     }
   }

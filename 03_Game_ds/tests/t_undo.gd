@@ -41,6 +41,8 @@ func _sixty_edits(t) -> void:
 	var store = Store.new()
 	store.load_file(SAMPLE)
 	var initial := UndoStack.canon(store.project)
+	# 2026-11-12：金币起点从数据读，不写死（操作者会改 hud.coin）
+	var base_coin: int = int(store.project["hud"]["coin"])
 	var applied := 0
 	for i in 60:
 		var r: Dictionary = store.apply_edit("coin+%d" % i, func(p):
@@ -49,7 +51,7 @@ func _sixty_edits(t) -> void:
 		if bool(r.get("ok", false)):
 			applied += 1
 	t.eq(applied, 60, "60 edits applied")
-	t.eq(int(store.project["hud"]["coin"]), 69, "60 increments landed on hud.coin")
+	t.eq(int(store.project["hud"]["coin"]), base_coin + 60, "60 increments landed on hud.coin")
 	var final_key := UndoStack.canon(store.project)
 	t.eq(store.history.size(), 60, "history holds 60 entries")
 	t.eq(store.history.depth(), 60, "cursor sits at the top")

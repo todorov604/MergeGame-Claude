@@ -10,7 +10,6 @@
 | `assets/fonts/font_zh.otf` | `font_zh` | PRODUCTION | 项目自有字体 | `01_icon/HotelManor_icon/剩余图标/font_zh.otf` | `2c76254f6fc379fddfce0a7e84fb5385bb135d3e399294f6eeb6680d0365b74b` |
 | `assets/fonts/font_en.ttf` | `font_en` | PRODUCTION | 项目自有字体 | `01_icon/HotelManor_icon/剩余图标/font_en.ttf` | `b85c38ecea8a7cfb39c24e395a4007474fa5a4fc864f6ee33309eb4948d232d5` |
 | `assets/ui/board_frame.png` | `board_frame` | PLACEHOLDER | 占位自绘/导出，可替换 | `01_icon/HotelManor_icon/剩余图标/board_frame.png` | `fea432ed74f09ccdcf5cad49ca5e450b50a42536d2584ad38e289b0895dd3edc` |
-| `assets/ui/ui_icon_star.png` | `ui_icon_star` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/ui_icon_star.png` | `cd1b8201bebadd5a6c3430738a29f0c4c0cc0674e6c0ee97b2da5624d2bafa83` |
 | `assets/ui/box_safe_x.png` | `box_safe_x` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_safe_x.png` | `17887bb0dce23afcccda98a51a7fe517d4a365dfc60dd197857774b162f93113` |
 | `assets/ui/box_energe_w.png` | `box_energe_w` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_energe_w.png` | `81f7ff348baaa02b8db2ab68c7a8f820404dfe81b893271c0d877336dff5af61` |
 | `assets/ui/box_treasure_y.png` | `box_treasure_y` | PLACEHOLDER | 同上 | `01_icon/HotelManor_icon/剩余图标/box_treasure_y.png` | `314d61a47dbd5ddb626dfe3e269c1ed09279e96d49fbf097d789a2677119ae0c` |
@@ -190,3 +189,92 @@ v7 manifest 已把 `01_icon` 公司自研素材全部登记为 `PRODUCTION`（`R
 - 工程副本：`assets/ui/generator_premium.png`（1:1 复制，未裁切）
 - sha256：`fef0836ee4b0...`
 - 用途：库存面板（左上角）投放的高级生成器图标
+
+## 2026-11-12 棋子补齐 12 套 × 10 级（新增 8 套，80 张）
+
+操作者口径：「用原始素材 01_icon/HotelManor_icon/棋子icon 补吧。ca,cb 长到 10 级。其它的系列也给补全。总共 120 个 icon，应该是 12 套，每套 10 个，都补上。」
+
+新增实体 `CleanSet_Ce..Cl`（宠物勺 / 毛刷 / 绿猫垫 / 紫猫垫 / 喷雾瓶 / 泡泡 / 方形爪垫 / 水碗），每套 10 级；源文件与 `01_icon` 字节完全相同（只复制、未重编码/缩放）。
+
+| 工程内路径 | manifest id | usage | license | 源文件 | sha256 |
+|---|---|---|---|---|---|
+| `assets/chips/icon_10001201.png` | `chip_clean_ce_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001201.png` | `b98b2cefef6271d480ff16573b63e693400c5c3a333ede4716c8a121a395d392` |
+| `assets/chips/icon_10001202.png` | `chip_clean_ce_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001202.png` | `24474d91abe0fd249d0bb3041696c761b9f6fe03210fb8a9d0c8da5c03f40f51` |
+| `assets/chips/icon_10001203.png` | `chip_clean_ce_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001203.png` | `c1f7757347b94012bf348c8d0f5515923054af42049992a6f7c9b8d68ec34200` |
+| `assets/chips/icon_10001204.png` | `chip_clean_ce_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001204.png` | `ac2f15b0b2fae7ff23902522d81a9e3e7a937bc416431defc1ad860b6fcc411a` |
+| `assets/chips/icon_10001205.png` | `chip_clean_ce_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001205.png` | `4e0321bf2e417756b214c036d5c6f0ba57632b8cd17d6295fcb96600e5def6fa` |
+| `assets/chips/icon_10001206.png` | `chip_clean_ce_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001206.png` | `ce8bf591eaa79615c141581677e9a2301364b0ba5541168f5a181f023d9516d6` |
+| `assets/chips/icon_10001207.png` | `chip_clean_ce_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001207.png` | `bf778d528ad20ce46f99bd5f9b9d4a754f1bf5420821f916752ca23199ba8818` |
+| `assets/chips/icon_10001208.png` | `chip_clean_ce_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001208.png` | `f4190a05b7b4d9c0c49b2a3e8873f2bd5af66e44c9a407ded01fe7ab224e99b3` |
+| `assets/chips/icon_10001209.png` | `chip_clean_ce_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001209.png` | `96ea2bed4e353d6a97f610a1e200af387f34818388e9ba66e78b5f343812f71b` |
+| `assets/chips/icon_10001210.png` | `chip_clean_ce_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10001210.png` | `3e11523b4f1284e6f9b7c21c65364843c8ad55ad2493a3cb70b11f6534ba8b11` |
+| `assets/chips/icon_10004201.png` | `chip_clean_cf_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004201.png` | `eab07d77a6b400d417ff355530f3e8a5336afe9fa0dff729bb33d187f2adf742` |
+| `assets/chips/icon_10004202.png` | `chip_clean_cf_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004202.png` | `14dae5b058e4cf28376b12660314f6783d9929d82aaa46b0a388a9fe17e6a8d8` |
+| `assets/chips/icon_10004203.png` | `chip_clean_cf_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004203.png` | `8a985e7b0d7ce0690d1a2a5ec501b95515be6227abe95df0137bcd91a3af6936` |
+| `assets/chips/icon_10004204.png` | `chip_clean_cf_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004204.png` | `2cbc95b1303ebd558f4cc42df3a452526dbea1e5503c73698a8b707c24ed6b73` |
+| `assets/chips/icon_10004205.png` | `chip_clean_cf_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004205.png` | `3a610e1346f9a6bb7148fc752cf1d3625d7e0a0ab4688a7282e62fa4a6f7eb07` |
+| `assets/chips/icon_10004206.png` | `chip_clean_cf_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004206.png` | `c50e0cc5e5c07b383e7491d01a77b1bdef9b378dc4ea606847ea60fbf404e874` |
+| `assets/chips/icon_10004207.png` | `chip_clean_cf_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004207.png` | `dc34bc2b41df1687ecdb13304887503e599bc0c38c41214af011c063fa08286b` |
+| `assets/chips/icon_10004208.png` | `chip_clean_cf_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004208.png` | `cf391478459f8c1195e9e49ff5de234b28a386e774d1f7bfbf41682beb8d7b88` |
+| `assets/chips/icon_10004209.png` | `chip_clean_cf_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004209.png` | `9813fa748cd4e56c495fd8b1e5995836a9cb5cd981ae0a60caea03012529f0ac` |
+| `assets/chips/icon_10004210.png` | `chip_clean_cf_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10004210.png` | `0ba1800cc98b26285e6a55b1bada7dcdc8439d3214ec5d49885a261ee08c304d` |
+| `assets/chips/icon_10007101.png` | `chip_clean_cg_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007101.png` | `6cb8c75d8ad0ed9d62712cdf83f8e12ccf0f536e40905818cfaef9e353d7a3c1` |
+| `assets/chips/icon_10007102.png` | `chip_clean_cg_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007102.png` | `95be1fa246cfc6ccea88d42657903506bd102f3850d90c6d5740f86e068e51b3` |
+| `assets/chips/icon_10007103.png` | `chip_clean_cg_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007103.png` | `09698264c5bd007e04f53a55ab9cf283c437b226bb008770664d609621169e0e` |
+| `assets/chips/icon_10007104.png` | `chip_clean_cg_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007104.png` | `c88a112f67a99835bf97697ae4d6725c209fbb1297ac14c2b714d674c8be30af` |
+| `assets/chips/icon_10007105.png` | `chip_clean_cg_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007105.png` | `75faa0cb59f2811be3a851e43895196f5804f7086c0894ec5d3927c478ad5e36` |
+| `assets/chips/icon_10007106.png` | `chip_clean_cg_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007106.png` | `bb76c05b3944c1766eab1acabde3ae7ca32f40c4aa36e92812969b0bdcfe7c3f` |
+| `assets/chips/icon_10007107.png` | `chip_clean_cg_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007107.png` | `23ec5e29642c4c9a8a948d469f9fa7b7d5a434dc9cb4f5f0ef7d8d40492c50cf` |
+| `assets/chips/icon_10007108.png` | `chip_clean_cg_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007108.png` | `004ac625278f52d991d440d8495b96d63d672920f69331900bcacbfbd6ae7774` |
+| `assets/chips/icon_10007109.png` | `chip_clean_cg_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007109.png` | `cc2d79f29c3354e032b4de93af815c91cac785a69123ef0e230e2719becdc6a2` |
+| `assets/chips/icon_10007110.png` | `chip_clean_cg_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007110.png` | `3b662dea73640dc1f08b318acfd354c05e8fbb95073e9bf230b39e8004cba23a` |
+| `assets/chips/icon_10007201.png` | `chip_clean_ch_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007201.png` | `81fbf2012c2a3083db9cdb3473621a10aaf14adad9c6ad3a9f0a7ed4a97349bb` |
+| `assets/chips/icon_10007202.png` | `chip_clean_ch_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007202.png` | `bbde6452b6b5f40c91d3e39f1a314e88b53b1dcf0d465a5872601f4f61796892` |
+| `assets/chips/icon_10007203.png` | `chip_clean_ch_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007203.png` | `79963993538de423eadcc8deb8eefd9847f1f459000d742ff9df3ac79e680008` |
+| `assets/chips/icon_10007204.png` | `chip_clean_ch_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007204.png` | `48014be6aa0944d12720ec4f5d98daae2d91981dbe5e47007cabebac19f7050c` |
+| `assets/chips/icon_10007205.png` | `chip_clean_ch_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007205.png` | `3df46b92a59001ca3bc65d341b9bb44d8d038c48c9b3a4ebcfb85051318ce041` |
+| `assets/chips/icon_10007206.png` | `chip_clean_ch_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007206.png` | `5e947b91574e8f77916b21fe6777a9b3f85173e4109d2b9ce0717c523b5ceb18` |
+| `assets/chips/icon_10007207.png` | `chip_clean_ch_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007207.png` | `f86efb1bc47c47a8da3f62f2869801d3d09e588a52b69c4e51946f81c8605879` |
+| `assets/chips/icon_10007208.png` | `chip_clean_ch_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007208.png` | `1bae797ffd60177145ff628235c1078945baed865dba46baeda93b3a5b93079e` |
+| `assets/chips/icon_10007209.png` | `chip_clean_ch_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007209.png` | `2241f62db5e517f259b7d09c0954c77e886dab98272d17fd546778c9667824d3` |
+| `assets/chips/icon_10007210.png` | `chip_clean_ch_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10007210.png` | `ee036abae9d5412fd2b7f02bcda31b93cbff661602f47e43798d4d008df18a19` |
+| `assets/chips/icon_10008101.png` | `chip_clean_ci_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008101.png` | `d757156c30c37fefb0bfa2ad2aeb90f56e7ef8116211561cb2585135af38fa13` |
+| `assets/chips/icon_10008102.png` | `chip_clean_ci_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008102.png` | `99e5cad40747da4b513e5993dd2525e63b213045ba3355296d75470fc8d07c8c` |
+| `assets/chips/icon_10008103.png` | `chip_clean_ci_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008103.png` | `47061b4486b552f76dd826b5737aef2db7f0c6f86a3411737e991be39ecb47a7` |
+| `assets/chips/icon_10008104.png` | `chip_clean_ci_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008104.png` | `19d07e214d51e3ec32e24b168ff76c6a20e0bda3c1ec2d6117ce2adb88928883` |
+| `assets/chips/icon_10008105.png` | `chip_clean_ci_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008105.png` | `eba1d08fddb75e06467da28b44e98d45345bb2b01af58c930456b69cede219ed` |
+| `assets/chips/icon_10008106.png` | `chip_clean_ci_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008106.png` | `b85bb7f8be6df866093cdc38ddde62883bf7d41d85db5870f01c4b3db97c7c8a` |
+| `assets/chips/icon_10008107.png` | `chip_clean_ci_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008107.png` | `2dce40e35b48d92533b0119121ed60365ad04879c5fb96edce0a3b5662996992` |
+| `assets/chips/icon_10008108.png` | `chip_clean_ci_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008108.png` | `cb4c868bb8fbdb252173245c9bfa9c5bb2b5a121a0f4094810bc926ab263ac29` |
+| `assets/chips/icon_10008109.png` | `chip_clean_ci_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008109.png` | `f54351695f0448fa3def810693a12f1a4e201ca738e799f9198017da83ffae30` |
+| `assets/chips/icon_10008110.png` | `chip_clean_ci_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008110.png` | `dfa6d46acf7eeab457a66c79c3d55d6858df5ad11e7c6811a6461f9fb86eba18` |
+| `assets/chips/icon_10008201.png` | `chip_clean_cj_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008201.png` | `9d234a4cf2a3a571f0ff9fde005653468b5fb1828826ed23829342c8bea6b05c` |
+| `assets/chips/icon_10008202.png` | `chip_clean_cj_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008202.png` | `12977f455c1d4e006ed7dd61f7f88d1205d90ad63917de5c0b489b2fffff9aec` |
+| `assets/chips/icon_10008203.png` | `chip_clean_cj_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008203.png` | `99c3a315cd0ce91cff73f914c5729f4f07257ff9e809e5d48b556d36411482f4` |
+| `assets/chips/icon_10008204.png` | `chip_clean_cj_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008204.png` | `bbec8dd5d981eb7e9e0dd77779bd411dc4a9d72f6a80d5019b895d6faf219451` |
+| `assets/chips/icon_10008205.png` | `chip_clean_cj_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008205.png` | `0ed9d3f9c1c0b23ab79de19cf57cc97495927075a2d2a61dd862c68c58987b72` |
+| `assets/chips/icon_10008206.png` | `chip_clean_cj_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008206.png` | `8810213a9da0f98827715a239bc4584e805f1ac6e89ac3ba068fd76fa5589eb6` |
+| `assets/chips/icon_10008207.png` | `chip_clean_cj_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008207.png` | `28d56aa73f47d6003ab266a870dfd7d06e273188dd104758153e97fd3d89eb31` |
+| `assets/chips/icon_10008208.png` | `chip_clean_cj_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008208.png` | `b0115d1ed5ea88318889e535446cf7e0543bc146342b544660a066d98a96c113` |
+| `assets/chips/icon_10008209.png` | `chip_clean_cj_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008209.png` | `3f339d185e624c4c951244b844ea4a6170f25855aeb02110ecb781188f618f00` |
+| `assets/chips/icon_10008210.png` | `chip_clean_cj_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_10008210.png` | `6c1fd36ca823a742e5458bd7e3cd06fdf21ebf245db3a6eadf197b7f7c2072f1` |
+| `assets/chips/icon_20001001.png` | `chip_clean_ck_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001001.png` | `bc4e12c654739f7244361984b8dd053c86af7ebb8588fe7f4f7f33fa5820be86` |
+| `assets/chips/icon_20001002.png` | `chip_clean_ck_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001002.png` | `a7411551dbb37ebe5c0a30397e142887efa51ec9f3d37c335e38f0c59531294c` |
+| `assets/chips/icon_20001003.png` | `chip_clean_ck_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001003.png` | `7c7ec648ec694d8467fe8978cc09103735067d6e8b952f8b9144109f1e6fb584` |
+| `assets/chips/icon_20001004.png` | `chip_clean_ck_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001004.png` | `e76fd64c3b29ae15f7bb8d48795814af00e7f570c7c1c612785ed3f9f578a478` |
+| `assets/chips/icon_20001005.png` | `chip_clean_ck_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001005.png` | `7a8e3451489a0c183442a8fe8fac8eaa8bdfc7e948c9e01085c10cee016674d7` |
+| `assets/chips/icon_20001006.png` | `chip_clean_ck_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001006.png` | `554304e9f53a7388c1f67a97b7795eb536fb66aef02f1d04d616210713b8a043` |
+| `assets/chips/icon_20001007.png` | `chip_clean_ck_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001007.png` | `77265cabcd7da5789b8ffae1b4e4a3be493cd81e9d9472b07a830328bc9d5ce3` |
+| `assets/chips/icon_20001008.png` | `chip_clean_ck_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001008.png` | `1570645afb781f6f02ba17388a542c902c7edf51fe731de0d8fc1fb19557cb83` |
+| `assets/chips/icon_20001009.png` | `chip_clean_ck_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001009.png` | `ad9ea629c4b8f88d330338025d87f4fe75299fb88edc8f338242a361e59ea2bd` |
+| `assets/chips/icon_20001010.png` | `chip_clean_ck_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20001010.png` | `36746bf0d808d368ecf09013d10b3aa1a841d25940594a82fa8f9c38dbbc33e3` |
+| `assets/chips/icon_20002001.png` | `chip_clean_cl_lv01` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002001.png` | `5215444851746c9fdb0ba67180ea467bdc22633100110004d009887adac88ab7` |
+| `assets/chips/icon_20002002.png` | `chip_clean_cl_lv02` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002002.png` | `133896573422cf15e83902c0400af224e72758bde52bd7bb28628b37e7f60162` |
+| `assets/chips/icon_20002003.png` | `chip_clean_cl_lv03` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002003.png` | `222addce5cb630e55a5dfd58d4226a263fde1e9069a5653684bac869b435b721` |
+| `assets/chips/icon_20002004.png` | `chip_clean_cl_lv04` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002004.png` | `d32d788df3e6c953f7347ccb85bd15bb0fb48416acb0586bd1813cdf22d4c0b5` |
+| `assets/chips/icon_20002005.png` | `chip_clean_cl_lv05` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002005.png` | `e0af7e51cbf9d5396860fa70f4408782705f1eba9938a8e0780fd2e3411d3202` |
+| `assets/chips/icon_20002006.png` | `chip_clean_cl_lv06` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002006.png` | `b63bbcbfefdd4d8b88fe55c544487a4b6564539eaa9ac5040c84a803990af548` |
+| `assets/chips/icon_20002007.png` | `chip_clean_cl_lv07` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002007.png` | `f1ab051486d6894650c42639ec23fcb8c034e4b620446dc78145668a8a7445ef` |
+| `assets/chips/icon_20002008.png` | `chip_clean_cl_lv08` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002008.png` | `eae16966c7534a3a5a321c50dabc944e0c49ea2a395252f2576c08147b5fd82b` |
+| `assets/chips/icon_20002009.png` | `chip_clean_cl_lv09` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002009.png` | `b777e76cdbb87d21bf440947f1e077da0f1e0f538cf7b816938ae3940b6d110c` |
+| `assets/chips/icon_20002010.png` | `chip_clean_cl_lv10` | PRODUCTION | 公司自有（来源 Icon / HotelManor） | `01_icon/HotelManor_icon/棋子icon/icon_20002010.png` | `fef0836ee4b0f31c561e4ee69cc66ca30cdb890f3e0dc94bca23c5ca7c3a8fd0` |

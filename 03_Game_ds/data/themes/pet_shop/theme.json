@@ -14,7 +14,6 @@
     "accent": "#C97B3C",
     "done": "#7FBF5E",
     "coin": "#E8A33D",
-    "star": "#F0B429",
     "gem": "#9C6BD6",
     "board_tint": "#FFD9A0",
     "banner": "#FFF8EC",
@@ -26,7 +25,7 @@
     "hud_radius": 18.0,
     "board_radius": 40.0,
     "band_height": 210.0,
-    "tint_alpha": 0.10
+    "tint_alpha": 0.1
   },
   "icons": {},
   "chip_icons": {}

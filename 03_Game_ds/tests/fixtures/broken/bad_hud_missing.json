@@ -22,7 +22,6 @@
     "energyTickSeconds": 120,
     "energyTickMode": "decrement",
     "coin": 0,
-    "gem": 0,
     "exp": 0
   },
   "entities": {

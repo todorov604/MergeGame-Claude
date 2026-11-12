@@ -422,7 +422,7 @@ static func _check_orders(ctx) -> void:
 			var raw_char = (o as Dictionary).get("character", null)
 			if raw_char != null and typeof(raw_char) != TYPE_STRING:
 				ctx.err("ORDER_CHARACTER_TYPE", base + ".character", "order character must be a string (got %s)" % _type_label(raw_char))
-			for coin_key in ["star", "coin", "gem", "energy"]:
+			for coin_key in ["coin", "gem", "energy"]:
 				var v = (o as Dictionary).get(coin_key, 0)
 				if not Ctx.is_num(v) or float(v) < 0.0:
 					ctx.err("ORDER_REWARD", base + "." + String(coin_key), "%s must be a number >= 0" % String(coin_key))

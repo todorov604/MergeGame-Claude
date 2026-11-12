@@ -479,6 +479,220 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
    `board_view._draw()` 的 item 循环里跳过被 `web` / `ice` / `icebox` 盖住的格子
    （障碍层自己会画"被扣住的那一枚"）。探针帧 180 确认：网纹在上、饼干在下。
 
+### 6.34 星标（star）整条链路废弃（2026-11-11）
+
+**操作者原话**：「这个去掉。对应游戏里，星星也去掉。现在是 0，默认也是不显示的。对应代码也去了吧。废弃了。icon 也删掉，excel 更新，归档更新。」
+
+| 位置 | 处理 |
+|---|---|
+| 数据 | `hud.star` 与 `orders[].star` 从 `sample_project.json` 删除；`validator.HUD_FIELDS` 从 8 项改 7 项 |
+| 规则 | `sim._make_order()` / `_settle_order()` / `snapshot()` 不再产生或累加 star |
+| 实机 HUD | `hud_view.gd`：字段表、默认值、`_pill_rect("star")`、`_star()` 绘制、debug 摘要全删 |
+| 成片 | `movie_scene`：`LAYOUT_STAR` / `COLOR_STAR` / 顶栏 star 药丸 / `_star` / `_star_icon` / `star_fly` 绘制全删；选中环改用 `accent` |
+| 动画层 | `fly_anim`：HANDLED 去掉 `star_fly`，`_draw_stars`、`_star`、`hud:star` 锚点删除 |
+| 主题 | `theme_loader` 默认 palette 去掉 `star`；`pet_shop` / `placeholder` 主题里的 star 键删除 |
+| 素材 | `assets/ui/ui_icon_star.png`（+ `.import`）与 `01_icon/.../ui_icon_star.png`、`fx_star_fly.png` 删除 |
+| 清单 | `manifest_index.json` 180→177（PLACEHOLDER 20→18、TODO 5→4、`audio_star` 与 `missing_files` 同步）；`resource_manifest.json` 254→251；csv/xlsx 同步删行；`PROVENANCE.md`、`LICENSES.md` 清行 |
+| 音效 | `audio_star`（星星音效，TODO 未补）从清单、csv、xlsx 删除；`missing_files` 剩 4 条 |
+| 编辑器 | 订单卡「星」输入删除；读入时 `stripStar()` 把 `star` 从数据里剔掉，保存不会写回 |
+| 测试 | `t_sim`/`t_order_view`/`t_order_rows`/`t_schema_v2`/`t_theme`/`t_guard`/`t_local_assets`/`t_manifest_index`/`t_relocatable` 同步（payload 111、in_project 62）；`bad_hud_missing.json` 改成缺 `gem`；样例数值断言见 §6.35 |
+
+**兼容**：`event_model` 里 `star_fly` 事件类型仍登记（老 take 回放不会报未知类型），但**没有任何绘制**。
+
+**验证**：`validate --strict` → `ok=true errors=0 warnings=0`；全量 **3323 checks / 0 failures**。
+
+
+### 6.35 数据是操作者的：测试不许绑死样例工程（2026-11-11）
+
+**操作者原话**：「为啥你总覆写我数据呀。直接用我的就行了。以后就这样，不行就自己做关卡。」
+
+**规矩**（此后一律照此办）：
+1. **不改 `data/sample_project.json` 来迁就测试**。编辑器保存后的值（角色、`count`、奖励、`shop`）就是事实。
+2. 测试分两类：
+   - **结构 / 确定性**：可以读样例工程（能加载、时间轴能解析、事件数、`run_all` 派发数、digest 可复现）。
+   - **精确数值**（金币/体力/棋子数/关卡推进）：一律用**自造关卡**在测试里断言，例如 `t_sim._test_flow_run()` 的两关迷你工程。
+3. 样例时间轴（30 s / 21 事件）是**编舞内容**，关卡一改它就可能对不上 —— 这不是 bug，测试也不能因此去改数据。
+4. 断言里的数据相关数字（需求枚数、角色、奖励）从 JSON 读，不写死。
+5. 需要"理想关卡"验证新功能时，用 `tools/make_*_probe.gd` 生成 `output/probe/` 下的自造关卡（§6.27）。
+
+**本次受影响改动**：`t_sim._test_sample_run()` 去掉样例数值断言（只留结构 + 确定性），
+新增 `_test_flow_run()` 自造两关精确断言（金币 10 / 钻石 2 / 体力 16 / 两单吃光棋子 / 关卡完成）；
+`t_order_view` 的「第二行要 4 枚」改成从数据读。全量 **3327 checks / 0 failures**（当时数据是 `char_glasses` + `count 6`）。
+
+
+### 6.36 游戏为准：默认只改编辑器（2026-11-11，操作者定）
+
+**操作者原话**：「现在一切以游戏为准。除非我让你改游戏再改游戏，要不你只改Html就行了。需要改要问我。」
+
+**规矩**：
+1. **默认只改 `05_editor/**`**。`src/**`（实机）与 `src/render/**`（成片）不动。
+2. 编辑器与游戏表现不一致时，**改编辑器去贴合游戏**，不要让游戏来迁就编辑器。
+3. 如果确实只有改游戏才能实现（例如新数据字段需要 sim 支持），**先说明原因和代价，等操作者点头**再动手。
+4. 本条优先于「§8 双画面同步」里的默认动作：§8 仍然管"授权改游戏后，实机与成片必须同源"，
+   但**不再授权我自己决定改游戏**。
+5. 已获授权的游戏侧改动（不要擅自回滚）：删 `icebox`、删死代码、`obstacle.chip` / `obstacle.seconds`
+   支持、`set_trapped_chips` 键归一化、`ShopCopy`（底栏文案 JSON 化）。
+
+
+### 6.37 05_editor 第一阶段结束，下一步改柜子逻辑（2026-11-12）
+
+**操作者原话**：「先提一版，然后再开始改代码和Html。记录就写html暂时结束，准备改柜子逻辑。」
+
+**状态**：`05_editor/index.html` 的关卡/订单/顶栏/底栏/棋盘编辑与拖拽已收口
+（自测入口 `?selftest=1`，`bash 05_editor/selftest.sh` 必须 PASS）。
+**下一阶段主线：柜子（safebox）从"算法排布"改成"JSON 指定坐标"。**
+
+已定的四条口径（操作者拍板）：
+
+| # | 结论 |
+|---|---|
+| 1 | 柜子格**继续阻挡**：棋子不能落进、不能生成、不能合并、不能拖；爆炸忽略、无倒计时、不可解锁 |
+| 2 | 旧的 `safes: ["2x4","2x3"]`（只写尺寸、位置靠 `Safeboxes.layout` 算）**废弃** |
+| 3 | 柜子之间、柜子与越界**必须拦**：重叠/越界都要报错 |
+| 4 | 编辑器「类型」里加**柜子**，带子选项：尺寸 + 以**左上角为锚点**的坐标 + ×N + Lv.N；越界或压到棋子要**报错提示** |
+
+方案文档：`03_Game_ds/docs/PLAN-2026-11-12-safebox.md`（新 JSON 结构 / 校验规则 / 游戏侧改动清单 / 验收）。
+
+**注意**：这条要改游戏侧（sim / 校验 / 测试），按 §6.36 必须先等操作者点头再动。
+
+
+### 6.38 柜子改成 JSON 指定坐标（2026-11-12 实施）
+
+**操作者口径**：柜子 = 纯占位装饰，位置和两个数字都由 JSON 定；旧写法废弃；越界/重叠要拦；
+编辑器「类型」里加柜子，左上角锚点。
+
+**新结构**（`levels[].safes`）：
+
+```json
+"safes": [
+  { "size": "2x4", "slot": [0, 5], "charges": 25, "level": 13 },
+  { "size": "1x7", "slot": [0, 8], "charges": 27, "level": 10 }
+]
+```
+
+- `slot` = 左上角锚点；占位：`1x7`=7×1、`2x2`=2×2、`2x3`=3×2、`2x4`=4×2（方向固定）
+- `charges`（画成 ×N，默认 10）、`level`（画成 Lv.N，默认 22），都必须 ≥1
+- 字符串写法 `["2x4"]` **废弃** → `SAFE_LEGACY_STRING`
+
+**游戏侧**：
+- `src/core/safeboxes.gd`：删 `layout()`/Rng/`_overlaps()`/`_box()`；新增
+  `span_of / cells_of / validate_entries / parse`（`parse` 产出 `{size,x,y,w,h,charges,level,cells}`）
+- `src/core/sim.gd` `_load_level()`：`Safeboxes.parse(...)`，占格仍 `add_obstacle(cell,"safe")`
+- `src/render/movie_scene.gd`：同样走 `parse()`
+- `src/validate/rules_board.gd`：新增 SAFE_* 校验（类型/尺寸/槽位/越界/重叠/压棋子压障碍/数字）
+- 测试：新增 `tests/t_safeboxes.gd`（30 checks：span、parse 丢弃非法、五类错误码、sim 占格阻挡）
+
+**编辑器（05_editor）**：
+- 类型下拉新增「柜子」+ 子选项：尺寸 / 锚点 x,y（左上角）/ ×N / Lv.N
+- 点格子放柜子；选中柜子任一格 → 面板显示该柜子；改字段即写回（先过 `safeConflict`）
+- 拖柜子整体平移，**Ctrl+拖 = 复制**；非法落点直接 toast 拒绝
+- 预览：柜子底图 + `×N` + `Lv.N`；类型非柜子时不再画旧复选框
+- 校验：旧字符串写法点名、越界/重叠/压棋子压障碍都报
+- 原来「关卡设置」里的柜子复选框**删除**（会把字符串写回 `safes`，已废弃）
+
+**数据迁移**：`data/sample_project.json` 的两关 `safes` 用**旧算法算出的坐标**改成对象写法
+（第一关 `2x4 @ (0,7)` 25/13；level_2 `1x7 @ (0,8)` 27/10），画面与迁移前一致。
+
+**验证**：Godot **3269 checks / 0**；`bash 05_editor/selftest.sh` PASS；
+自造探针 `output/probe/safe_project.json` 出片抽帧确认柜子落在 JSON 坐标上、`×25 / Lv.13`、`×27 / Lv.10`。
+
+**2026-11-12 二次迁移 + 内容清理**（操作者：「检查一下当前的 Json……要是有旧写法的，帮我改一下，过 check」）：
+编辑器那次保存把 `safes` 又写回了字符串，已重新迁移成对象；顺手清掉 4 条内容错误：
+
+| 问题 | 处理 |
+|---|---|
+| `safes: ["2x4"] / ["1x7"]` 旧写法 | 用旧算法算坐标 → 对象写法（第一关 `2x3 @ (0,7)` 25/13；level_2 `1x7 @ (0,8)` 27/10） |
+| `ORDER_MISSION_DUP` order_1 | `Ca lv1 ×6` + `Ca lv1 ×1` 合并成 `×7` |
+| `ORDER_MISSION_DUP` order_2 | `Ca lv1 ×4/×1/×1/×1` 合并成 `×7` |
+| `SLOT_LEVEL_RANGE` | `CleanBox_C` (3,1) 等级 4 → 3（实体上限就是 3） |
+| `SAFE_OVERLAP` | 第一关柜子 `2x4` → `2x3`（避开 (3,7) 的锁盒） |
+
+结果：`validate --strict` → **ok=true errors=0 warnings=0**；Godot **3269/0**；编辑器自测 PASS。
+
+**编辑器 bug（同日修）**：柜子校验原来写在"障碍循环"里 → 30 个障碍把同一条错误重复报 30 次
+（弹窗显示 62 条）。已挪到 level 级，一条柜子只报一次。
+
+
+### 6.39 冰倒计时按关重算 + 编辑器国际化（2026-11-12）
+
+**操作者原话（冰）**：「第2关开始的冰块倒计时时间不对，我设的30秒。但是从第1关就开始计时了。
+等我玩到第2关，已经变成15秒了。」
+
+**根因**：`sim.ice_since[cell]` 记的是 `0.0`，而 `sim.time` 是**整个工程的全局时钟**，切关不重置，
+于是第 2 关的冰把第 1 关花掉的时间也扣掉了。
+
+**修法**：`_load_level()` 里改成 `ice_since[cell] = time`（这一关开始的时刻）。
+`ice_remaining()` 不变（本来就算 `time - ice_since`）。
+回归测试：`tests/t_sim.gd::_test_ice_restarts_each_level`（第 1 关耗 45 s 后进第 2 关，冰必须仍是 30 s，
+再走 5 s → 25 s；把 `time` 改回 `0.0` 这条立刻红）。
+验证：用操作者的 take `20261112_134900`（12.79 s 切关）重新出片，第 800 帧（进关 0.55 s）10 块冰全是 `00:30`。
+
+**编辑器国际化（同日）**：
+- 右栏「订单」和「校验」之间新增**国际化**分区，目前只维护 `board.full`（"棋盘已满"）
+- 顶部「语言」下拉 = `zh` / `en`；**切换时同时写 `meta.locale`**（这是游戏真正读的字段）
+- 改文案直接写 `locales.<语言>.board.full`
+- 坑：第一版只切"编辑哪门语言"、没写 `meta.locale` → 操作者切到 en 后画面仍是中文
+- 自测覆盖：下拉必须是 `zh,en`、改文案写回对应语言、切语言写回 `meta.locale`
+
+**未做（操作者说先不管）**：`hook.question / level.complete / cta.play` 三条只在成片的
+`_draw_view_layer()` 里画，而那一层在 `movie_scene._draw()`（父层），会被棋盘/订单带这些**子节点**
+盖住 —— 所以成片里也看不见。真要显示得把它们挪到最上层 `FilmOverlay`（和光标同一层）。
+实机 `game_screen` 只渲染 `board.full` 的 toast，不渲染时间轴 text/cta。
+
+
+### 6.40 棋子补齐 12 套 × 10 级（2026-11-12）
+
+**操作者原话**：「用原始素材【E:\MergeGame-Claude_icon\HotelManor_icon\棋子icon】补吧。ca,cb 长到 10 级。
+其它的系列也给补全。总共 120 个 icon，应该是 12 套，每套 10 个，都补上。更新代码，归档，这些流程一个也不要忘记。
+然后再更新 Html 对应的选项之类的。」
+
+**12 套映射**（`CleanSet_*` → 源文件前缀）：
+
+| 实体 | 源前缀 | 内容 | 登记位置 |
+|---|---|---|---|
+| Ca | `icon_100021xx` | 饼干 | 快照 `chip_clean_ca_lv01..06` + 别名 `icon_10002107..10` |
+| Cb | `icon_100022xx` | 面包卷 | 同 Ca（别名 `icon_10002207..10`） |
+| Cc | `icon_100011xx` | 小鱼干 | 本地登记 `chip_clean_cc_lv01..10` |
+| Cd | `icon_100051xx` | 皮球 | 同 Cc |
+| **Ce** | `icon_100012xx` | 宠物勺 | **新增（本地登记）** |
+| **Cf** | `icon_100042xx` | 毛刷 | 新增 |
+| **Cg** | `icon_100071xx` | 绿猫垫 | 新增 |
+| **Ch** | `icon_100072xx` | 紫猫垫 | 新增 |
+| **Ci** | `icon_100081xx` | 喷雾瓶 | 新增 |
+| **Cj** | `icon_100082xx` | 泡泡 | 新增 |
+| **Ck** | `icon_200010xx` | 方形爪垫 | 新增 |
+| **Cl** | `icon_200020xx` | 水碗 | 新增 |
+
+**这一步的关键坑（先查再动手）**：Ca/Cb 的 7~10 级**不是没登记**——快照里一直有
+`icon_10002107..10` 记录，`manifest_index.aliases` 把 `chip_clean_ca_lv07` 指向它，
+`AssetGuard.resolve_id()` 会解析别名，所以**游戏里本来就正常**；
+只有**编辑器**没解析别名（`files[id]` 只按资源表建），预览 7~10 级才是空的。已在 `buildAssetMaps()` 末尾补别名展开。
+
+**改动清单**：
+
+| 位置 | 内容 |
+|---|---|
+| `assets/chips/` | 新增 80 张（8 套 × 10 级），与 `01_icon` 字节一致 |
+| `data/assets_local.json` | 72 → **152** 条（新增 80 条，`pending_manifest: true`） |
+| `data/themes/default/theme.json` | `chip_icons` 4 套 → **12 套 × 10 级 = 120 个 id** |
+| `data/sample_project.json` | 实体 18 → **26**（新增 `CleanSet_Ce..Cl`，`maxLevel 10`，各自 hue/label） |
+| `data/manifest_index.json` | `in_project` 按磁盘重算：62 → **142**（棋子 20 → 100 张在工程内） |
+| `00_design/resource_manifest.json` / `.csv` | 251 → **331** 行 |
+| `00_design/资源清单模板-v7.xlsx` | 183 → **263** 行（第 4 行起，18 列） |
+| `assets/PROVENANCE.md` | 新增 80 行（路径 / id / usage / license / 源 / sha256） |
+| `01_icon/.../剩余图标/LICENSES.md` | 新增「12 套 × 10 级」段落 |
+| `05_editor/index.html` | `buildAssetMaps()` 展开 `manifest.aliases` → 编辑器也能看到 Ca/Cb 7~10 级 |
+
+**测试**（硬编码数字一律改成从数据算，避免下次再红）：
+`EXPECTED_PAYLOAD_COUNT 111 → 191`；`in_project` 计数、`local_ids()`、`chip_refs()`、
+`entities`、`asset_refs`、`guard.index.size()`、`allowed_ids` 全部改成"跟数据/磁盘一致"。
+
+**结果**：Godot **3700 checks / 0 failures**；`validate --strict` → **ok=true errors=0 warnings=0**；
+`bash 05_editor/selftest.sh` → **SELFTEST PASS**；
+新探针 `tools/probe_chips.gd` → `theme ok=true series=12 / textures ok=120 missing=0 / RESULT PASS`
+（含 Ca/Cb 7~10 级别名解析）。
+
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
@@ -590,7 +804,7 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 | 蜘蛛网 | `web` | 压着一枚棋子；**爆炸不再炸开**，只能拖一枚同款棋子压上去 → 解锁网 + 合成高一级（§6.33） |
 | 冰 | `ice`（关卡摆的）/ `icebox`（盒子变的） | 带倒计时；`ice_seconds` 配关卡冰时长；到点自己化（`melt`） |
 | 问号袋 | `bag` | 未知道具袋 |
-| 柜子 | `safe` | 多格大块 `1x7` / `2x2` / `2x3` / `2x4`，`level.safes` |
+| 柜子 | `safe` | 多格大块，**JSON 指定坐标**：`safes: [{size, slot(左上角), charges, level}]`（§6.38） |
 | 泡泡 | `bubble` | 气泡障碍 |
 
 ### 9.2 棋子与生成器
@@ -619,7 +833,7 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 | 立绘 | `portrait` | 卡片后的人像 |
 | 绿组 / 非绿组 | `full` / `not full` | 排序唯一判据（§6.29） |
 | 锁数字 | `lock_row_display()` | 点对号那一瞬把该卡数字与颜色定住（§6.30） |
-| 结算 | `settle` / `claim_pending` / `done` | 收满 → 飞棋子 → 缩卡 → 奖励 → 移出队列 |
+| 结算 | `settle` / `claim_pending` / `done` | 收满 → 飞棋子 → 缩卡 → 奖励（金币/钻石/体力，**无星标**）→ 移出队列 |
 
 ### 9.4 左上角库存面板
 

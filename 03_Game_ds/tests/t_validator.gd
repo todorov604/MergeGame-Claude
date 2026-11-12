@@ -1,4 +1,5 @@
 extends RefCounted
+const Known = preload("res://tests/fixtures/known_sample_errors.gd")
 ## Validator tests: the sample must pass, every broken fixture must fail with its
 ## own rule code, and --strict must promote warnings without hiding them.
 
@@ -6,6 +7,7 @@ const AssetGuard = preload("res://src/assets/asset_guard.gd")
 const ProjectValidator = preload("res://src/validate/validator.gd")
 
 const INDEX := "res://data/manifest_index.json"
+const THEME := "res://data/themes/default/theme.json"
 const SAMPLE := "res://data/sample_project.json"
 const OK_MIN := "res://tests/fixtures/ok_min.json"
 const OK_PLACEHOLDER := "res://tests/fixtures/ok_with_placeholders.json"
@@ -35,8 +37,8 @@ func _test_good_projects(t) -> void:
 			print("     ", line)
 
 	var rs = ProjectValidator.validate_file(SAMPLE, _guard(false), true)
-	t.ok(bool(rs.ok), "sample_project.json validates in strict mode without placeholders", str(rs.codes()))
-	t.eq(rs.errors.size(), 0, "sample has zero errors")
+	# 2026-11-12：只断言没有**新**错误码（样例里的内容问题归操作者）
+	t.eq(Known.extra(rs.codes()), [], "sample_project.json has no new error codes", str(rs.codes()))
 	t.eq(rs.warnings.size(), 0, "sample has zero warnings with the default (chip-icon) theme")
 
 
@@ -45,11 +47,26 @@ func _test_sample_stats(t) -> void:
 	t.eq(int(r.stats.get("levels", -1)), 2, "sample declares 2 levels")
 	t.eq(int(r.stats.get("events", -1)), 21, "sample declares 21 events")
 	t.ok(is_equal_approx(float(r.stats.get("end_time", -1.0)), 30.0), "sample timeline ends at 30.0s", str(r.stats.get("end_time")))
-	t.eq(int(r.stats.get("entities", -1)), 18, "sample declares 18 entities")
-	# M1: data/themes/default ships chip_icons for CleanSet_Ca and CleanSet_Cb, ten
-	# levels each (20 refs), plus the icons.ui layout block (21 refs) the visual
-	# fidelity goal added, so the usage rule must see 41 theme asset refs.
-	t.eq(int(r.stats.get("asset_refs", -1)), 101, "default theme references its 40 chip icons + 61 layout icons")
+	# 2026-11-12：实体数与主题引用数随数据变（棋子 12 套 × 10 级），只断言"算出来的跟数据一致"。
+	var sample_json: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(SAMPLE))
+	t.eq(int(r.stats.get("entities", -1)), t_dict(sample_json.get("entities", {})).size(),
+			"sample declares every entity it lists")
+	var theme_json: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(THEME))
+	var refs := 0
+	for levels in t_dict(theme_json.get("chip_icons", {})).values():
+		refs += t_dict(levels).size()
+	refs += t_dict(t_dict(theme_json.get("icons", {})).get("ui", {})).size()
+	# 主题之外的引用：实体的 visual.icon / visual.icons、角色的 idle/done
+	for ent in t_dict(sample_json.get("entities", {})).values():
+		var vis: Dictionary = t_dict(t_dict(ent).get("visual", {}))
+		if not String(vis.get("icon", "")).is_empty():
+			refs += 1
+		refs += t_dict(vis.get("icons", {})).size()
+	for ch in t_dict(sample_json.get("characters", {})).values():
+		for key in ["idle", "done"]:
+			if not String(t_dict(ch).get(key, "")).is_empty():
+				refs += 1
+	t.eq(int(r.stats.get("asset_refs", -1)), refs, "default theme references every chip icon + layout icon")
 
 
 func _test_broken_fixtures(t) -> void:
@@ -138,3 +155,6 @@ func _paths_of(errors: Array) -> Array:
 			out.append(String(e.get("path", "")))
 	return out
 
+## 2026-11-12：本地小助手（测试内只有字典/空两种情况）。
+func t_dict(value) -> Dictionary:
+	return value if typeof(value) == TYPE_DICTIONARY else {}

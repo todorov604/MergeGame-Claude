@@ -42,6 +42,10 @@ var generator_state: Dictionary = {}
 var level_complete_pending: bool = false
 ## 2026-11-10：冰只按**自己的倒计时**融化（爆炸不再波及）。这里记每格冰出现的关卡时刻。
 var ice_since: Dictionary = {}
+## 2026-11-11：每格冰可以有自己的时长（关卡 JSON 的 `obstacle.seconds`）。
+var ice_lengths: Dictionary = {}
+## 2026-11-11：网 / 冰下面压着的那枚棋子可以由 JSON 指定（`obstacle.chip`）。
+var trapped_chips: Dictionary = {}
 var board_full_pending: bool = false
 var log_events: Array = []
 var seed_value: int = 0
@@ -81,6 +85,27 @@ func _load_level(index: int) -> void:
 	# 2026-11-05: the badge number comes from the level data, not from its index.
 	_apply_level_number(lvl, index)
 	board.load_level(lvl)
+	# 2026-11-11：障碍可以带自己的参数 —— `seconds`（这块冰多少秒）与
+	# `chip`（网/冰下面压哪一枚棋子）。没写就沿用原来的确定性默认值。
+	ice_lengths = {}
+	trapped_chips = {}
+	for entry in lvl.get("obstacles", []):
+		if typeof(entry) != TYPE_DICTIONARY:
+			continue
+		var slot = (entry as Dictionary).get("slot", [])
+		if typeof(slot) != TYPE_ARRAY or (slot as Array).size() < 2:
+			continue
+		var ocell := Vector2i(int((slot as Array)[0]), int((slot as Array)[1]))
+		var sec = (entry as Dictionary).get("seconds", null)
+		if typeof(sec) == TYPE_INT or typeof(sec) == TYPE_FLOAT:
+			if int(sec) > 0:
+				ice_lengths[ocell] = int(sec)
+		var chip = (entry as Dictionary).get("chip", null)
+		if typeof(chip) == TYPE_DICTIONARY:
+			var cident := String((chip as Dictionary).get("entity", ""))
+			if not cident.is_empty():
+				trapped_chips[ocell] = {"entity": cident,
+						"level": int((chip as Dictionary).get("level", 1))}
 	# 2026-11-11：蜘蛛网下面**压着一枚确定的棋子**（和视图 `IceCell.chip` 画的是同一枚）。
 	# 这样"拖一枚同款棋子压上去"才有比较对象：解锁网 + 合成高一级。
 	for cell in board.obstacles.keys():
@@ -88,24 +113,30 @@ func _load_level(index: int) -> void:
 			continue
 		if board.has_item(cell):
 			continue
-		var webbed := IceCell.chip(model.project, cell)
+		var webbed := _trapped_chip(cell)
 		if not webbed.is_empty():
 			board.put(cell, String(webbed.get("entity", "")), int(webbed.get("level", 1)))
 	# 2026-11-10：关卡自带的冰从关卡开始计时。
+	# 2026-11-12（操作者报的 bug）：倒计时必须从**这一关开始的那一刻**算。
+	# 以前记的是 0.0，而 `time` 是整个工程的全局时钟 —— 玩到第 2 关时冰已经
+	# 倒数了第 1 关花掉的时间（设 30 秒、进关只剩 15 秒）。
 	ice_since = {}
 	for cell in board.obstacles.keys():
 		var kinds0: Array = board.obstacle_types(cell)
-		if kinds0.has("ice") or kinds0.has("icebox"):
-			ice_since[cell] = 0.0
+		if kinds0.has("ice"):
+			ice_since[cell] = time
 	# Multi-cell safeboxes: the level declares the sizes it wants (e.g. ["1x7","2x4"]);
 	# their cells are blocked for the whole level, so no spawn/drop/merge lands there.
+	# 2026-11-12（操作者）：柜子改成 JSON 指定坐标，只在里占格，不参与规则。
 	safeboxes = []
-	var sizes = lvl.get("safes", [])
-	if typeof(sizes) == TYPE_ARRAY and not (sizes as Array).is_empty():
-		var occupied: Array = []
+	var raw_safes = lvl.get("safes", [])
+	if typeof(raw_safes) == TYPE_ARRAY and not (raw_safes as Array).is_empty():
+		var occupied := {}
 		for pos in board.cells.keys():
-			occupied.append(pos)
-		safeboxes = Safeboxes.layout(board.width, board.height, seed_value, index, sizes, occupied)
+			occupied[pos] = "item"
+		for pos in board.obstacles.keys():
+			occupied[pos] = "obstacle"
+		safeboxes = Safeboxes.parse(raw_safes, board.width, board.height, occupied)
 		for cell in Safeboxes.cells(safeboxes):
 			board.add_obstacle(cell, "safe")
 
@@ -174,7 +205,6 @@ func _make_order(raw: Dictionary) -> Dictionary:
 		"id": String(raw.get("id", "")),
 		"character": String(raw.get("character", "")),
 		"mission": mission,
-		"star": int(raw.get("star", 0)),
 		"coin": int(raw.get("coin", 0)),
 		# 2026-11-09：订单的钻石奖励（订单卡底部那颗）。缺省 0 = 这单不给钻石，
 		# 老数据/老 take 不加字段也能照旧跑。
@@ -465,27 +495,6 @@ func _do_stockpile_tap(_payload: Dictionary) -> Dictionary:
 	return _ok("stockpile spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
 
 
-## 配置优先；否则取「当前订单需求的低一级」，多订单时按 RNG 抽一个。
-func _stockpile_output(cfg: Dictionary) -> Dictionary:
-	var want := String(cfg.get("entity", ""))
-	var lvl := int(cfg.get("level", 0))
-	if not want.is_empty() and lvl > 0:
-		return {"entity": want, "level": lvl}
-	var candidates: Array = []
-	for order in orders:
-		if bool(order.get("done", false)):
-			continue
-		for m in order.get("mission", []):
-			var entity := String((m as Dictionary).get("entity", ""))
-			var need := int((m as Dictionary).get("level", 1))
-			if entity.is_empty():
-				continue
-			candidates.append({"entity": entity, "level": maxi(need - 1, 1)})
-	if candidates.is_empty():
-		return {}
-	return candidates[rng.next_int(candidates.size())]
-
-
 func _do_tap(payload: Dictionary) -> Dictionary:
 	last_spawn = {}
 	var target = payload.get("target", null)
@@ -607,10 +616,11 @@ func _do_merge(payload: Dictionary) -> Dictionary:
 
 
 ## 冰的倒计时长度（秒）。关卡 JSON 的 `ice_seconds` 是**关卡自带冰**的时长
-## （第 1 关配成 45 秒，显示 00:45）；盒子开出来的 `icebox` 仍按 5~10 分钟。
-func ice_seconds(kind: String, cell: Vector2i) -> int:
-	if kind == "icebox":
-		return IceCell.start_seconds_between(cell, 5 * 60, 10 * 60)
+## （第 1 关配成 45 秒，显示 00:45）；每格也可以用 `obstacle.seconds` 单独配。
+func ice_seconds(_kind: String, cell: Vector2i) -> int:
+	# 关卡里给这一格写了 `seconds` 就用它（每块冰可以不一样）。
+	if ice_lengths.has(cell):
+		return maxi(int(ice_lengths[cell]), 1)
 	var raw = model.level(int(level_index)).get("ice_seconds", 0)
 	if typeof(raw) == TYPE_INT or typeof(raw) == TYPE_FLOAT:
 		var v := int(raw)
@@ -619,30 +629,35 @@ func ice_seconds(kind: String, cell: Vector2i) -> int:
 	return IceCell.start_seconds(cell)
 
 
+## 网 / 冰下面那枚棋子：JSON 指定优先，否则沿用确定性生成的那一枚。
+func _trapped_chip(cell: Vector2i) -> Dictionary:
+	if trapped_chips.has(cell):
+		return trapped_chips[cell]
+	return IceCell.chip(model.project, cell)
+
+
 ## 某格冰还剩多少秒（给视图显示用，和融化判定同一份算法）。
 func ice_remaining(cell: Vector2i) -> int:
 	if not ice_since.has(cell):
 		return 0
-	var kinds: Array = board.obstacle_types(cell)
-	var kind := "icebox" if kinds.has("icebox") else "ice"
 	var start := float(ice_since[cell])
-	return maxi(ice_seconds(kind, cell) - int(floor(maxf(time - start, 0.0))), 0)
+	return maxi(ice_seconds("ice", cell) - int(floor(maxf(time - start, 0.0))), 0)
 
 
 ## 时间推进到 `t`：到点的冰**自己化掉**（这是冰唯一的解锁方式）。
-## 返回 [{"cell": [x, y], "kind": "ice"/"icebox", "melt": true}, ...]，实机与成片各播一次。
+## 返回 [{"cell": [x, y], "kind": "ice", "melt": true}, ...]，实机与成片各播一次。
 func tick_to(t: float) -> Array:
 	time = maxf(time, t)
 	var out: Array = []
 	for cell in ice_since.keys():
 		var kinds: Array = board.obstacle_types(cell)
-		if not kinds.has("ice") and not kinds.has("icebox"):
+		if not kinds.has("ice"):
 			continue
 		if ice_remaining(cell) > 0:
 			continue
-		var kind := "icebox" if kinds.has("icebox") else "ice"
+		var kind := "ice"
 		if board.remove_obstacle(cell, kind):
-			var frozen := IceCell.chip(model.project, cell)
+			var frozen := _trapped_chip(cell)
 			if not frozen.is_empty() and not board.has_item(cell):
 				board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
 						int(frozen.get("level", 1)))
@@ -679,25 +694,25 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 				# 2026-11-10：冰**只能等时间到**自己化掉，合并的爆炸不许波及。
 				# 2026-11-11（操作者口径）：蜘蛛网也**不再被爆炸炸开** ——
 				# 只能拖一枚同款棋子压上去，解锁并合成高一级（见 _do_merge）。
-				if k == "ice" or k == "icebox" or k == "web":
+				if k == "ice" or k == "web":
 					continue
 				# 2026-11-11（操作者改口径）：蓝盒子（lock）砸开后**只出蜘蛛网 + 棋子**，
-				# 冰块那条路去掉（冰只保留关卡自己摆的 `ice`，以及老 take 里已有的 `icebox`）。
+				# 冰块那条路去掉（冰只保留关卡自己摆的 `ice`）。
 				if k == "lock":
 					if board.remove_obstacle(cell, k):
 						board.add_obstacle(cell, "web")
 						# 2026-11-11：盒子变出来的网**也要压一枚棋子**（和关卡自带的网一致），
 						# 否则玩家拖"同款"过来没有比较对象 —— `_do_merge` 只会报目标为空。
 						if not board.has_item(cell):
-							var webbed_chip := IceCell.chip(model.project, cell)
+							var webbed_chip := _trapped_chip(cell)
 							if not webbed_chip.is_empty():
 								board.put(cell, String(webbed_chip.get("entity", "")),
 										int(webbed_chip.get("level", 1)))
 						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": "web"})
 					continue
 				if board.remove_obstacle(cell, k):
-					if k == "ice" or k == "web" or k == "icebox":
-						var frozen := IceCell.chip(model.project, cell)
+					if k == "ice" or k == "web":
+						var frozen := _trapped_chip(cell)
 						if not frozen.is_empty() and not board.has_item(cell):
 							board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
 									int(frozen.get("level", 1)))
@@ -872,7 +887,6 @@ func _settle_order(order: Dictionary) -> void:
 		it["have"] = 0
 	order["done"] = true
 	hud["coin"] = int(hud.get("coin", 0)) + int(order.get("coin", 0))
-	hud["star"] = int(hud.get("star", 0)) + int(order.get("star", 0))
 	# 2026-11-09：钻石/体力与金币同一时刻入账（视图层据此播飞行 + 数字跳）。
 	hud["gem"] = int(hud.get("gem", 0)) + int(order.get("gem", 0))
 	hud["energy"] = int(hud.get("energy", 0)) + int(order.get("energy", 0))
@@ -1004,7 +1018,6 @@ func snapshot() -> Dictionary:
 			"id": String(o["id"]),
 			"character": String(o["character"]),
 			"mission": mission_rows,
-			"star": int(o["star"]),
 			"coin": int(o["coin"]),
 			"gem": int(o.get("gem", 0)),
 			"energy": int(o.get("energy", 0)),
@@ -1014,6 +1027,16 @@ func snapshot() -> Dictionary:
 	var board_snap := {}
 	if board != null:
 		board_snap = board.snapshot()
+		# 2026-11-11：网/冰下面那枚棋子与每格冰的秒数由 JSON 决定，
+		# 视图层只照着画 —— 不再各算一份 IceCell.chip()。
+		var trapped := {}
+		for cell in trapped_chips.keys():
+			trapped["%d,%d" % [cell.x, cell.y]] = (trapped_chips[cell] as Dictionary).duplicate()
+		board_snap["trapped"] = trapped
+		var ice_len := {}
+		for cell in ice_lengths.keys():
+			ice_len["%d,%d" % [cell.x, cell.y]] = int(ice_lengths[cell])
+		board_snap["ice_lengths"] = ice_len
 
 	return {
 		"level_index": level_index,

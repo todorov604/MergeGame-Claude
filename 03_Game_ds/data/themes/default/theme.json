@@ -114,6 +114,102 @@
       "8": "chip_clean_cd_lv08",
       "9": "chip_clean_cd_lv09",
       "10": "chip_clean_cd_lv10"
+    },
+    "CleanSet_Ce": {
+      "1": "chip_clean_ce_lv01",
+      "2": "chip_clean_ce_lv02",
+      "3": "chip_clean_ce_lv03",
+      "4": "chip_clean_ce_lv04",
+      "5": "chip_clean_ce_lv05",
+      "6": "chip_clean_ce_lv06",
+      "7": "chip_clean_ce_lv07",
+      "8": "chip_clean_ce_lv08",
+      "9": "chip_clean_ce_lv09",
+      "10": "chip_clean_ce_lv10"
+    },
+    "CleanSet_Cf": {
+      "1": "chip_clean_cf_lv01",
+      "2": "chip_clean_cf_lv02",
+      "3": "chip_clean_cf_lv03",
+      "4": "chip_clean_cf_lv04",
+      "5": "chip_clean_cf_lv05",
+      "6": "chip_clean_cf_lv06",
+      "7": "chip_clean_cf_lv07",
+      "8": "chip_clean_cf_lv08",
+      "9": "chip_clean_cf_lv09",
+      "10": "chip_clean_cf_lv10"
+    },
+    "CleanSet_Cg": {
+      "1": "chip_clean_cg_lv01",
+      "2": "chip_clean_cg_lv02",
+      "3": "chip_clean_cg_lv03",
+      "4": "chip_clean_cg_lv04",
+      "5": "chip_clean_cg_lv05",
+      "6": "chip_clean_cg_lv06",
+      "7": "chip_clean_cg_lv07",
+      "8": "chip_clean_cg_lv08",
+      "9": "chip_clean_cg_lv09",
+      "10": "chip_clean_cg_lv10"
+    },
+    "CleanSet_Ch": {
+      "1": "chip_clean_ch_lv01",
+      "2": "chip_clean_ch_lv02",
+      "3": "chip_clean_ch_lv03",
+      "4": "chip_clean_ch_lv04",
+      "5": "chip_clean_ch_lv05",
+      "6": "chip_clean_ch_lv06",
+      "7": "chip_clean_ch_lv07",
+      "8": "chip_clean_ch_lv08",
+      "9": "chip_clean_ch_lv09",
+      "10": "chip_clean_ch_lv10"
+    },
+    "CleanSet_Ci": {
+      "1": "chip_clean_ci_lv01",
+      "2": "chip_clean_ci_lv02",
+      "3": "chip_clean_ci_lv03",
+      "4": "chip_clean_ci_lv04",
+      "5": "chip_clean_ci_lv05",
+      "6": "chip_clean_ci_lv06",
+      "7": "chip_clean_ci_lv07",
+      "8": "chip_clean_ci_lv08",
+      "9": "chip_clean_ci_lv09",
+      "10": "chip_clean_ci_lv10"
+    },
+    "CleanSet_Cj": {
+      "1": "chip_clean_cj_lv01",
+      "2": "chip_clean_cj_lv02",
+      "3": "chip_clean_cj_lv03",
+      "4": "chip_clean_cj_lv04",
+      "5": "chip_clean_cj_lv05",
+      "6": "chip_clean_cj_lv06",
+      "7": "chip_clean_cj_lv07",
+      "8": "chip_clean_cj_lv08",
+      "9": "chip_clean_cj_lv09",
+      "10": "chip_clean_cj_lv10"
+    },
+    "CleanSet_Ck": {
+      "1": "chip_clean_ck_lv01",
+      "2": "chip_clean_ck_lv02",
+      "3": "chip_clean_ck_lv03",
+      "4": "chip_clean_ck_lv04",
+      "5": "chip_clean_ck_lv05",
+      "6": "chip_clean_ck_lv06",
+      "7": "chip_clean_ck_lv07",
+      "8": "chip_clean_ck_lv08",
+      "9": "chip_clean_ck_lv09",
+      "10": "chip_clean_ck_lv10"
+    },
+    "CleanSet_Cl": {
+      "1": "chip_clean_cl_lv01",
+      "2": "chip_clean_cl_lv02",
+      "3": "chip_clean_cl_lv03",
+      "4": "chip_clean_cl_lv04",
+      "5": "chip_clean_cl_lv05",
+      "6": "chip_clean_cl_lv06",
+      "7": "chip_clean_cl_lv07",
+      "8": "chip_clean_cl_lv08",
+      "9": "chip_clean_cl_lv09",
+      "10": "chip_clean_cl_lv10"
     }
   },
   "generator_premium": "ui_generator_premium"

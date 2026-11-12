@@ -36,7 +36,7 @@
         "hue": "#F2A65A",
         "label": "A",
         "icons": {
-          "1": "ui_icon_star"
+          "1": "board_frame"
         }
       }
     },

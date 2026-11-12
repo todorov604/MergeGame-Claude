@@ -418,9 +418,9 @@ func _test_swap_command(t) -> void:
 	# 所见即所得: the green cell + finish badge are derived from the snapshot, so the
 	# completed marker travels with the chip after a swap.
 	var done_before: Array = CompletedCells.from_snapshot(sim.snapshot())
-	# 2026-11-10：第 1 关改成两个任务（Ca2×1 + Ca1×2），Ca1 开局就摆在棋盘上，
-	# 所以开局可付的格子 = 4 枚 Ca1（Ca2 那行还得靠合并）
-	t.eq(done_before.size(), 6, "level 1 starts with its Ca1 cells completed")
+	# 开局可付的格子数由关卡数据决定（操作者会改棋盘）——这里只断言"有、且不超过棋盘总枚数"，
+	# 精确数字交给数据驱动：枚数 = 数据里该 entity@level 的露在外面的棋子数。
+	t.eq(done_before.size(), _free_ca1_count(), "level 1 开局铺绿的格子 = 数据里露在外面的 Ca 棋子")
 	if done_before.size() >= 1:
 		var done_cell := Vector2i(int(done_before[0][0]), int(done_before[0][1]))
 		var free2 := Vector2i(-1, -1)
@@ -491,7 +491,6 @@ func _test_scripts_compile(t) -> void:
 		var screen = screen_script.new()
 		t.ok(screen is Control, "game_screen instantiates as a Control")
 		t.ok(screen.has_method("_fit_preview_window"), "game_screen keeps the F5 window helper")
-		t.ok(screen.has_method("_free_click"), "game_screen exposes the free-mode click path")
 		t.ok(screen.has_method("_free_click_at"), "game_screen exposes the testable click point")
 		t.ok(screen.has_method("_start_recording"), "game_screen exposes take recording")
 		if screen != null:
@@ -501,7 +500,47 @@ func _test_scripts_compile(t) -> void:
 	if film_script != null:
 		var film = film_script.new()
 		t.ok(film is Control, "movie_scene instantiates as a Control")
-		t.ok(film.has_method("_draw_cursor"), "movie_scene can draw the recorded cursor")
+		t.ok(film.has_method("_paint_cursor"), "movie_scene can paint the recorded cursor")
 		t.ok(film.has_method("_load_take"), "movie_scene can load a take")
 		if film != null:
 			film.free()
+
+
+## 数据里第 1 关"露在外面（不被障碍盖住）"的 Ca 棋子数 —— 游戏 CompletedCells 的判据。
+func _free_ca1_count() -> int:
+	var model = ProjectModel.new()
+	if not model.load_file(SAMPLE):
+		return 0
+	var lv: Dictionary = model.level(0)
+	var blocked := {}
+	for o in (lv.get("obstacles", []) as Array):
+		var slot = (o as Dictionary).get("slot", [])
+		if typeof(slot) == TYPE_ARRAY and (slot as Array).size() >= 2:
+			blocked["%d@%d" % [int(slot[0]), int(slot[1])]] = true
+	# 本关所有订单子任务要的 entity@level
+	var wanted := {}
+	for order in (lv.get("orders", []) as Array):
+		for m in ((order as Dictionary).get("mission", []) as Array):
+			wanted["%s@%d" % [String((m as Dictionary).get("entity", "")),
+					int((m as Dictionary).get("level", 1))]] = true
+	# 安全柜/冰同样挡住；safes 的格子由 Safeboxes 布局决定，这里用 sim 的真实棋盘来数。
+	var sim = Sim.new()
+	sim.setup(model, 7)
+	var n := 0
+	for cell in sim.board.cells.keys():
+		if sim.board.is_blocked(cell):
+			continue
+		var item: Dictionary = sim.board.item(cell)
+		var ent := String(item.get("entity", ""))
+		if ent.is_empty():
+			continue
+		if String(model.entity(ent).get("kind", "chip")) != "chip":
+			continue
+		# 绿格只由"订单真正要的 entity@level"点亮（本关是 Ca lv1 与 Ca lv2），不是所有棋子。
+		var key := "%s@%d" % [ent, int(item.get("level", 0))]
+		if not wanted.has(key):
+			continue
+		if sim.board.obstacle_types(cell).has("web") or sim.board.obstacle_types(cell).has("ice"):
+			continue
+		n += 1
+	return n

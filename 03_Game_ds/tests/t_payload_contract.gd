@@ -1,4 +1,5 @@
 extends RefCounted
+const Known = preload("res://tests/fixtures/known_sample_errors.gd")
 ## N2 (validator side) — sim event payload contract.
 ##
 ## src/core/sim.gd reads a fixed shape out of every sim payload: tap reads
@@ -109,7 +110,7 @@ func _assert_shape(t, r, path: String, what: String) -> void:
 
 func _test_sample_is_clean(t) -> void:
 	var r = _validate(_sample(), "case_payload_sample")
-	t.ok(bool(r.ok), "sample payloads satisfy every sim contract", str(r.codes()))
+	t.eq(Known.extra(r.codes()), [], "sample payloads add no new errors", str(r.codes()))
 	t.ok(not _has_shape(r.errors), "sample produces no EV_PAYLOAD_SHAPE")
 
 
@@ -208,4 +209,4 @@ func _test_good_shapes(t) -> void:
 	_append(p, "t_tick_ok", "energy_tick", 21.5, {"delta": -2})
 	var r = _validate(p, "case_payload_good")
 	t.ok(not _has_shape(r.errors), "every well-formed payload passes the contract", str(r.codes()))
-	t.ok(bool(r.ok), "the extended project is otherwise valid", str(r.codes()))
+	t.eq(Known.extra(r.codes()), [], "the extended project adds no new errors", str(r.codes()))

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MergeGame 内容编辑器 Sample</title>
+<style>
+:root{
+  --bg:#0d1726;--panel:#15243a;--panel2:#1d304a;--line:#2d4564;--text:#eaf2ff;
+  --muted:#91a6c1;--blue:#65a9ff;--blue2:#2b6fb8;--green:#83d46a;--gold:#f7c84b;
+  --danger:#ff7777;--radius:14px;--shadow:0 18px 50px rgba(0,0,0,.28)
+}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 50% -10%,#23446c 0,#0d1726 52%);color:var(--text);font-family:"Segoe UI","Microsoft YaHei",sans-serif;min-width:1180px}
+button,select,input{font:inherit;color:inherit} button{cursor:pointer;border:1px solid var(--line);background:#1b2d46;border-radius:9px;padding:8px 12px}button:hover{background:#274366}button.primary{background:linear-gradient(180deg,#6db7ff,#3277bd);border-color:#80c0ff;color:#fff;font-weight:700}button.ghost{background:transparent;color:var(--muted)}
+.app{width:1420px;margin:24px auto 40px;background:rgba(15,28,47,.92);border:1px solid #345173;border-radius:18px;box-shadow:var(--shadow);overflow:hidden}.topbar{height:66px;display:flex;align-items:center;gap:18px;padding:0 22px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#1b3554,#14253d)}.brand{font-size:21px;font-weight:800;letter-spacing:.5px}.brand small{display:block;color:var(--muted);font-size:11px;font-weight:400;margin-top:2px}.path{flex:1;color:#b8c9df;background:#102139;border:1px solid #294362;border-radius:8px;padding:9px 12px;font-size:13px}.status{font-size:12px;color:#a8e58b}.top-actions{display:flex;gap:8px}.body{display:grid;grid-template-columns:190px 1fr 330px;min-height:850px}.sidebar{padding:20px 12px;border-right:1px solid var(--line);background:#111f33}.nav-title{font-size:11px;text-transform:uppercase;color:#7290b3;letter-spacing:1px;padding:0 10px 10px}.nav{display:flex;flex-direction:column;gap:7px}.nav button{display:flex;align-items:center;gap:10px;text-align:left;width:100%;border-color:transparent;background:transparent;color:#a9bdd5}.nav button.active{background:linear-gradient(90deg,#315c8d,#234265);border-color:#4e83bb;color:#fff}.nav .ico{width:22px;text-align:center;font-size:17px}.side-sep{height:1px;background:var(--line);margin:20px 10px}.side-card{margin:0 4px;padding:12px;border:1px solid #2b4564;background:#152a43;border-radius:11px;font-size:12px;color:#9db4cf;line-height:1.55}.side-card b{color:#e8f2ff}.workspace{padding:20px 24px 30px;background:linear-gradient(180deg,#13243a,#101c2e)}.workspace-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}.workspace-head h2{font-size:18px;margin:0}.workspace-head span{font-size:12px;color:var(--muted)}.workspace-grid{display:grid;grid-template-columns:350px 1fr;gap:22px;align-items:start}.levels{border:1px solid var(--line);background:#14263e;border-radius:var(--radius);overflow:hidden}.levels-head{padding:13px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}.levels-head b{font-size:13px}.level-list{padding:8px}.level-row{display:flex;align-items:center;justify-content:space-between;padding:11px 10px;border-radius:9px;color:#b4c9df;cursor:pointer}.level-row:hover{background:#1c3655}.level-row.active{background:#285582;color:#fff}.level-row .meta{font-size:11px;color:#8eabca}.level-row.active .meta{color:#c3ddff}.preview-card{border:1px solid var(--line);border-radius:var(--radius);background:#14263e;padding:16px;display:flex;flex-direction:column;align-items:center}.preview-title{width:100%;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;font-size:13px;color:#b9cce2}.preview-title .zoom{color:#82b9ef;font-size:11px}.phone-wrap{width:270px;height:480px;padding:0;border-radius:22px;background:#07111e;border:8px solid #091321;box-shadow:0 10px 30px rgba(0,0,0,.45)}.game-preview{position:relative;width:540px;height:960px;transform:scale(.5);transform-origin:top left;overflow:hidden;border-radius:13px;background:#e1cdb2}.game-preview:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(247,227,198,.9),rgba(186,157,120,.92));z-index:0}.bg-top{position:absolute;left:0;top:0;width:540px;height:205px;background:url('../assets/ui/main_bg_01_top.png') center/cover no-repeat;opacity:.92}.bg-bottom{position:absolute;left:0;top:205px;width:540px;height:755px;background:url('../assets/ui/main_bg_01_bottom.png') center/cover no-repeat;opacity:.9}.hud{position:absolute;top:0;left:0;width:540px;height:75px;z-index:3}.level-badge{position:absolute;left:8px;top:8px;width:58px;height:52px;background:url('../assets/ui/main_bar_level_bg.png') center/contain no-repeat;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:21px;color:#fff;text-shadow:0 2px 2px #23466e}.resource-row{position:absolute;top:12px;left:74px;right:5px;display:flex;align-items:center;gap:8px}.resource{height:41px;border-radius:12px;background-position:center;background-size:100% 100%;background-repeat:no-repeat;position:relative;display:flex;align-items:center;justify-content:center;color:#31517d;font-weight:900;font-size:18px;text-shadow:0 1px #fff}.resource.energy{width:105px;background-image:url('../assets/ui/energy_bar.png')}.resource.coin{width:120px;background-image:url('../assets/ui/coin_bar.png')}.resource.gem{width:117px;background-image:url('../assets/ui/gem_bar.png')}.resource b{margin-left:18px}.clock{position:absolute;left:80px;top:48px;width:100px;text-align:center;color:#fff;font-size:13px;font-weight:800;text-shadow:0 1px 3px #284568}.shop{position:absolute;right:3px;top:3px;width:58px;height:55px;background:url('../assets/ui/common_main_btn_shop.png') center/contain no-repeat}.orders{position:absolute;z-index:4;left:0;top:75px;width:540px;height:125px}.orders-title{position:absolute;left:10px;top:4px;color:#5c483c;font-size:10px;font-weight:800;letter-spacing:1px}.stockpile{position:absolute;left:10px;top:35px;width:72px;height:72px;border-radius:15px;background:url('../assets/ui/stockpile_frame.png') center/contain no-repeat;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;text-shadow:0 2px 3px #385f88}.order-card{position:absolute;top:28px;width:205px;height:92px;background:url('../assets/ui/order_card_bar.png') center/100% 100% no-repeat;border-radius:9px;filter:drop-shadow(0 4px 4px rgba(58,40,24,.2))}.order-card.one{left:113px}.order-card.two{left:325px}.portrait{position:absolute;left:8px;top:-40px;width:58px;height:72px;object-fit:contain;z-index:2;filter:drop-shadow(0 4px 2px rgba(0,0,0,.22))}.order-id{position:absolute;left:12px;top:10px;font-size:10px;font-weight:800;color:#5b3f37}.mission-row{position:absolute;left:70px;right:6px;top:21px;display:flex;gap:4px}.mission-chip{position:relative;width:43px;height:43px;border-radius:9px;background:rgba(255,255,255,.45);border:1px solid rgba(91,70,49,.22);display:flex;align-items:center;justify-content:center}.mission-chip img{width:36px;height:36px;object-fit:contain}.mission-chip small{position:absolute;right:-2px;bottom:-4px;background:#78c95d;color:#fff;border-radius:6px;padding:1px 3px;font-size:8px;border:1px solid #fff}.reward-row{position:absolute;left:74px;bottom:6px;right:8px;display:flex;align-items:center;justify-content:flex-end;gap:7px;font-size:12px;color:#fff;font-weight:900;text-shadow:0 1px 2px #304870}.reward-row img{object-fit:contain}.reward-row .energy-i{width:14px;height:19px}.reward-row .gem-i{width:18px;height:15px}.board{position:absolute;z-index:2;left:24px;top:214px;width:492px;height:615px;border-radius:22px;background:url('../assets/ui/board_frame.png') center/100% 100% no-repeat;padding:17px 16px 14px}.grid{width:100%;height:100%;display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(9,1fr);gap:3px}.cell{position:relative;border-radius:8px;background:url('../assets/ui/board_plate.png') center/100% 100% no-repeat;display:flex;align-items:center;justify-content:center;cursor:pointer}.cell:hover{filter:brightness(1.12)}.cell.selected{outline:3px solid #ffd34d;outline-offset:-3px;box-shadow:0 0 0 4px rgba(255,211,77,.28)}.cell .chip{width:82%;height:82%;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(56,57,57,.28))}.cell.done:after{content:"✓";position:absolute;right:1px;bottom:1px;width:17px;height:17px;border-radius:50%;background:#58bb4d;color:#fff;font-size:13px;text-align:center;line-height:17px;font-weight:900;border:2px solid #e9f6e6}.cell.lock:after{content:"";position:absolute;inset:0;background:url('../assets/ui/main_common_icon_lock_1x1.png') center/48% no-repeat,rgba(82,98,117,.18);border-radius:8px}.bottom{position:absolute;left:0;right:0;bottom:0;height:136px;z-index:3;background:url('../assets/ui/items.png') center/100% 100% no-repeat}.bottom-title{position:absolute;left:34px;top:27px;color:#2f4359;font-weight:900;font-size:19px}.bottom-sub{position:absolute;left:34px;top:57px;color:#5e7186;font-size:13px}.bottom-line{position:absolute;left:34px;top:49px;width:168px;height:2px;background:#9ab1c4}.buy{position:absolute;right:35px;top:13px;width:58px;height:58px;background:url('../assets/ui/coin_reward.png') center/contain no-repeat;color:#fff;text-align:center;font-weight:900;font-size:13px;padding-top:42px;text-shadow:0 1px 2px #2f6b1e}.exit{position:absolute;left:8px;bottom:6px;width:51px;height:54px;background:url('../assets/ui/exit_button.png') center/contain no-repeat}.bag{position:absolute;right:9px;bottom:5px;width:45px;height:58px;background:url('../assets/ui/common_main_btn_cabinet.png') center/contain no-repeat}.inspector{padding:20px 18px;border-left:1px solid var(--line);background:#111f33}.inspector h3{margin:0 0 14px;font-size:16px}.form-section{border-top:1px solid var(--line);padding-top:15px;margin-top:16px}.form-section:first-of-type{border-top:0;padding-top:0;margin-top:0}.form-label{display:block;color:#8fa8c5;font-size:12px;margin:0 0 6px}.field{width:100%;background:#0f2036;border:1px solid #2b4665;border-radius:8px;padding:9px 10px;margin-bottom:11px;outline:none}.field:focus{border-color:var(--blue);box-shadow:0 0 0 2px rgba(101,169,255,.16)}.form-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mission-edit{display:grid;grid-template-columns:1fr 62px 52px 30px;gap:6px;align-items:center;margin-bottom:7px}.mission-edit select,.mission-edit input{min-width:0;padding:7px 5px;background:#0f2036;border:1px solid #2b4665;border-radius:7px;font-size:12px}.mission-edit button{padding:5px 0;background:#311f2b;color:#f39595;border-color:#623247}.reward-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.reward-grid label{color:#8fa8c5;font-size:11px}.reward-grid input{width:100%;margin-top:5px;padding:8px;background:#0f2036;border:1px solid #2b4665;border-radius:7px}.inspector-actions{display:flex;gap:8px;margin-top:18px}.inspector-actions button{flex:1}.toast{position:fixed;right:28px;bottom:26px;background:#1c3d2b;border:1px solid #5dba7a;color:#d9ffe3;padding:12px 17px;border-radius:10px;opacity:0;transform:translateY(10px);transition:.22s;pointer-events:none}.toast.show{opacity:1;transform:none}.hint{font-size:11px;color:#7691af;line-height:1.55;margin-top:12px}
+@media(max-width:1220px){body{min-width:0}.app{width:calc(100% - 24px)}.body{grid-template-columns:175px 1fr 300px}.workspace-grid{grid-template-columns:300px 1fr}.phone-wrap{transform:scale(.9);transform-origin:top center;margin-bottom:-48px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">MergeGame 内容编辑器<small>HTML Authoring Preview · Godot 运行时数据源</small></div>
+    <div class="path">工程：E:\MergeGame-Claude\03_Game_ds　/　data/sample_project.json</div>
+    <div class="status">● 已加载 sample_project.json</div>
+    <div class="top-actions"><button class="ghost" id="loadBtn">重新读取</button><button class="primary" id="buildBtn">生成 JSON</button></div>
+  </header>
+  <div class="body">
+    <aside class="sidebar">
+      <div class="nav-title">编辑模块</div>
+      <nav class="nav">
+        <button class="active" data-tab="level"><span class="ico">▦</span>关卡设计</button>
+        <button data-tab="order"><span class="ico">▤</span>订单任务</button>
+        <button data-tab="icon"><span class="ico">◆</span>图标资源</button>
+        <button data-tab="theme"><span class="ico">◈</span>主题外观</button>
+      </nav>
+      <div class="side-sep"></div>
+      <div class="nav-title">当前状态</div>
+      <div class="side-card"><b>level_1</b><br>棋盘：7 × 9<br>订单：1 张<br>任务：2 行<br>资源：已通过登记</div>
+      <div class="side-sep"></div>
+      <div class="side-card">编辑器只修改数据。实机和成片继续读取同一份 JSON。</div>
+    </aside>
+
+    <main class="workspace">
+      <div class="workspace-head"><h2 id="workspaceTitle">关卡设计</h2><span id="workspaceSub">实时预览 540 × 960 · 当前关卡 level_1</span></div>
+      <div class="workspace-grid">
+        <section class="levels">
+          <div class="levels-head"><b>关卡列表</b><button id="addLevel">＋ 新关卡</button></div>
+          <div class="level-list" id="levelList">
+            <div class="level-row active" data-level="level_1"><span>01　庄园初见</span><span class="meta">1 订单</span></div>
+            <div class="level-row" data-level="level_2"><span>02　仓库整理</span><span class="meta">5 订单</span></div>
+          </div>
+          <div class="levels-head" style="border-top:1px solid var(--line)"><b>快速操作</b></div>
+          <div style="padding:12px;display:grid;gap:8px"><button id="copyLevel">复制当前关卡</button><button id="previewTake">预览当前数据</button></div>
+        </section>
+
+        <section class="preview-card">
+          <div class="preview-title"><span>Godot 游戏画面预览</span><span class="zoom">设计坐标 540 × 960　缩放 50%</span></div>
+          <div class="phone-wrap" aria-label="540x960 游戏画面预览">
+            <div class="game-preview">
+              <div class="bg-top"></div><div class="bg-bottom"></div>
+              <div class="hud">
+                <div class="level-badge">1</div>
+                <div class="resource-row"><div class="resource energy"><b>88</b></div><div class="resource coin"><b>9</b></div><div class="resource gem"><b>99</b></div></div>
+                <div class="clock">29:58</div><div class="shop"></div>
+              </div>
+              <div class="orders">
+                <div class="orders-title">订单队列　·　可拖动预览</div>
+                <div class="stockpile">×9</div>
+                <div class="order-card one">
+                  <img class="portrait" src="../assets/ui/char_blonde.png"><div class="order-id">ORDER_01</div>
+                  <div class="mission-row"><div class="mission-chip"><img src="../assets/chips/icon_10002102.png"><small>0/1</small></div><div class="mission-chip"><img src="../assets/chips/icon_10002101.png"><small>0/4</small></div></div>
+                  <div class="reward-row"><img class="energy-i" src="../assets/ui/energy_icon.png">53 <img class="gem-i" src="../assets/ui/gem_icon.png">2</div>
+                </div>
+                <div class="order-card two"><img class="portrait" src="../assets/ui/char_waitress.png"><div class="order-id">ORDER_02</div><div class="mission-row"><div class="mission-chip"><img src="../assets/chips/icon_10002204.png"><small>0/1</small></div></div><div class="reward-row"><img class="energy-i" src="../assets/ui/energy_icon.png">36 <img class="gem-i" src="../assets/ui/gem_icon.png">1</div></div>
+              </div>
+              <div class="board"><div class="grid" id="boardGrid"></div></div>
+              <div class="bottom"><div class="bottom-title">清洁用品仓库</div><div class="bottom-line"></div><div class="bottom-sub">Clean Set · Lv.1</div><div class="buy">购买<br>+20</div><div class="exit"></div><div class="bag"></div></div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <aside class="inspector">
+      <h3 id="inspectorTitle">当前关卡</h3>
+      <div class="form-section">
+        <label class="form-label">关卡名称</label><input class="field" value="庄园初见" id="levelName">
+        <div class="form-row"><div><label class="form-label">宽度</label><input class="field" value="7" type="number"></div><div><label class="form-label">高度</label><input class="field" value="9" type="number"></div></div>
+        <label class="form-label">库存次数</label><input class="field" value="9" type="number">
+      </div>
+      <div class="form-section"><label class="form-label">当前订单</label><select class="field" id="orderSelect"><option>order_1 · char_blonde</option><option>order_2 · char_waitress</option></select><label class="form-label">角色</label><select class="field"><option>char_blonde</option><option>char_waitress</option><option>char_customer</option></select></div>
+      <div class="form-section"><label class="form-label">任务行　（最多 4 行）</label><div id="missionEditor"><div class="mission-edit"><select><option>CleanSet_Ca</option><option>CleanSet_Cb</option></select><select><option>Lv.2</option><option>Lv.1</option></select><input value="1" type="number"><button title="删除">×</button></div><div class="mission-edit"><select><option>CleanSet_Ca</option><option>CleanSet_Cb</option></select><select><option>Lv.1</option><option>Lv.2</option></select><input value="4" type="number"><button title="删除">×</button></div></div><button class="ghost" id="addMission">＋ 添加任务行</button></div>
+      <div class="form-section"><label class="form-label">奖励数值</label><div class="reward-grid"><label>金币<input id="coin" value="5" type="number"></label><label>星星<input value="0" type="number"></label><label>钻石<input id="gem" value="2" type="number"></label><label>体力<input id="energy" value="53" type="number"></label></div></div>
+      <div class="inspector-actions"><button class="primary" id="applyBtn">应用修改</button><button id="resetBtn">撤销</button></div>
+      <div class="hint" id="hint" aria-live="polite">提示：点击中间棋盘格，可以切换选中状态；右侧字段用于演示订单和奖励编辑。</div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite">JSON 已生成</div>
+<script>
+const project={version:2,theme:'themes/default',levels:[{id:'level_1',name:'庄园初见',board:{width:7,height:9,slots:[{x:3,y:4,entity:'CleanBox_C',level:1},{x:2,y:3,entity:'CleanSet_Ca',level:1},{x:3,y:3,entity:'CleanSet_Ca',level:1},{x:4,y:3,entity:'CleanSet_Cb',level:1}]},obstacles:[],orders:[{id:'order_1',character:'char_blonde',mission:[{entity:'CleanSet_Ca',level:2,count:1},{entity:'CleanSet_Ca',level:1,count:4}],coin:5,star:0,gem:2,energy:53}],stockpile:{enabled:true,count:9,entity:'',level:0}},{id:'level_2',name:'仓库整理',board:{width:7,height:9,slots:[]},obstacles:[],orders:[],stockpile:{enabled:true,count:9,entity:'',level:0}}]};
+const chips={CleanSet_Ca:{1:'icon_10002101.png',2:'icon_10002102.png'},CleanSet_Cb:{1:'icon_10002201.png',2:'icon_10002202.png'}};
+let currentLevel=0,selectedCell=-1;
+const grid=document.getElementById('boardGrid');
+function renderGrid(){grid.innerHTML='';const lv=project.levels[currentLevel];const slots=lv.board.slots||[];for(let i=0;i<63;i++){const x=i%7,y=Math.floor(i/7),cell=document.createElement('div');cell.className='cell';const slot=slots.find(s=>s.x===x&&s.y===y);if(slot){const img=document.createElement('img');img.className='chip';const f=chips[slot.entity]?.[slot.level];if(f)img.src='../assets/chips/'+f;cell.appendChild(img);if(slot.entity==='CleanSet_Ca'&&slot.level===2)cell.classList.add('done')}if(i===selectedCell)cell.classList.add('selected');cell.addEventListener('click',()=>{selectedCell=i;renderGrid();document.getElementById('hint').textContent=`已选中棋盘格：(${x}, ${y})，可在后续版本里直接选择实体与等级。`});grid.appendChild(cell)}}
+function selectLevel(index){currentLevel=index;document.querySelectorAll('.level-row').forEach((el,i)=>el.classList.toggle('active',i===index));const lv=project.levels[index];document.getElementById('workspaceSub').textContent=`实时预览 540 × 960 · 当前关卡 ${lv.id}`;document.getElementById('levelName').value=lv.name||lv.id;renderGrid();showToast(`已切换到 ${lv.id}`)}
+function showToast(text){const t=document.getElementById('toast');t.textContent=text;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1700)}
+document.querySelectorAll('.level-row').forEach((el,i)=>el.addEventListener('click',()=>selectLevel(i)));
+document.querySelectorAll('.nav button').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.nav button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const tab=btn.dataset.tab;document.getElementById('workspaceTitle').textContent=tab==='level'?'关卡设计':tab==='order'?'订单任务':tab==='icon'?'图标资源':'主题外观';showToast(`已打开：${btn.textContent.trim()}`)}));
+document.getElementById('addMission').addEventListener('click',()=>{const box=document.getElementById('missionEditor');if(box.children.length>=4){showToast('一个订单最多 4 行任务');return}const row=box.firstElementChild.cloneNode(true);row.querySelector('input').value=1;box.appendChild(row)});
+document.getElementById('copyLevel').addEventListener('click',()=>{const copy=JSON.parse(JSON.stringify(project.levels[currentLevel]));copy.id=`level_${project.levels.length+1}`;copy.name=`${copy.name} 副本`;project.levels.push(copy);const row=document.createElement('div');row.className='level-row';row.dataset.level=copy.id;row.innerHTML=`<span>0${project.levels.length}　${copy.name}</span><span class="meta">${copy.orders.length} 订单</span>`;row.addEventListener('click',()=>selectLevel(project.levels.indexOf(copy)));document.getElementById('levelList').appendChild(row);showToast('已复制当前关卡')});
+document.getElementById('applyBtn').addEventListener('click',()=>{const lv=project.levels[currentLevel];lv.name=document.getElementById('levelName').value;const o=lv.orders[0];if(o){o.coin=Number(document.getElementById('coin').value||0);o.gem=Number(document.getElementById('gem').value||0);o.energy=Number(document.getElementById('energy').value||0)}showToast('修改已应用到内存数据')});
+document.getElementById('resetBtn').addEventListener('click',()=>{document.getElementById('levelName').value=project.levels[currentLevel].name;showToast('已撤销未保存修改')});
+document.getElementById('buildBtn').addEventListener('click',async()=>{const text=JSON.stringify(project,null,2)+'\n';if(window.showSaveFilePicker){try{const h=await window.showSaveFilePicker({suggestedName:'sample_project.json',types:[{description:'JSON',accept:{'application/json':['.json']}}]});const w=await h.createWritable();await w.write(text);await w.close();showToast('JSON 已写入选择的位置');return}catch(e){if(e.name==='AbortError')return}}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download='sample_project.json';a.click();URL.revokeObjectURL(a.href);showToast('JSON 已下载')});
+document.getElementById('loadBtn').addEventListener('click',()=>showToast('示例数据已重新载入'));
+document.getElementById('addLevel').addEventListener('click',()=>showToast('新关卡入口已预留'));
+document.getElementById('previewTake').addEventListener('click',()=>showToast('预览使用当前内存数据'));
+renderGrid();
+</script>
+</body>
+</html>

@@ -24,7 +24,6 @@ const DEFAULT_PALETTE := {
 	"accent": "#5B8DEF",
 	"done": "#8FD46B",
 	"coin": "#F6C445",
-	"star": "#F2B233",
 	"gem": "#B27BEA",
 	"board_tint": "#FFFFFF",
 	"banner": "#FFFFFF",

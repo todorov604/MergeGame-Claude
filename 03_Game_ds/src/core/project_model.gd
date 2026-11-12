@@ -11,7 +11,6 @@ const DEFAULT_HUD := {
 	"energyTickSeconds": 120,
 	"energyTickMode": "decrement",
 	"coin": 0,
-	"star": 0,
 	"gem": 0,
 	"exp": 0,
 }

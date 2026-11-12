@@ -6,9 +6,7 @@
     "board": {
       "frame": "board_frame"
     },
-    "hud": {
-      "star": "ui_icon_star"
-    },
+    "hud": {},
     "generator": {
       "CleanBox_C": "box_treasure_y"
     }

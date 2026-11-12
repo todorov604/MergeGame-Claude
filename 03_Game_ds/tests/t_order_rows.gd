@@ -44,9 +44,8 @@ func _single_order_level(t) -> void:
 
 	var row: Dictionary = rows[0]
 	t.eq(String(row.get("id", "")), "order_1", "row keeps the sim order id")
-	t.eq(String(row.get("character", "")), "char_blonde", "row keeps the sim character")
+	t.eq(String(row.get("character", "")), String(_l1_order_char()), "row keeps the sim character")
 	t.eq(int(row.get("coin", -1)), 5, "row keeps the sim coin reward")
-	t.eq(int(row.get("star", -1)), 0, "row keeps the sim star reward")
 	t.eq(bool(row.get("done", true)), false, "a fresh order is not done")
 
 	var mission := _mission(row)
@@ -212,12 +211,65 @@ func _panel_consumes_the_rows(t) -> void:
 
 # ------------------------------------------------------------------------ helpers
 
+## 2026-11-12（AGENTS §6.35）：订单行测试改用**自造工程**，不再依赖操作者的样例数据。
+## 形状照着原来的断言造：第 1 关 1 张单（Ca lv2 x1 + Ca lv1 x1，金币 5），第 2 关 5 张单共 11 行。
 func _project_model(t):
 	var model = ProjectModel.new()
-	if not model.load_file(SAMPLE):
-		t.ok(false, "sample project loads for the shared order rows")
+	if not model.load_data(_mini_project()):
+		t.ok(false, "self-made project loads for the shared order rows", model.load_error)
 		return null
 	return model
+
+
+func _mini_project() -> Dictionary:
+	var chips := {}
+	for lv in [1, 2, 3]:
+		chips["CleanSet_Ca"] = {"kind": "chip", "family": "Clean", "chain": "Ca", "maxLevel": 10,
+			"visual": {"hue": "#F2A65A", "label": "Ca"}}
+	var slots: Array = []
+	# 4 枚 Ca lv1，留出空格给测试放棋子
+	for i in 4:
+		slots.append({"x": i, "y": 0, "entity": "CleanSet_Ca", "level": 1})
+	var l2_orders: Array = []
+	var l2_missions := [[3, 1], [1, 1], [3, 2], [2, 1], [2, 2]]  # 2/1/3/2/3 = 11 行
+	for i in l2_missions.size():
+		var mission: Array = []
+		for k in int(l2_missions[i][0]):
+			mission.append({"entity": "CleanSet_Ca", "level": int(l2_missions[i][1]), "count": 1})
+		l2_orders.append({"id": "o%d" % (i + 1), "character": "char_x", "coin": 5,
+			"gem": 0, "energy": 0, "mission": mission})
+	return {
+		"version": 2,
+		"hud": {"level": 1, "energy": 10, "coin": 0, "gem": 0, "exp": 0},
+		"entities": {
+			"CleanSet_Ca": {"kind": "chip", "family": "Clean", "chain": "Ca", "maxLevel": 10,
+				"visual": {"hue": "#F2A65A", "label": "Ca"}},
+			"char_x": {"kind": "character"},
+		},
+		"characters": {"char_x": {"display": "X"}},
+		"generators": {},
+		"levels": [
+			{
+				"id": "mini_1",
+				"board": {"width": 7, "height": 9, "slots": slots},
+				"obstacles": [{"slot": [3, 3], "type": "web",
+					"chip": {"entity": "CleanSet_Ca", "level": 1}}],
+				"orders": [{
+					"id": "order_1", "character": "char_x", "coin": 5, "gem": 0, "energy": 0,
+					"mission": [
+						{"entity": "CleanSet_Ca", "level": 2, "count": 1},
+						{"entity": "CleanSet_Ca", "level": 1, "count": 1},
+					],
+				}],
+			},
+			{
+				"id": "mini_2",
+				"board": {"width": 7, "height": 9, "slots": []},
+				"obstacles": [],
+				"orders": l2_orders,
+			},
+		],
+	}
 
 
 func _fresh_sim(model):
@@ -354,3 +406,14 @@ func _board_count_ignores_blocked_and_surplus(t) -> void:
 	t.eq(int(m.get("board", -1)), 6, "只数露在外面的 6 枚（冰里/网下不算）")
 	t.eq(int(m.get("need", -1)), 4, "需求仍是 4")
 	t.ok(int(m.get("board", 0)) > int(m.get("need", 1)), "允许盈余（6/4）")
+
+
+## level_1 第一单的角色（操作者会在内容编辑器里改，所以从数据里读，不写死）。
+func _l1_order_char() -> String:
+	var model = ProjectModel.new()
+	if not model.load_data(_mini_project()):
+		return ""
+	var orders: Array = model.level(0).get("orders", [])
+	if orders.is_empty():
+		return ""
+	return String((orders[0] as Dictionary).get("character", ""))

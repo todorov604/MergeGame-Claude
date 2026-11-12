@@ -135,9 +135,7 @@ const FONT_INK := 30
 const FONT_CAPS := 22
 const FONT_COUNTER := 26
 
-# 2026-11-10：`icebox` = 蓝盒子开出来的冰（倒计时 5~10 分钟），必须进白名单，
-# 否则 sim 里已经挡住了、画面上却什么都不显示（操作者报"炸开后什么都没有、还拖不进去"）。
-const OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice", "icebox"]
+const OBSTACLE_TYPES := ["lock", "web", "bubble", "bag", "ice"]
 const DEFAULT_SELECTED := [3, 3]
 const DEFAULT_COMPLETED := [[1, 4]]
 
@@ -176,6 +174,8 @@ var _font_display: Font = null
 ## Level time used by the ice countdown; the screen feeds its own clock, the film
 ## feeds frame/FPS. Same input -> same label, so preview and film stay identical.
 var ice_elapsed: float = 0.0
+## 2026-11-11：JSON 指定的"网/冰下面那枚棋子"，键是 "x,y"。
+var _trapped: Dictionary = {}
 ## 2026-11-10：每格冰剩余秒数由 **sim** 算好推进来（`ice_seconds` 可配成 45 秒）。
 var _ice_left: Dictionary = {}
 ## Spawn flight: {"spawn": sim.last_spawn, "started": level time}. While it runs the
@@ -374,11 +374,6 @@ func start_fly(spawn: Dictionary, started_at: float) -> void:
 	queue_redraw()
 
 
-func fly_active() -> bool:
-	return not _flys.is_empty()
-
-
-## Drives every running flight at display rate; stops itself when they all landed.
 func _process(_delta: float) -> void:
 	if _flys.is_empty():
 		set_process(false)
@@ -456,14 +451,6 @@ func item_count() -> int:
 	return _items.size()
 
 
-func obstacle_count() -> int:
-	return _obstacles.size()
-
-
-## Attaches the theme's asset table: the per-(entity, level) chip icons *and* the
-## board container's own UI textures. Passing a loader is what turns the board from
-## procedural blobs into real art; without this call the board renders exactly as
-## before (the tests rely on both branches).
 func set_asset_theme(loader, project: Dictionary) -> void:
 	_asset_loader = loader
 	_asset_project = project
@@ -605,7 +592,7 @@ func _draw() -> void:
 				# 2026-11-11：**被障碍盖住的格子不画真实棋子** —— 网 / 冰 自己在障碍层
 				# 画了"被扣住的那一枚"，再画一遍会盖在网上面（操作者：网要在上面）。
 				var kinds_here: Array = _obstacles_for(cell)
-				if kinds_here.has("web") or kinds_here.has("ice") or kinds_here.has("icebox"):
+				if kinds_here.has("web") or kinds_here.has("ice"):
 					continue
 				_draw_item_pulsed(cell, _items[cell])
 
@@ -817,7 +804,7 @@ func _draw_unlocks() -> void:
 		match shown:
 			"lock": tex = _ui_texture(UI_LOCK)
 			"web": tex = _ui_texture(UI_WEB)
-			"ice", "icebox": tex = _ui_texture(UI_ICE)
+			"ice": tex = _ui_texture(UI_ICE)
 			"bag", "bubble": tex = _ui_texture(UI_SAFE_UNKNOWN)
 			_: tex = null
 		draw_set_transform(base.get_center(), 0.0, Vector2(scale, scale))
@@ -1098,7 +1085,7 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 		"web":
 			# 2026-11-05: same treatment as ice — a deterministic chip sits under the
 			# web so the cell is never empty behind the lines.
-			var webbed := IceCell.chip(_asset_project, key)
+			var webbed := _trapped_chip_for(key)
 			if not webbed.is_empty():
 				var web_tex := _chip_texture(webbed)
 				if web_tex != null:
@@ -1113,10 +1100,10 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 		"bag":
 			if not _draw_ui_art(UI_SAFE_UNKNOWN, r):
 				_draw_bubble(r.get_center())
-		"ice", "icebox":
+		"ice":
 			# 2026-11-05: a deterministic chip is frozen under the ice and the timer
 			# placeholder is replaced by a real label (project display font).
-			var frozen := IceCell.chip(_asset_project, key)
+			var frozen := _trapped_chip_for(key)
 			if not frozen.is_empty():
 				var texture := _chip_texture(frozen)
 				if texture != null:
@@ -1130,14 +1117,36 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 			_rounded(r, 14, Color(0.0, 0.0, 0.0, 0.25))
 
 
-## Countdown on an ice cell: mm:ss between 10:00 and 19:59, ticking once per second
-## of level time, drawn with the project display font (江城圆体 700W).
-## 这一格的障碍是不是 `kind`（渲染时判断 icebox 用）。
-func obstacles_has_kind(key: Vector2i, kind: String) -> bool:
-	return String(_obstacles.get(key, "")) == kind
+## 键既接受 Vector2i（sim.trapped_chips 原样传进来）也接受 "x,y" 字符串
+## （成片读的是 snapshot 里的字符串键）—— 两边都归一成字符串，否则查不到就退回默认棋子。
+func set_trapped_chips(rows: Dictionary) -> void:
+	var next := {}
+	for raw_key in rows.keys():
+		var key := ""
+		if typeof(raw_key) == TYPE_VECTOR2I:
+			key = "%d,%d" % [raw_key.x, raw_key.y]
+		elif typeof(raw_key) == TYPE_STRING:
+			key = String(raw_key)
+		else:
+			continue
+		var raw = rows[raw_key]
+		if typeof(raw) == TYPE_DICTIONARY:
+			next[key] = raw
+	if next == _trapped:
+		return
+	_trapped = next
+	queue_redraw()
 
 
-## sim 给的每格剩余秒数：{cell: seconds}。没有条目时退回旧的按时间推算。
+func _trapped_chip_for(cell: Vector2i) -> Dictionary:
+	var key := "%d,%d" % [cell.x, cell.y]
+	if _trapped.has(key):
+		var raw = _trapped[key]
+		if typeof(raw) == TYPE_DICTIONARY:
+			return raw
+	return IceCell.chip(_asset_project, cell)
+
+
 func set_ice_remaining_map(rows: Dictionary) -> void:
 	if rows == _ice_left:
 		return
@@ -1165,14 +1174,11 @@ func _draw_ice_label(key: Vector2i, r: Rect2, frozen: Dictionary) -> void:
 	if _font_display == null:
 		return
 	var font := _font_display
-	# 2026-11-10：盒子开出来的冰（icebox）倒计时 5~10 分钟，关卡自带的冰仍是 10~20 分钟
 	var left := -1
 	if _ice_left.has(key):
 		left = int(_ice_left[key])
 	if left < 0:
 		var start := IceCell.start_seconds(key)
-		if obstacles_has_kind(key, "icebox"):
-			start = IceCell.start_seconds_between(key, 5 * 60, 10 * 60)
 		left = clampi(start - int(floor(maxf(ice_elapsed, 0.0))), 0, IceCell.MAX_SECONDS)
 	var text := IceCell.format_clock(left)
 	var size := 26
@@ -1545,7 +1551,7 @@ func _legend_color(kind: String) -> Color:
 			return Color(0.65, 0.72, 0.80)
 		"bubble":
 			return Color(0.72, 0.86, 1.0)
-		"ice", "icebox":
+		"ice":
 			return Color(0.93, 0.97, 1.0)
 		_:
 			return Color("#F2A65A")
@@ -1596,28 +1602,6 @@ func _text_center(rect: Rect2, text: String, size: int, color: Color) -> void:
 func _text_shadow_center(rect: Rect2, text: String, size: int, color: Color) -> void:
 	_text_center(_shift(rect, Vector2(1.5, 2.5)), text, size, Color(0.0, 0.0, 0.0, 0.22))
 	_text_center(rect, text, size, color)
-
-
-func _text_bottom_right(rect: Rect2, text: String, size: int, color: Color, pad: float) -> void:
-	if _font == null or text.is_empty():
-		return
-	var measured := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
-	var pos := Vector2(
-		rect.position.x + rect.size.x - pad - measured.x,
-		rect.position.y + rect.size.y - pad - _font.get_descent(size)
-	)
-	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
-
-
-func _text_bottom_center(rect: Rect2, text: String, size: int, color: Color, pad: float) -> void:
-	if _font == null or text.is_empty():
-		return
-	var measured := _font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size)
-	var pos := Vector2(
-		rect.position.x + (rect.size.x - measured.x) * 0.5,
-		rect.position.y + rect.size.y - pad - _font.get_descent(size)
-	)
-	draw_string(_font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
 
 
 func _shift(rect: Rect2, offset: Vector2) -> Rect2:

@@ -546,13 +546,6 @@ func portrait_center(order_id: String) -> Vector2:
 	return Vector2(r.position.x + 62.0, r.position.y + 66.0)
 
 
-func mission_chip_center(order_id: String, index: int) -> Vector2:
-	var r := card_rect(order_id)
-	if r.size.x <= 0.0:
-		return Vector2(size.x * 0.5, size.y * 0.5)
-	return Vector2(r.position.x + 120.0 + 100.0 * float(index) + 31.0, r.position.y + 123.0)
-
-
 func set_palette(colors: Dictionary) -> void:
 	if typeof(colors) == TYPE_DICTIONARY and not colors.is_empty():
 		palette = colors
@@ -974,21 +967,6 @@ func card_awaiting_confirm(order_id: String) -> bool:
 	return false
 
 
-func _card_ready(card: Dictionary) -> bool:
-	var items := _as_mission(card)
-	if items.is_empty():
-		return false
-	for item in items:
-		var have := int((item as Dictionary).get("have", 0))
-		var need := maxi(int((item as Dictionary).get("need", 1)), 1)
-		if have >= need:
-			continue
-		if bool((item as Dictionary).get("ready", false)):
-			continue
-		return false
-	return true
-
-
 func _as_mission(card: Dictionary) -> Array:
 	var items = card.get("mission", [])
 	return items if typeof(items) == TYPE_ARRAY else []
@@ -1111,16 +1089,6 @@ func _pill(r: Rect2) -> void:
 	_check(Vector2(pill_rect.position.x + 34.0, pill_rect.get_center().y), 16.0)
 	_text_center(Rect2(pill_rect.position + Vector2(56.0, 0.0),
 			Vector2(pill_rect.size.x - 70.0, pill_rect.size.y)), "DONE", 26, Color.WHITE)
-
-
-func _portrait(c: Vector2, radius: float, card: Dictionary) -> void:
-	var hue: Color = card.get("hue", Color("#94A3B8"))
-	draw_circle(c, radius + 3.0, hue.darkened(0.28), true, -1.0, true)
-	draw_circle(c, radius, hue, true, -1.0, true)
-	# 2026-11-05: the little arc highlight ("小花") is gone; the portrait is a clean disc.
-	var initial := String(card.get("initial", "?"))
-	_text_center(Rect2(c - Vector2(radius, radius), Vector2(radius * 2.0, radius * 2.0)),
-			initial, 40, Color.WHITE)
 
 
 func _check(c: Vector2, radius: float) -> void:
@@ -1531,14 +1499,6 @@ func _box(radius: int, outline: bool) -> StyleBoxFlat:
 	return box
 
 
-func _text_at(pos: Vector2, text: String, size_px: int, color: Color) -> void:
-	if _font == null or text.is_empty():
-		return
-	draw_string(_font, pos + Vector2(0.0, float(size_px)), text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			size_px, color)
-
-
-## 量一段文字在当前显示字体下的宽度（布局要先知道宽度才好居中）。
 func _text_width(font: Font, text: String, size_px: int) -> float:
 	if font == null:
 		return 0.0

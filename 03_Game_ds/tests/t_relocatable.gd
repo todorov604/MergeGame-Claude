@@ -29,9 +29,9 @@ const PAYLOAD_USAGES := ["PRODUCTION", "PLACEHOLDER"]
 ## + 21 layout copies (9 files no table carried before + 12 snapshot files that were
 ##   registered but never copied)
 ## + 1 CC0 cursor (ui_cursor_hand, 2026-11-05 free mode)
-const EXPECTED_PAYLOAD_COUNT := 112
+const EXPECTED_PAYLOAD_COUNT := 191
 
-const SNAPSHOT_RESOURCE_COUNT := 180
+const SNAPSHOT_RESOURCE_COUNT := 177
 
 const TEXT_EXTENSIONS := {
 	"gd": true,
@@ -133,7 +133,7 @@ func _test_asset_allowlist(t) -> void:
 	var local_basenames: Array = reg["local_basenames"]
 
 	t.ok(int(reg["snapshot_count"]) == SNAPSHOT_RESOURCE_COUNT,
-			"the snapshot still carries 180 records", str(reg["snapshot_count"]))
+			"the snapshot still carries 177 records", str(reg["snapshot_count"]))
 	t.ok(local_basenames.size() > 0, "the local register contributes layout files",
 			str(local_basenames.size()))
 
@@ -161,7 +161,7 @@ func _test_asset_allowlist(t) -> void:
 
 	t.ok(all_files.has(PROVENANCE_PATH), "PROVENANCE.md governance document is present")
 	t.eq(payload_files.size(), EXPECTED_PAYLOAD_COUNT,
-			"assets contains exactly one-hundred-twelve payload files")
+			"assets contains exactly one-hundred-eleven payload files")
 	t.ok(unexpected.size() == 0,
 			"every payload file under res://assets is registered in the snapshot or in data/assets_local.json",
 			_detail_paths(unexpected))

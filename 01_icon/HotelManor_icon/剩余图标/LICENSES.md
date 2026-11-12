@@ -71,3 +71,8 @@
 ## generator_premium.png（2026-11-10）
 
 来自 `棋子icon/icon_20002010.png`，公司自有资产（北京Icon 资产汇总），仅本项目内使用。
+
+## 2026-11-12 棋子补齐 12 套 × 10 级
+
+新增 8 套棋子（`CleanSet_Ce..Cl`）：`icon_100012xx`（宠物勺）、`icon_100042xx`（毛刷）、`icon_100071xx` / `icon_100072xx`（绿/紫猫垫）、`icon_100081xx`（喷雾瓶）、`icon_100082xx`（泡泡）、`icon_200010xx`（方形爪垫）、`icon_200020xx`（水碗），各 10 级。
+许可：公司自有（北京Icon 资产汇总），仅本项目内使用；来源 `01_icon/HotelManor_icon/棋子icon/`。

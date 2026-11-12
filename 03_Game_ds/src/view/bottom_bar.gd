@@ -139,8 +139,9 @@ func _draw() -> void:
 			items.position.y + FilmLayout.BAR_COIN_OFFSET_Y, coin_size, coin_size)
 	_draw_fit("reminder", Rect2(items.position + FilmLayout.BAR_ICON_OFFSET,
 			FilmLayout.BAR_ICON_SIZE))
+	# 2026-11-11：标题也要能被 JSON 的 shop.title 覆盖（金币数量同理，见下面 reward）。
 	_text_left(Rect2(items.position + FilmLayout.BAR_TITLE_OFFSET, FilmLayout.BAR_TITLE_SIZE),
-			FilmLayout.BAR_TITLE, 38, Color("#2E4157"), font_bold)
+			String(_state.get("title", FilmLayout.BAR_TITLE)), 38, Color("#2E4157"), font_bold)
 	var line_left: float = items.position.x + FilmLayout.BAR_TITLE_OFFSET.x
 	var line_rect := Rect2(line_left, items.position.y + FilmLayout.BAR_LINE_OFFSET_Y,
 			maxf(coin_rect.position.x - FilmLayout.BAR_LINE_GAP - line_left, 0.0),

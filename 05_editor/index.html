@@ -1,0 +1,2739 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>MergeGame 关卡编辑器</title>
+<style>
+:root{--panel:#14263e;--line:#294362;--text:#dbe7f5;--muted:#8fa8c5;--ok:#7ad48a;--warn:#f0b45a;--err:#f28b8b}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.55 "Segoe UI","Microsoft YaHei",sans-serif;background:#0b1420;color:var(--text);zoom:1.25}
+button{font:inherit;cursor:pointer;background:#1d3a5c;color:#dceaff;border:1px solid #35618f;border-radius:8px;padding:7px 12px}
+button:hover:enabled{background:#27527f}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.ghost{background:transparent;border-color:var(--line);color:#a9c4e2}
+button.danger{background:#3a1f28;border-color:#6b3040;color:#ffc7cf}
+input,select{font:inherit;background:#0f2036;border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--text);min-width:0;min-height:40px;font-size:14px}
+input[type=number]{width:96px}
+.app{max-width:1536px;margin:16px auto 32px;background:rgba(14,26,42,.94);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#17304d,#122540)}
+.brand{font-size:17px;font-weight:800}
+.brand small{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.spacer{flex:1}
+.status{font-size:12px;color:var(--muted);max-width:560px;text-align:right}
+.body{display:grid;grid-template-columns:var(--left-w,238px) 7px minmax(0,1fr) 7px var(--right-w,400px);min-height:700px}
+.splitter{position:relative;cursor:col-resize;background:linear-gradient(90deg,rgba(255,255,255,.04),rgba(255,255,255,.10));touch-action:none}
+.splitter::after{content:"";position:absolute;left:2px;top:40%;width:3px;height:20%;border-radius:2px;background:#35618f;opacity:.5}
+.splitter:hover::after,.splitter.dragging::after{opacity:1;background:#65a9ff;height:26%}
+body.resizing{cursor:col-resize;user-select:none}
+.col{padding:14px}
+.left{background:#101f33;overflow:auto;max-height:820px}
+.mid{background:linear-gradient(180deg,#13243a,#101c2e);display:flex;flex-direction:column;align-items:center;gap:10px}
+.right{background:#101f33;overflow:auto;max-height:820px}
+h3{margin:0 0 10px;font-size:15px;color:#cfe0f5}
+.hint{font-size:12px;color:#7691af;line-height:1.6}
+.levels{display:flex;flex-direction:column;gap:6px}
+.level-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:#132842;border:1px solid transparent;cursor:pointer}
+.level-row .meta{font-size:11px;color:#93aecb}
+.level-row .moves{display:flex;gap:3px}
+.headacts{display:flex;align-items:center;gap:6px}
+.rowtools{display:flex;align-items:center;gap:6px}
+.lvmove:hover:enabled{border-color:#4e83bb;color:#fff}
+.lvmove:disabled{opacity:.25;cursor:not-allowed}
+.level-row.active{border-color:#4e83bb;background:#1d4470}
+.level-row b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bgTop{position:absolute;left:0;top:0;width:540px;height:205px;object-fit:cover}
+.bgBottom{position:absolute;left:0;top:205px;width:540px;height:755px;object-fit:cover}
+.hudbar .bar{position:absolute;display:block}
+.hudbar .bar img.art{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:fill}
+.hudbar .bar .val{position:absolute;left:33%;right:20%;top:50%;transform:translateY(-50%);text-align:center;font-weight:900;font-size:19px;color:#31517d;text-shadow:0 1px #fff;letter-spacing:.5px;white-space:nowrap}
+.hudbar .plus{position:absolute;top:16px;width:24px;height:24px;background:url() center/contain no-repeat}
+.stockpile{position:absolute;left:10px;top:112px;width:74px;height:74px;z-index:5}
+.stockpile img.frame{position:absolute;inset:0;width:100%;height:100%}
+.stockpile b{position:absolute;right:-4px;top:-6px;background:#e8503a;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff}
+.phone{width:351px;height:624px;border-radius:20px;background:#07111e;border:7px solid #091321;position:relative;overflow:hidden;flex:none}
+.stage{position:absolute;left:0;top:0;width:540px;height:960px;transform:scale(.65);transform-origin:top left;background:#e1cdb2;overflow:hidden}
+.hudbar{position:absolute;left:0;top:0;width:540px;height:75px;z-index:3}
+.badge-num{position:absolute;left:8px;top:25px;width:58px;text-align:center;font-weight:900;font-size:19px;line-height:1;color:#fff;-webkit-text-stroke:2px #23466e;paint-order:stroke fill}
+.badge{position:absolute;left:8px;top:8px;width:58px;height:52px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:21px;color:#fff;text-shadow:0 2px 2px #23466e}
+.res{position:absolute;top:12px;height:41px;display:flex;align-items:center;justify-content:center;color:#31517d;font-weight:900;font-size:18px;text-shadow:0 1px #fff}
+.res.energy{left:74px;width:105px}
+.res.coin{left:187px;width:120px}
+.res.gem{left:315px;width:117px}
+.orders{position:absolute;left:0;top:75px;width:540px;height:130px;z-index:4;overflow:hidden;touch-action:none}
+.orderrow{position:absolute;left:0;top:0;width:100%;height:100%;will-change:transform}
+.ocard{position:absolute;top:34px;width:205px;height:92px}
+.ocard img.cardbg{position:absolute;inset:0;width:100%;height:100%}
+.oport{position:absolute;left:8px;top:-34px;width:58px;height:72px;object-fit:contain;z-index:2}
+.omiss{position:absolute;left:70px;right:6px;top:16px;display:flex;gap:4px}
+.om{position:relative;width:46px;height:46px;border-radius:8px;background:rgba(255,255,255,.55);display:flex;align-items:center;justify-content:center;background-size:100% 100%}
+.om .num{position:absolute;left:0;right:0;bottom:-4px;text-align:center;font-size:11px;font-weight:900;color:#FCFCFC;-webkit-text-stroke:2px #947450;paint-order:stroke fill}
+.om.full .num{color:#B0FC74;-webkit-text-stroke:2px #508018}
+.om .bang{position:absolute;left:-6px;top:-8px;width:16px;height:16px}
+.om img{width:34px;height:34px;object-fit:contain}
+.orew{position:absolute;left:12px;bottom:6px;right:10px;display:flex;align-items:center;justify-content:flex-end;gap:8px;font-size:12px;font-weight:900;color:#fff;text-shadow:0 1px 2px #304870}
+.orew img{height:15px;object-fit:contain}
+.boardwrap{position:absolute;left:24px;top:214px;width:492px;height:615px;padding:16px}
+.boardwrap > img.frame{position:absolute;inset:0;width:100%;height:100%}
+.grid{position:absolute;left:0;top:0;width:100%;height:100%;display:grid;gap:3px}
+.popdrag{position:fixed;z-index:90;padding:9px 14px;border-radius:11px;background:linear-gradient(180deg,#1d4470,#16324f);border:1px solid #4b8bcc;color:#eaf3ff;font-size:12.5px;font-weight:700;letter-spacing:.3px;box-shadow:0 12px 28px rgba(0,0,0,.5);pointer-events:none;transition:opacity .18s ease, transform .18s ease}
+.popdrag[hidden]{display:none}
+.popdrag.out{opacity:0;transform:translateY(-8px) scale(.96)}
+.popdrag b{color:#9fe870}
+.popdrag i{color:#8fb6dd;font-style:normal}
+.stage,.boardwrap,.orderrow{user-select:none;-webkit-user-select:none}
+.stage img{-webkit-user-drag:none}
+.cell{touch-action:none}
+@keyframes shakeX{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(4px)}75%{transform:translateX(-3px)}}
+.cell.shake{animation:shakeX .3s ease}
+.dragghost{position:fixed;width:36px;height:36px;pointer-events:none;z-index:80;transform:translate(-50%,-50%);opacity:.92;filter:drop-shadow(0 6px 10px rgba(0,0,0,.45))}
+.dragghost img{width:100%;height:100%;object-fit:contain}
+input:focus,select:focus,textarea:focus{outline:2px solid #eaf3ff;outline-offset:1px;border-color:#7fc4ff;box-shadow:0 0 0 3px rgba(127,196,255,.35)}
+.flash{animation:flashRing .9s ease-out 1}
+@keyframes flashRing{0%{box-shadow:0 0 0 0 rgba(127,196,255,.85)}100%{box-shadow:0 0 0 10px rgba(127,196,255,0)}}
+.cell.drop{outline:2px solid #7fc4ff;outline-offset:-2px;border-radius:10px}
+.cell{position:relative;border-radius:8px;background-size:100% 100%;display:flex;align-items:center;justify-content:center;cursor:pointer;outline:1px solid rgba(120,160,200,.10)}
+.cell:hover{filter:brightness(1.1)}
+.cell.sel{outline:3px solid #ffd34d;outline-offset:-3px}
+.cell.done{background-color:#8fd46b;background-blend-mode:multiply;box-shadow:inset 0 0 0 2px #6cbb4f}
+.cell .genlv{position:absolute;left:2px;bottom:2px;font-size:9px;font-weight:900;color:#fff;background:rgba(35,70,110,.7);border-radius:4px;padding:0 3px}
+.cell .icetimer{position:absolute;left:0;right:0;bottom:1px;text-align:center;font-size:10px;font-weight:900;color:#3b4f66;text-shadow:0 1px 0 #fff}
+.gridwrap{position:absolute;left:16px;top:16px;right:16px;bottom:16px}
+.safeblock .sx{position:absolute;left:0;right:0;top:38%;text-align:center;font-weight:900;font-size:15px;color:#fff;-webkit-text-stroke:2px #2b4a72;paint-order:stroke fill;letter-spacing:.5px}
+.safeblock .slv{position:absolute;left:50%;bottom:8%;transform:translateX(-50%);font-weight:900;font-size:12px;color:#31517d;background:rgba(255,255,255,.92);border-radius:7px;padding:1px 7px}
+.safeblock{position:absolute;pointer-events:none;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(20,40,70,.25)}
+.coinpill{position:absolute;right:-6px;top:-14px;display:flex;align-items:center;gap:3px;background:rgba(60,90,120,.92);border-radius:12px;padding:2px 8px 2px 3px;color:#fff;font-size:12px;font-weight:900}
+.coinpill i{font-style:normal}
+.bottom .s-title{position:absolute;color:#2E4157;font-weight:900;font-size:19px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bottom .s-line{position:absolute;height:2px;background:#C4D7E2;border-radius:1px}
+.bottom .s-sub{position:absolute;color:#4B6076;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bottom .s-buy{position:absolute;text-align:center;color:#93A9BE;font-weight:900;font-size:15px}
+.bottom .s-reward{position:absolute;text-align:center;color:#fff;font-weight:900;font-size:21px;line-height:1;text-shadow:0 2px 3px #2F6B1E}
+.bottom .shopmask{position:absolute;left:92px;top:8px;width:344px;height:104px;background:#E9EFF0;border-radius:16px}
+.bottom .s-title{position:absolute;left:104px;top:18px;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#2E4157;font-weight:900;font-size:19px}
+.bottom .s-lv{position:absolute;right:250px;top:22px;color:#7C8FA3;font-weight:900;font-size:15px}
+.bottom .s-line{position:absolute;left:104px;top:52px;width:236px;height:2px;background:#CBD9E2;border-radius:1px}
+.bottom .s-sub{position:absolute;left:104px;top:60px;max-width:330px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4B6076;font-size:13px}
+.bottom .s-buy{position:absolute;right:86px;top:14px;color:#5A6E83;font-weight:900;font-size:15px}
+.bottom .s-reward{position:absolute;right:86px;top:70px;width:60px;text-align:center;color:#fff;font-weight:900;font-size:18px;text-shadow:0 2px 2px #2F6B1E}
+.cell .chip{width:84%;height:84%;object-fit:contain;filter:drop-shadow(0 3px 2px rgba(56,57,57,.28))}
+.cell .obs{position:absolute;inset:0;background-size:82% 82%;background-position:center;background-repeat:no-repeat}
+.bottom{position:absolute;left:0;bottom:0;width:540px;height:136px;z-index:8;overflow:visible}
+.bottom img{position:absolute;inset:0;width:100%;height:100%}
+.sect{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
+.sect > h3.shead{display:flex;align-items:baseline;gap:8px;cursor:pointer;user-select:none;margin-bottom:10px}
+.sect > h3.shead::after{content:"▾";margin-left:auto;font-size:11px;color:#7691af;transition:transform .15s}
+.sect.collapsed > h3.shead::after{content:"▸"}
+.sect.collapsed > *{display:none}
+.sect.collapsed > h3.shead{display:flex}
+.sect > h3 .sub{font-size:11px;color:#7691af;font-weight:400}
+.sect:first-child{border-top:0;margin-top:0;padding-top:0}
+.row{display:flex;align-items:center;gap:6px;margin-bottom:7px;flex-wrap:wrap}
+.row label{font-size:12px;color:var(--muted);min-width:96px;white-space:nowrap}
+.ordercard{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px;background:#12243b}
+.i18nrow{display:grid;grid-template-columns:minmax(90px,140px) 1fr 28px;gap:8px;align-items:center;margin-bottom:6px}
+.i18nrow .k{font-size:11px;color:#93aecb;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.i18nrow input{min-height:34px}
+.sect[data-sect="cell"]{position:relative}
+.sect[data-sect="cell"] .row{padding-right:108px}
+.col.right.galleryOn .sect{display:none}
+.galgroup{margin:14px 0 6px;border-top:1px solid #24405f;padding-top:10px}
+.galgroup h4{margin:0 0 8px;font-size:13px;color:#cfe2f5;font-weight:600}
+.galgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+.galcell{position:relative;border:1px solid #2b4564;border-radius:10px;background:#12253c;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.galcell img{width:86%;height:86%;object-fit:contain}
+.galcell .lv{position:absolute;right:4px;bottom:2px;font-size:10px;color:#9fb8d2}
+.galcell.empty{color:#4b6480;font-size:11px}
+.cellpreview{position:absolute;right:14px;top:104px;width:88px;height:88px;border-radius:12px;border:1px solid #2b4564;background:radial-gradient(120% 120% at 50% 20%,#1b3554,#0f2036);display:flex;align-items:center;justify-content:center;overflow:hidden;pointer-events:none}
+.cellpreview[hidden]{display:none}
+.cellpreview img{position:absolute;width:100%;height:100%;object-fit:contain}
+.cellpreview img.pchip{inset:8px;width:calc(100% - 16px);height:calc(100% - 16px)}
+.cellpreview img.pobs{inset:0;width:100%;height:100%}
+.charpreview{width:54px;height:66px;flex:0 0 auto;border:1px solid #2b4564;border-radius:9px;background:radial-gradient(120% 120% at 50% 20%,#1b3554,#0f2036);display:flex;align-items:center;justify-content:center;overflow:hidden;margin-left:6px}
+.charpreview img{width:100%;height:100%;object-fit:contain;object-position:center bottom}
+.mrow{display:grid;grid-template-columns:minmax(120px,1fr) 54px 54px 96px;gap:6px;margin-bottom:6px;align-items:center}
+.mrow select,.mrow input{width:100%;min-width:0;padding:7px 8px;min-height:36px}
+.mrow input[type=number]{width:100%;text-align:center}
+.mrowhead{color:#7691af;font-size:11px;letter-spacing:.5px;margin-bottom:4px}
+.mrowhead .op{text-align:right}
+.rowtools,.headacts{display:flex;align-items:center;gap:3px;justify-content:flex-end;flex:0 0 auto}
+.ordercard > .row > input{min-width:0}
+.ibtn{width:28px;height:28px;flex:0 0 28px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#132842;border:1px solid #2b4564;color:#cfe0f5;font-size:11px;line-height:1}
+.ibtn:hover:enabled{background:#1d3a5c;border-color:#4e83bb;color:#fff}
+.ibtn:disabled{opacity:.45;cursor:not-allowed}
+.ibtn.danger{background:transparent;color:#c98c96;border-color:#43222c}
+.ibtn.danger:hover:enabled{background:#3a1f28;border-color:#8b4050;color:#ffd7dd}
+.backup{max-height:200px;overflow:auto;display:flex;flex-direction:column;gap:5px}
+.bk{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:#0f2036}
+.bk:hover{border-color:#3a6494;background:#122540}
+.bk.pinned{background:#101c2e;border-style:dashed}
+.bk .bkmain{min-width:0}
+.bk .name{font-size:12px;color:#dbe7f5;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk .meta{font-size:10px;color:#7691af;margin-top:2px}
+.bk .acts{display:flex;gap:6px;align-items:center;flex:0 0 auto}
+.bk button.mini{padding:5px 10px;font-size:11px;border-radius:8px;background:transparent;border:1px solid var(--line);color:#a9c4e2}
+.bk button.mini:hover:enabled{border-color:#4e83bb;color:#fff;background:#1d3a5c}
+.bk button.mini.danger{width:28px;padding:5px 0;color:#ffb3bd;border-color:#5d2a36}
+.bk button.mini.danger:hover:enabled{background:#3a1f28;border-color:#8b4050}
+.bk button.mini:disabled{opacity:.3;cursor:not-allowed}
+.warn{color:var(--warn)}
+.err{color:var(--err)}
+.ok{color:var(--ok)}
+#errors{font-size:11px;line-height:1.55;max-height:130px;overflow:auto}
+#errors div{color:#ffb8b8}
+.modal-mask{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;background:rgba(6,14,24,.62);backdrop-filter:blur(3px)}
+.modal-mask[hidden]{display:none}
+.modal{width:min(420px,calc(100vw - 48px));background:linear-gradient(180deg,#17304d,#122540);border:1px solid #35618f;border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.55);padding:18px 20px 16px}
+.modal-title{font-size:15px;font-weight:800;color:#e8f2ff;margin-bottom:8px}
+.modal-text ul.errlist{margin:0;padding-left:16px;max-height:46vh;overflow:auto}
+.modal-text ul.errlist li{margin:3px 0;line-height:1.5}
+.modal-text{font-size:13px;line-height:1.7;color:#a9c4e2}
+.modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.modal-actions button{min-width:88px;padding:8px 14px}
+.modal-actions button.primary{background:#1f5fa8;border-color:#3d86d6;color:#fff}
+.modal-actions button.primary:hover{background:#2a72c4}
+.modal-actions button.danger{background:#5a2431;border-color:#8b4050;color:#ffd7dd}
+.modal-actions button.danger:hover{background:#75303f}
+.toast{position:fixed;left:50%;top:50%;z-index:70;padding:16px 28px;border-radius:14px;background:linear-gradient(180deg,#1c4a33,#14362a);border:1px solid #57b376;color:#e6fff0;font-size:17px;font-weight:700;letter-spacing:.4px;white-space:nowrap;box-shadow:0 18px 44px rgba(0,0,0,.55);opacity:0;pointer-events:none;transform:translate(-50%,-50%) scale(.9);transition:opacity .18s ease, transform .18s ease}
+.toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">MergeGame 关卡编辑器<small>改完保存 → Godot 按 F5 玩 → 按 R 停并自动出片</small></div>
+    <button id="openBtn">打开工程目录…</button>
+    <button id="reopenBtn" class="ghost" hidden>继续上次的工程</button>
+    <button id="saveBtn" disabled>保存</button>
+    <div class="spacer"></div>
+    <div class="status" id="status">未打开工程：点「打开工程目录…」选择 <code>03_Game_ds/data</code></div>
+  </div>
+  <div class="body">
+    <div class="col left" id="colLeft">
+      <h3>关卡</h3>
+      <div class="levels" id="levelList"></div>
+      <div class="row" style="margin-top:10px">
+        <button id="addLevel" class="ghost">新增</button>
+        <button id="dupLevel" class="ghost">复制</button>
+        <button id="delLevel" class="danger">删除</button>
+      </div>
+      <div class="sect">
+        <h3>备份 / 恢复</h3>
+        <div class="row">
+          <input id="bkName" placeholder="备份名称（可空）" style="flex:1">
+          <button id="makeBk">备份当前</button>
+        </div>
+        <div class="hint" id="bkMsg" style="margin-bottom:6px">保存时不会自动备份；想留档就点「备份当前」。</div>
+        <div class="backup" id="backupList"><div class="hint">打开工程后显示</div></div>
+        <div class="row" style="margin-top:8px"><button id="refreshBk" class="ghost">刷新列表</button></div>
+      </div>
+      <div class="sect" id="galleryEntry">
+        <h3>图标预览</h3>
+        <div class="row"><button id="openGallery" class="ghost" style="flex:1">按系列查看图标</button></div>
+        <div class="hint">点这里右栏切到图库；点其它任何地方自动切回编辑。</div>
+      </div>
+    </div>
+
+    <div class="splitter" id="splitL" title="拖动调整左栏宽度"></div>
+
+    <div class="col mid" id="colMid">
+      <div class="phone"><div class="stage" id="stage">
+        <img id="bgTop" style="position:absolute;left:0;top:0;width:540px;height:205px;object-fit:cover;opacity:.95">
+        <div class="hudbar" id="hud"></div>
+        <div class="orders" id="orders"></div>
+        <div class="boardwrap"><img class="frame" id="boardFrame"><div class="grid" id="grid"></div></div>
+        <div class="bottom"><img id="bottomImg"></div>
+      </div></div>
+      <div class="hint" id="previewHint">540 × 960 预览（缩放 0.5）</div>
+    </div>
+
+    <div class="splitter" id="splitR" title="拖动调整右栏宽度"></div>
+
+    <div class="col right" id="colRight">
+      <div id="iconGallery" hidden>
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h3 class="shead" style="margin:0">图标预览<span class="sub" id="galCount"></span></h3>
+          <button id="closeGallery" class="ghost">← 返回编辑</button>
+        </div>
+        <div id="galleryBody"></div>
+      </div>
+
+      <div class="sect" data-sect="level">
+        <h3 class="shead">关卡设置</h3>
+        <div class="row"><label>关卡名</label><input id="lvId" style="flex:1"></div>
+        <div class="row"><label>合并爆炸范围</label><input id="lvBlast" type="number" min="1" max="3" title="1 = 上下左右；2 = 再向外一层（菱形）"></div>
+        <div class="row"><label>柜子</label><span class="hint">在棋盘上配置：点格子 → 类型选「柜子」</span></div>
+        <div class="row"><label>右上生成器库存</label><input type="checkbox" id="spOn"><input id="spCount" type="number" min="0" style="width:80px"><select id="spGen"></select></div>
+      </div>
+
+      <div class="sect" data-sect="cell">
+        <h3 class="shead">棋盘属性设置<span class="sub">点击棋盘选格</span></h3>
+        <div class="row"><label>格子</label><span id="cellInfo" class="hint">点棋盘选一格</span></div>
+        <div class="row" id="rowKind"><label>类型</label>
+          <select id="cellKind">
+            <option value="empty">空</option>
+            <option value="chip">棋子</option>
+            <option value="generator">生成器</option>
+            <option value="obstacle">障碍</option>
+            <option value="safebox">柜子</option>
+          </select>
+        </div>
+        <div id="cellPreview" class="cellpreview" hidden></div>
+        <div class="row" id="rowEntity"><label>实体</label><select id="cellEntity"></select></div>
+        <div class="row" id="rowLevel"><label>等级</label><input id="cellLevel" type="number" min="1" max="10" value="1"></div>
+        <div class="row" id="rowObstacle"><label>障碍</label>
+          <select id="cellObstacle"><option value="">（无）</option><option value="lock">锁盒 lock</option><option value="web">蜘蛛网 web</option><option value="ice">冰 ice</option><option value="bag">问号袋 bag</option></select>
+        </div>
+        <div class="row" id="rowSeconds"><label>冰秒数</label><input id="cellSeconds" type="number" min="1" placeholder="30" style="width:120px" title="这块冰的倒计时秒数，留空按 30 秒写入"></div>
+        <div class="row" id="rowTrapped"><label>压住的棋子</label>
+          <select id="cellChipEntity" style="flex:1;min-width:150px"></select>
+          <input id="cellChipLevel" type="number" min="1" max="10" value="1">
+        </div>
+        <div class="row" id="rowSafeSize"><label>柜子尺寸</label>
+          <select id="safeSize" title="前面的 1x7 / 2x3 是素材名；括号里是实际占几列 × 几行"><option value="1x7">1x7（横7 × 竖1）</option><option value="2x2">2x2（横2 × 竖2）</option><option value="2x3">2x3（横3 × 竖2）</option><option value="2x4" selected>2x4（横4 × 竖2）</option></select>
+        </div>
+        <div class="row" id="rowSafeAnchor"><label>锚点 左/上</label>
+          <input id="safeX" type="number" min="0" style="width:80px"><input id="safeY" type="number" min="0" style="width:80px">
+          <span class="hint">左上角</span>
+        </div>
+        <div class="row" id="rowSafeNum"><label>×N / Lv.N</label>
+          <input id="safeCharges" type="number" min="1" style="width:80px"><input id="safeLevel" type="number" min="1" style="width:80px">
+        </div>
+        <div class="row" id="rowSafeActions">
+          <button id="placeSafe">放置柜子</button>
+          <button id="delSafe" class="ghost">删除柜子</button>
+          <span class="hint">改尺寸/坐标后按「放置柜子」生效</span>
+        </div>
+        <div class="row" id="rowCellActions"><button id="clearCell" class="ghost">清空该格</button><span class="hint">改动即时生效</span></div>
+      </div>
+
+      <div class="sect" data-sect="topbar">
+        <h3 class="shead">顶栏设置</h3>
+        <div class="row"><label>小熊爪子数字</label><input id="lvNumber" type="number" min="1" title="顶栏左上角爪子徽章里的数字（JSON: levels[].level_number，逐关）"></div>
+        <div class="row"><label>体力</label><input id="hudEnergy" type="number" min="0" title="JSON: hud.energy"></div>
+        <div class="row"><label>金币</label><input id="hudCoin" type="number" min="0" title="JSON: hud.coin"></div>
+        <div class="row"><label>钻石</label><input id="hudGem" type="number" min="0" title="JSON: hud.gem"></div>
+      </div>
+
+      <div class="sect" data-sect="shop">
+        <h3 class="shead">底栏设置</h3>
+        <div class="row"><label>标题</label><input id="shopTitle" style="flex:1" placeholder="壳木壳木，CamelCamel"></div>
+        <div class="row"><label>副标题</label><input id="shopSub" style="flex:1" placeholder="美宜制作，Made by MeiXuan"></div>
+        <div class="row"><label>奖励</label><input id="shopReward" type="number" min="0" placeholder="32"></div>
+      </div>
+
+      <div class="sect" data-sect="order">
+        <h3 class="shead">订单</h3>
+        <div id="orderList"></div>
+        <div class="row"><button id="addOrder" class="ghost">新增订单</button></div>
+      </div>
+
+      <div class="sect" data-sect="i18n">
+        <h3 class="shead">国际化<span class="sub">只有 board.full</span></h3>
+        <div class="row"><label>语言</label>
+          <select id="i18nLocale"></select>
+        </div>
+        <div id="i18nList"></div>
+      </div>
+
+      <div class="sect" data-sect="check">
+        <h3 class="shead">校验</h3>
+        <div id="errors" class="hint">打开工程后自动校验</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="modalMask" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-title" id="modalTitle">确认</div>
+    <div class="modal-text" id="modalText"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="modalCancel">取消</button>
+      <button class="primary" id="modalOk">确定</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<div class="popdrag" id="popdrag" hidden></div>
+<script>
+const ASSET_BASE = '../03_Game_ds/assets/';
+const MAIN = 'sample_project.json';
+const BACKUP_DIR = 'backup';
+// 棋盘障碍只有这四种。泡泡（bubble）是柜子图上的装饰气泡（safeboxes 的模板），
+// 不是能摆在格子上的障碍 —— 游戏 sim 里也没有它的规则。
+const OBSTACLES = ['lock','web','ice','bag'];
+// 一张订单卡在游戏里最多摆 4 个子任务（order_panel 的图标位就 4 个）。
+const MISSION_MAX = 4;
+// 一关最多 5 张订单（游戏里队列就是这么配的）。
+const ORDER_MAX = 5;
+// 游戏里 bag 画的是问号袋（safe_unknown），主题里的 'bag' 槽是底栏柜子按钮，别混用
+const OBSTACLE_SLOT = { lock:'lock', web:'web', ice:'ice', bag:'safe_unknown', bubble:'bubble' };
+
+let dirHandle = null;
+let project = null;
+let theme = null;
+let files = {};        // asset id -> {dir, name}
+let chips = {};        // entity -> {level -> url}
+let ui = {};           // theme slot -> url
+let selLevel = 0;
+let selCell = null;
+let _bandOffset = 0;   // 订单带拖动位移（px，<=0）
+
+// ---- 三栏宽度：可拖动分隔条 + 预览自适应缩放（结果记在 localStorage）----
+const SPLIT_MIN_LEFT = 180, SPLIT_MAX_LEFT = 460;
+const SPLIT_MIN_RIGHT = 320, SPLIT_MAX_RIGHT = 720;
+
+function readSplit(){
+  const l = parseInt(localStorage.getItem('editor.leftW') || '', 10);
+  const r = parseInt(localStorage.getItem('editor.rightW') || '', 10);
+  return {
+    left: Number.isFinite(l) ? l : 238,
+    right: Number.isFinite(r) ? r : 400,
+  };
+}
+function applySplit(left, right, save){
+  const cl = Math.max(SPLIT_MIN_LEFT, Math.min(SPLIT_MAX_LEFT, left));
+  const cr = Math.max(SPLIT_MIN_RIGHT, Math.min(SPLIT_MAX_RIGHT, right));
+  document.documentElement.style.setProperty('--left-w', cl + 'px');
+  document.documentElement.style.setProperty('--right-w', cr + 'px');
+  if (save){
+    localStorage.setItem('editor.leftW', String(cl));
+    localStorage.setItem('editor.rightW', String(cr));
+  }
+  fitPreview();
+  return { left: cl, right: cr };
+}
+
+let _fitRaf = 0;
+function fitPreview(){
+  cancelAnimationFrame(_fitRaf);
+  _fitRaf = requestAnimationFrame(() => {
+    const mid = $('colMid');
+    const phone = document.querySelector('.phone');
+    const stage = $('stage');
+    if (!mid || !phone || !stage) return;
+    const availW = Math.max(160, mid.clientWidth - 48);
+    const availH = Math.max(200, window.innerHeight - 220);
+    const scale = Math.max(0.36, Math.min(0.86, Math.min(availW / 540, availH / 960)));
+    phone.style.width = Math.round(540 * scale) + 'px';
+    phone.style.height = Math.round(960 * scale) + 'px';
+    stage.style.transform = 'scale(' + scale.toFixed(4) + ')';
+    const hint = $('previewHint');
+    if (hint) hint.dataset.scale = String(Math.round(scale * 100)) + '%';
+  });
+}
+
+function bindSplitter(el, side){
+  if (!el) return;
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    // 拖动过程中自己记住当前宽度；松手时才写 localStorage。
+    // 之前松手时又去 readSplit()（那是 localStorage 里的旧值），所以一拉就弹回去。
+    const start = readSplit();
+    const startX = e.clientX;
+    let cur = { left: start.left, right: start.right };
+    el.classList.add('dragging');
+    document.body.classList.add('resizing');
+    el.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const dx = ev.clientX - startX;
+      cur = (side === 'left')
+        ? applySplit(start.left + dx, start.right, false)
+        : applySplit(start.left, start.right - dx, false);
+    };
+    const up = () => {
+      el.classList.remove('dragging');
+      document.body.classList.remove('resizing');
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', up);
+      el.removeEventListener('pointercancel', up);
+      applySplit(cur.left, cur.right, true);
+    };
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+  });
+}
+
+// 统一确认弹窗（替代原生 confirm，样式与界面一致）
+// 只报信息的弹窗（没有取消）
+function askAlert(opts){
+  return new Promise((resolve) => {
+    const mask = $('modalMask');
+    const ok = $('modalOk');
+    const cancel = $('modalCancel');
+    $('modalTitle').textContent = opts.title || '提示';
+    $('modalText').innerHTML = opts.html || escapeHtml(opts.text || '');
+    ok.textContent = opts.ok || '确定';
+    ok.className = 'primary';
+    cancel.style.display = 'none';
+    const done = () => {
+      mask.hidden = true;
+      cancel.style.display = '';
+      ok.onclick = null; mask.onclick = null;
+      document.removeEventListener('keydown', onKey);
+      resolve(true);
+    };
+    const onKey = (e) => { if (e.key === 'Escape' || e.key === 'Enter') done(); };
+    ok.onclick = done;
+    mask.onclick = (e) => { if (e.target === mask) done(); };
+    document.addEventListener('keydown', onKey);
+    mask.hidden = false;
+    ok.focus();
+  });
+}
+
+function escapeHtml(text){
+  return String(text).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function askConfirm(opts){
+  return new Promise((resolve) => {
+    const mask = $('modalMask');
+    const ok = $('modalOk');
+    const cancel = $('modalCancel');
+    $('modalTitle').textContent = opts.title || '确认';
+    $('modalText').textContent = opts.text || '';
+    ok.textContent = opts.ok || '确定';
+    ok.className = opts.danger ? 'danger' : 'primary';
+    const done = (value) => {
+      mask.hidden = true;
+      document.removeEventListener('keydown', onKey);
+      ok.onclick = null; cancel.onclick = null; mask.onclick = null;
+      resolve(value);
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') done(false);
+      if (e.key === 'Enter') done(true);
+    };
+    ok.onclick = () => done(true);
+    cancel.onclick = () => done(false);
+    mask.onclick = (e) => { if (e.target === mask) done(false); };
+    document.addEventListener('keydown', onKey);
+    mask.hidden = false;
+    cancel.focus();
+  });
+}
+
+// 面板元素取值：缺了就记下来（渲染继续，顶栏报出来），不整段崩掉。
+let _missingIds = [];
+// 国际化：目前只维护 board.full（"棋盘已满"），按语言分别存
+const I18N_KEYS = ['board.full'];
+const I18N_DEFAULTS = { zh: '棋盘已满', en: 'Board is full' };
+
+function localeList(){
+  project.locales = project.locales || {};
+  const keys = Object.keys(project.locales).filter(k => project.locales[k] && typeof project.locales[k] === 'object');
+  return keys.length ? keys : ['zh'];
+}
+
+function currentLocale(){
+  const sel = document.getElementById('i18nLocale');
+  if (sel && sel.value) return sel.value;
+  const meta = (project && project.meta) || {};
+  return String(meta.locale || 'zh');
+}
+
+function ensureLocaleTable(loc){
+  project.locales = project.locales || {};
+  const table = project.locales[loc] = project.locales[loc] || {};
+  I18N_KEYS.forEach(key => {
+    if (table[key] === undefined) table[key] = I18N_DEFAULTS[loc] || I18N_DEFAULTS.zh;
+  });
+  return table;
+}
+
+function renderI18n(){
+  const box = need('i18nList');
+  const sel = need('i18nLocale');
+  if (!box) return;
+  const locales = localeList();
+  if (sel) {
+    const want = String((project.meta || {}).locale || 'zh');
+    const cur = sel.value || (locales.includes(want) ? want : locales[0]);
+    sel.innerHTML = '';
+    locales.forEach(loc => {
+      const o = document.createElement('option'); o.value = loc; o.textContent = loc;
+      sel.appendChild(o);
+    });
+    sel.value = locales.includes(cur) ? cur : locales[0];
+    if (!sel.dataset.bound) {
+      sel.dataset.bound = '1';
+      sel.addEventListener('change', () => {
+        // 2026-11-12：下拉不仅切换"编辑哪门语言"，还要把它写进 meta.locale ——
+        // 游戏只认 meta.locale，不写它的话切了语言画面还是原来的。
+        project.meta = project.meta || {};
+        project.meta.locale = sel.value;
+        renderI18n();
+        validate();
+        renderPreview();
+        toast('游戏语言已设为 ' + sel.value + '（保存后 F5 生效）');
+      });
+    }
+  }
+  const loc = currentLocale();
+  const table = ensureLocaleTable(loc);
+  box.innerHTML = '';
+  I18N_KEYS.forEach(key => {
+    const row = document.createElement('div');
+    row.className = 'i18nrow';
+    const name = document.createElement('span');
+    name.className = 'k'; name.textContent = key; name.title = 'locales.' + loc + '.' + key;
+    const val = document.createElement('input');
+    val.value = String(table[key] ?? '');
+    val.onchange = () => { table[key] = val.value; validate(); };
+    row.appendChild(name); row.appendChild(val);
+    box.appendChild(row);
+  });
+}
+
+// ---------------------------------------------------------------- 图标预览
+// 2026-11-12（操作者）：左栏一个入口，右栏切到按系列分类的图标图库；点别处自动切回。
+let galleryOpen = false;
+
+function galleryEntities(){
+  return Object.keys(project && project.entities || {})
+    .filter(id => entityKind(id) === 'chip')
+    .sort((a, b) => entityLabel(a).localeCompare(entityLabel(b), 'zh'));
+}
+
+function renderGallery(){
+  const box = document.getElementById('galleryBody');
+  if (!box) return;
+  const list = galleryEntities();
+  const count = document.getElementById('galCount');
+  if (count) count.textContent = list.length + ' 套 × 10 级';
+  box.innerHTML = '';
+  list.forEach(id => {
+    const group = document.createElement('div');
+    group.className = 'galgroup';
+    const h = document.createElement('h4');
+    h.textContent = entityLabel(id);
+    group.appendChild(h);
+    const grid = document.createElement('div');
+    grid.className = 'galgrid';
+    for (let lv = 1; lv <= 10; lv++) {
+      const cell = document.createElement('div');
+      const url = chipUrl(id, lv);
+      if (url) {
+        cell.className = 'galcell';
+        cell.innerHTML = '<img src="' + url + '" alt=""><span class="lv">' + lv + '</span>';
+        cell.title = id + ' Lv.' + lv;
+      } else {
+        cell.className = 'galcell empty';
+        cell.textContent = 'Lv.' + lv;
+      }
+      grid.appendChild(cell);
+    }
+    group.appendChild(grid);
+    box.appendChild(group);
+  });
+}
+
+function openGallery(){
+  galleryOpen = true;
+  const col = document.getElementById('colRight');
+  const gal = document.getElementById('iconGallery');
+  if (col) col.classList.add('galleryOn');
+  if (gal) gal.hidden = false;
+  renderGallery();
+}
+
+function closeGallery(){
+  if (!galleryOpen) return;
+  galleryOpen = false;
+  const col = document.getElementById('colRight');
+  const gal = document.getElementById('iconGallery');
+  if (col) col.classList.remove('galleryOn');
+  if (gal) gal.hidden = true;
+}
+
+document.getElementById('openGallery').addEventListener('click', (ev) => {
+  ev.stopPropagation();
+  openGallery();
+});
+document.getElementById('closeGallery').addEventListener('click', () => closeGallery());
+// 点图库以外的地方 → 切回编辑（左栏、棋盘、顶栏都算"以外"）
+document.addEventListener('pointerdown', (ev) => {
+  if (!galleryOpen) return;
+  const gal = document.getElementById('iconGallery');
+  const entry = document.getElementById('galleryEntry');
+  if (gal && gal.contains(ev.target)) return;
+  if (entry && entry.contains(ev.target)) return;
+  closeGallery();
+}, true);
+
+function need(id){
+  const el = document.getElementById(id);
+  if (!el) _missingIds.push(id);
+  return el;
+}
+
+const $ = (id) => document.getElementById(id);
+// 拖放结果的小弹窗：贴光标显示「复制 (2,5) → (4,3)」，1.5 秒淡出
+// body 上有 zoom:1.25，position:fixed 的元素坐标会被再乘一次 zoom；
+// 鼠标事件给的是未缩放坐标 → 统一除回去，否则 ghost / 弹窗会往右下漂移。
+function bodyZoom(){
+  const z = parseFloat(getComputedStyle(document.body).zoom);
+  return Number.isFinite(z) && z > 0 ? z : 1;
+}
+function fixedPos(clientX, clientY){
+  const z = bodyZoom();
+  return { x: clientX / z, y: clientY / z, vw: window.innerWidth / z, vh: window.innerHeight / z };
+}
+
+let _popTimer = 0;
+function popDrag(text, x, y, ok){
+  const el = $('popdrag');
+  if (!el) return;
+  el.innerHTML = text;
+  el.classList.remove('out');
+  el.hidden = false;
+  const z = bodyZoom();
+  const w = (el.offsetWidth || 180) / z, h = (el.offsetHeight || 34) / z;
+  const px = (x === undefined ? (window.innerWidth / z) / 2 : x / z);
+  const py = (y === undefined ? 120 : y / z);
+  const vw = window.innerWidth / z, vh = window.innerHeight / z;
+  const left = Math.max(8, Math.min(vw - w - 8, px - w / 2));
+  const top = Math.max(8, Math.min(vh - h - 8, py - h - 14));
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  clearTimeout(_popTimer);
+  _popTimer = setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => { el.hidden = true; }, 200);
+  }, ok ? 1500 : 1100);
+}
+
+let _toastTimer = 0;
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 2000);   // 停 2 秒再淡出
+}
+function setStatus(msg, cls){ const s=$('status'); s.className='status '+(cls||''); s.textContent=msg; }
+
+async function readJsonFromDir(dir, path){
+  const parts = path.split('/');
+  let d = dir;
+  for (let i=0;i<parts.length-1;i++) d = await d.getDirectoryHandle(parts[i]);
+  const fh = await d.getFileHandle(parts[parts.length-1]);
+  return JSON.parse(await (await fh.getFile()).text());
+}
+
+function buildAssetMaps(manifest, local){
+  files = {};
+  const add = (tbl) => {
+    if (!tbl) return;
+    for (const [id, rec] of Object.entries(tbl)) {
+      if (!rec || !rec.file_name) continue;
+      // 目录按文件名判，不按 id：快照里棋子 7~10 级记的是 icon_10002110 这种 id，
+      // 按 id 前缀会误判成 ui/，图就 404（表现为预览一个破图标）。
+      const fn = String(rec.file_name);
+      const dir = (String(id).startsWith('chip_') || fn.startsWith('icon_')) ? 'chips/' : 'ui/';
+      files[id] = { dir, name: rec.file_name };
+    }
+  };
+  add(manifest && manifest.resources);
+  add(local && local.resources);
+  // 别名：快照里 chip_clean_ca_lv07 这类"统一命名"只是 alias，真记录是 icon_10002107。
+  // 游戏侧 AssetGuard 会解析，编辑器这边也得补一份，否则 7~10 级看不到图。
+  const alias = (manifest && manifest.aliases) || {};
+  for (const [name, target] of Object.entries(alias)) {
+    if (!files[name] && files[target]) files[name] = files[target];
+  }
+}
+
+function buildChipMap(){
+  chips = {};
+  const ci = (theme && theme.chip_icons) || {};
+  for (const [entity, levels] of Object.entries(ci)) {
+    chips[entity] = {};
+    for (const [lv, id] of Object.entries(levels)) {
+      const f = files[id];
+      if (f) chips[entity][lv] = ASSET_BASE + f.dir + f.name;
+    }
+  }
+}
+
+function buildUiMap(){
+  ui = {};
+  const table = (theme && theme.icons && theme.icons.ui) || {};
+  for (const [slot, id] of Object.entries(table)) {
+    const f = files[id];
+    if (f) ui[slot] = ASSET_BASE + f.dir + f.name;
+  }
+}
+
+// ---- 记住工程目录（IndexedDB 存 FileSystemDirectoryHandle）----
+const DB_NAME = 'mergegame-editor', STORE = 'handles', KEY = 'dataDir';
+let lastHandle = null;
+
+function idb(){
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(DB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function saveHandle(h){
+  try { const db = await idb();
+    await new Promise((res, rej) => { const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(h, KEY); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+  } catch(e){}
+}
+async function loadHandle(){
+  try { const db = await idb();
+    return await new Promise((res, rej) => { const tx = db.transaction(STORE, 'readonly');
+      const rq = tx.objectStore(STORE).get(KEY); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); });
+  } catch(e){ return null; }
+}
+
+// 真正读取数据（打开目录 / 继续上次都走这里）
+// 2026-11-11：星标废弃 —— 读进来的订单统一把 star 字段删掉，保存出去就不会再带。
+function stripStar(){
+  if (!project) return;
+  (project.levels || []).forEach(lv => (lv.orders || []).forEach(o => { delete o.star; }));
+  if (project.hud) delete project.hud.star;
+}
+
+async function loadFromHandle(){
+  project = await readJsonFromDir(dirHandle, MAIN);
+  theme = await readJsonFromDir(dirHandle, 'themes/default/theme.json');
+  const manifest = await readJsonFromDir(dirHandle, 'manifest_index.json');
+  let local = null;
+  try { local = await readJsonFromDir(dirHandle, 'assets_local.json'); } catch(e){}
+  buildAssetMaps(manifest, local);
+  buildChipMap();
+  buildUiMap();
+  stripStar();
+  selLevel = 0; selCell = null;
+  $('saveBtn').disabled = false;
+  setStatus('已读取 ' + dirHandle.name + '/' + MAIN + '：' + project.levels.length + ' 关 · ' + entitySummary(), 'ok');
+  renderAll();
+  refreshBackups();
+}
+
+async function bootLast(){
+  lastHandle = await loadHandle();
+  if (!lastHandle) return;
+  const perm = await lastHandle.queryPermission({ mode: 'readwrite' }).catch(() => 'prompt');
+  if (perm === 'granted') {
+    dirHandle = lastHandle;
+    try { await loadFromHandle(); } catch(e){ setStatus('上次的工程读取失败：' + e.message, 'err'); }
+    return;
+  }
+  $('reopenBtn').hidden = false;
+  setStatus('上次的工程目录：' + lastHandle.name + ' —— 点「继续上次的工程」不用再选', '');
+}
+
+async function reopenLast(){
+  if (!lastHandle) { openProject(); return; }
+  const perm = await lastHandle.requestPermission({ mode: 'readwrite' }).catch(() => 'denied');
+  if (perm !== 'granted') { toast('没有授权，请手动选一次目录'); openProject(); return; }
+  dirHandle = lastHandle;
+  try { await loadFromHandle(); $('reopenBtn').hidden = true; }
+  catch(e){ setStatus('读取失败：' + e.message, 'err'); }
+}
+
+async function openProject(){
+  if (!window.showDirectoryPicker) { toast('请用 Chrome / Edge 打开本页'); return; }
+  const opts = { id: 'mergegame-data', mode: 'readwrite' };
+  if (lastHandle) opts.startIn = lastHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker(opts);
+  } catch(e){ return; }
+  try {
+    await loadFromHandle();
+    lastHandle = dirHandle;
+    await saveHandle(dirHandle);
+    $('reopenBtn').hidden = true;
+  } catch(e){
+    setStatus('读取失败：' + e.message, 'err');
+  }
+}
+
+function level(){ return project.levels[selLevel]; }
+function slotAt(x,y,lv){ const L = lv || level(); return (L.board.slots || []).find(s => s.x===x && s.y===y); }
+function obstacleAt(x,y,lv){ const L = lv || level(); return (L.obstacles || []).find(o => o.slot && o.slot[0]===x && o.slot[1]===y); }
+function chipUrl(entity, lv){ return (chips[entity] && chips[entity][String(lv)]) || ''; }
+
+// 任何一段渲染抛错都不要把整个界面弄白：分段兜底，错误写到顶栏。
+// 右栏分区折叠（状态存 localStorage）
+function collapsedSet(){
+  try { return new Set(JSON.parse(localStorage.getItem('editor.collapsed') || '[]')); }
+  catch (e) { return new Set(); }
+}
+function saveCollapsed(set){
+  try { localStorage.setItem('editor.collapsed', JSON.stringify([...set])); } catch (e) {}
+}
+function applyCollapsed(){
+  const set = collapsedSet();
+  document.querySelectorAll('#colRight .sect[data-sect]').forEach(el => {
+    el.classList.toggle('collapsed', set.has(el.dataset.sect));
+  });
+}
+// 点画面某个区域 → 只展开对应分区，其它收起（手风琴）
+function openSection(key){
+  const set = collapsedSet();
+  document.querySelectorAll('#colRight .sect[data-sect]').forEach(el => {
+    const on = el.dataset.sect === key;
+    el.classList.toggle('collapsed', !on);
+    if (on) set.delete(el.dataset.sect); else set.add(el.dataset.sect);
+  });
+  saveCollapsed(set);
+  const target = document.querySelector('#colRight .sect[data-sect="' + key + '"]');
+  if (!target) return;
+  if (target.scrollIntoView) target.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // Tab 落到该分区的第一个输入项（不是按钮/复选框）
+  const first = target.querySelector(
+    'input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea');
+  if (first) {
+    try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); }
+    first.classList.remove('flash');
+    void first.offsetWidth;              // 重启动画
+    first.classList.add('flash');
+    setTimeout(() => first.classList.remove('flash'), 950);
+    if (first.select && first.tagName === 'INPUT' && first.type !== 'number') first.select();
+  }
+}
+
+function bindSections(){
+  const right = $('colRight');
+  if (!right || right.dataset.bound) return;
+  right.dataset.bound = '1';
+  right.addEventListener('click', (e) => {
+    const head = e.target.closest('h3.shead');
+    if (!head) return;
+    const sect = head.parentElement;
+    const key = sect.dataset.sect;
+    if (!key) return;
+    const set = collapsedSet();
+    sect.classList.toggle('collapsed');
+    if (sect.classList.contains('collapsed')) set.add(key); else set.delete(key);
+    saveCollapsed(set);
+  });
+  applyCollapsed();
+}
+
+function renderAll(){
+  const step = (fn, name) => {
+    try { fn(); } catch(e){ console.error('[' + name + ']', e); setStatus(name + ' 渲染失败：' + e.message, 'err'); }
+  };
+  step(renderLevelList, '关卡列表');
+  step(renderPreview, '预览');
+  step(renderInspector, '属性');
+  step(validate, '校验');
+}
+
+function renderLevelList(){
+  const box = $('levelList'); box.innerHTML='';
+  if (!project) return;
+  project.levels.forEach((lv, i) => {
+    const el = document.createElement('div');
+    el.className = 'level-row' + (i===selLevel ? ' active' : '');
+    const title = document.createElement('b');
+    title.textContent = (lv.id || ('level_' + (i + 1)));
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = (lv.orders || []).length + ' 单';
+    const moves = document.createElement('div');
+    moves.className = 'moves';
+    // 关卡顺序 = JSON 的 levels 数组顺序（游戏就按这个顺序推进）
+    const up = document.createElement('button');
+    up.className = 'lvmove'; up.textContent = '▲'; up.title = '上移';
+    up.disabled = (i === 0);
+    up.onclick = (e) => { e.stopPropagation(); moveLevel(i, i - 1); };
+    const down = document.createElement('button');
+    down.className = 'lvmove'; down.textContent = '▼'; down.title = '下移';
+    down.disabled = (i === project.levels.length - 1);
+    down.onclick = (e) => { e.stopPropagation(); moveLevel(i, i + 1); };
+    moves.appendChild(up); moves.appendChild(down);
+
+    el.appendChild(title); el.appendChild(meta); el.appendChild(moves);
+    el.onclick = () => { selLevel = i; selCell = null; _bandOffset = 0; renderAll(); };
+    box.appendChild(el);
+  });
+}
+
+// 任务行顺序 = order.mission 数组顺序（卡片上从左到右的排列）
+function moveMission(order, from, to){
+  const rows = order.mission || [];
+  if (to < 0 || to >= rows.length || from === to) return;
+  const [item] = rows.splice(from, 1);
+  rows.splice(to, 0, item);
+  renderAll();
+}
+
+// 订单顺序 = orders 数组顺序（游戏里卡的初始排列，之后按"绿底大对号"动态排）
+function moveOrder(from, to){
+  const orders = level().orders || [];
+  if (to < 0 || to >= orders.length || from === to) return;
+  const [item] = orders.splice(from, 1);
+  orders.splice(to, 0, item);
+  renderAll();
+  toast('订单已移到第 ' + (to + 1) + ' 位');
+}
+
+// 交换两关的位置（顺序写进 levels 数组，游戏按这个顺序推进关卡）
+function moveLevel(from, to){
+  if (!project || to < 0 || to >= project.levels.length || from === to) return;
+  const arr = project.levels;
+  const [item] = arr.splice(from, 1);
+  arr.splice(to, 0, item);
+  selLevel = to;
+  selCell = null;
+  _safeCache = null;
+  renderAll();
+  toast('已移到第 ' + (to + 1) + ' 位');
+}
+
+function assetUrl(id){
+  const f = files[id];
+  return f ? (ASSET_BASE + f.dir + f.name) : '';
+}
+
+function entityIcon(entityId, lv){
+  const ent = (project.entities || {})[entityId] || {};
+  if ((ent.kind || 'chip') === 'generator') {
+    const iconId = (ent.visual && ent.visual.icon) || '';
+    const byId = iconId ? assetUrl(iconId) : '';
+    return byId || ui['generator'] || '';
+  }
+  return chipUrl(entityId, lv);
+}
+
+// 顶栏资源条：高度固定 41（540 空间），宽度按贴图比例；整体在 540 宽里居中，间隔 15。
+let _barCursorX = 0;
+function resetBarCursor(){
+  const H = 41;
+  const widths = [H * (243 / 90), H * (255 / 82), H * (246 / 67)];
+  const total = widths.reduce((a, b) => a + b, 0) + 15 * (widths.length - 1);
+  _barCursorX = (540 - total) / 2;
+  return widths;
+}
+function hudBar(kind, aspect, value){
+  const H = 41;
+  const w = H * aspect;
+  const left = _barCursorX;
+  _barCursorX += w + 15;
+  return '<div class="bar" style="left:' + left.toFixed(1) + 'px;top:12px;width:' + w.toFixed(1) + 'px;height:' + H + 'px">' +
+    (ui[kind + '_bar'] ? '<img class="art" src="' + ui[kind + '_bar'] + '" alt="">' : '') +
+    '<span class="val">' + value + '</span>' +
+  '</div>';
+}
+
+function renderPreview(){
+  if (!project) return;
+  const lv = level();
+  const img = (url, style, cls) => url
+    ? '<img class="' + (cls || '') + '" style="' + (style || '') + '" src="' + url + '" onerror="this.style.display=\'none\'">'
+    : '';
+
+  const hud = project.hud || {};
+  const W = lv.board.width || 7, H = lv.board.height || 9;
+  const slotsArr = lv.board.slots || [];
+  const orders = lv.orders || [];
+
+  // ---------- 完成度：和游戏一样，给"能交的棋子"铺绿底 ----------
+  const wanted = {};
+  orders.forEach(o => (o.mission || []).forEach(m => {
+    const key = m.entity + '@' + m.level;
+    wanted[key] = (wanted[key] || 0) + (m.count === undefined || m.count === null ? 1 : m.count);
+  }));
+  // 2026-11-11：和游戏完全一致 —— 只要这枚棋子露在外面、匹配某个未收满的任务行，就铺绿；
+  // 超出需求枚数的那几枚**也铺绿**（游戏 CompletedCells 就是这么算的）。
+  const green = new Set();
+  const wantedKeys = {};
+  orders.forEach(o => (o.mission || []).forEach(m => {
+    const key = m.entity + '@' + m.level;
+    const need = (m.count === undefined || m.count === null) ? 1 : Number(m.count);
+    wantedKeys[key] = Math.max(wantedKeys[key] || 0, need);
+  }));
+  slotsArr.forEach(s => {
+    const key = s.entity + '@' + s.level;
+    if (!(key in wantedKeys)) return;
+    if (obstacleAt(s.x, s.y)) return;      // 冰里 / 网下 / 盒子里不算（和游戏同一规则）
+    green.add(s.x + ',' + s.y);
+  });
+
+  // 每行"棋盘上能交几枚"：不封顶（6/4 就显示 6），也不扣其它订单，和游戏角标一致
+  const haveByKey = {};
+  slotsArr.forEach(s => {
+    if (obstacleAt(s.x, s.y)) return;
+    const key = s.entity + '@' + s.level;
+    haveByKey[key] = (haveByKey[key] || 0) + 1;
+  });
+
+  // ---------- 顶栏 ----------
+  // 2026-11-11：操作者要求预览里不画熊爪（level_paw.png），只留徽章底板 + 数字。
+  const badgeBg = ui['level_badge_bg'] || '';
+  const lvNum = (lv.level_number !== undefined ? lv.level_number : (hud.level || selLevel + 1));
+  resetBarCursor();
+  const hudHtml =
+    (badgeBg ? '<div class="badge" style="background:url(' + badgeBg + ') center/contain no-repeat"></div>' : '') +
+    '<div class="badge-num">' + lvNum + '</div>' +
+    // 三条资源条：按贴图原始比例排（energy_bar.png 243×90、coin 255×82、gem 246×67），
+    // 数字居中罩在条上、绿色 "+" 贴在条的右缘 —— 和实机 top_bar.gd 的做法一致。
+    hudBar('energy', 243 / 90, hud.energy || 0) +
+    hudBar('coin', 255 / 82, hud.coin || 0) +
+    hudBar('gem', 246 / 67, hud.gem || 0) +
+    (ui['shop'] ? '<img src="' + ui['shop'] + '" style="position:absolute;right:3px;top:3px;width:58px;height:55px" onerror="this.style.display=\'none\'">' : '');
+
+  // ---------- 库存面板 ----------
+  const sp = lv.stockpile || {};
+  let spHtml = '';
+  if (sp.enabled) {
+    const genId = sp.generator || '';
+    const genEnt = (project.entities || {})[genId] || {};
+    const genIcon = genEnt.visual && genEnt.visual.icon ? assetUrl(genEnt.visual.icon) : '';
+    spHtml =
+      '<div class="stockpile">' +
+        img(ui['stockpile_frame'], 'position:absolute;inset:0;width:100%;height:100%', 'frame') +
+        img(genIcon || ui['generator'], 'position:absolute;left:8px;top:8px;width:58px;height:58px;object-fit:contain') +
+        '<b>' + (sp.count === undefined ? 9 : sp.count) + '</b>' +
+        img(ui['stockpile_arrows'], 'position:absolute;right:-6px;bottom:-10px;width:34px;height:40px') +
+      '</div>';
+  }
+
+  // ---------- 订单卡 ----------
+  let ordersHtml = '';
+  // 全部订单都渲染，整排可左右拖动（和游戏里拖任务栏看后面的卡一样）
+  orders.forEach((o, i) => {
+    const portrait = ui['char_' + String(o.character || '').replace('char_', '')] || ui[o.character] || '';
+    let miss = '';
+    (o.mission || []).slice(0, 4).forEach(m => {
+      const mu = chipUrl(m.entity, m.level);
+      const key = m.entity + '@' + m.level;
+      const need = (m.count === undefined || m.count === null) ? 1 : Number(m.count);
+      const have = haveByKey[key] || 0;
+      const full = have >= need;
+      const plate = full ? (ui['mission_frame_done'] || '') : (ui['mission_frame_todo'] || '');
+      miss += '<div class="om' + (full ? ' full' : '') + '"' +
+        (plate ? ' style="background-image:url(' + plate + ');background-size:100% 100%"' : '') + '>' +
+        (mu ? '<img src="' + mu + '" onerror="this.style.display=' + "'none'" + '">' : '?') +
+        '<span class="num">' + have + '/' + need + '</span>' +
+        (full && ui['exclamation'] ? '<img class="bang" src="' + ui['exclamation'] + '">' : '') +
+        '</div>';
+    });
+    const pill = '<div class="coinpill">' + img(ui['coin_reward'], 'width:20px;height:20px') + '<i>+' + (o.coin || 0) + '</i></div>';
+    ordersHtml +=
+      '<div class="ocard" style="left:' + (113 + i * 212) + 'px">' +
+        (ui['order_card'] ? '<img class="cardbg" src="' + ui['order_card'] + '" onerror="this.style.display=\'none\'">' : '') +
+        (portrait ? '<img class="oport" src="' + portrait + '" onerror="this.style.display=\'none\'">' : '') +
+        '<div class="omiss">' + miss + '</div>' +
+        '<div class="orew">' +
+          img(ui['gem'], 'height:15px') + '<span>' + (o.gem || 0) + '</span>' +
+          img(ui['energy'], 'height:15px') + '<span>' + (o.energy || 0) + '</span>' +
+        '</div>' + pill +
+      '</div>';
+  });
+
+  // ---------- 棋盘 ----------
+  const plate = ui['board_plate'] || '';
+  const genStamp = ui['stamina'] || '';
+  let gridHtml = '';
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const sAt = slotAt(x, y), ob = obstacleAt(x, y);
+    const selCls = selCell && selCell.x === x && selCell.y === y ? ' sel' : '';
+    const doneCls = green.has(x + ',' + y) ? ' done' : '';
+    let inner = '';
+    // 被网 / 冰盖住时，格子里的棋子不画（游戏里那枚是"压在障碍下的"，由下面单独画）
+    const covered = !!ob && (ob.type === 'web' || ob.type === 'ice');
+    if (sAt && !covered) {
+      const ent = (project.entities || {})[sAt.entity] || {};
+      const isGen = (ent.kind || 'chip') === 'generator';
+      const url = entityIcon(sAt.entity, sAt.level);
+      inner += url ? '<img class="chip" src="' + url + '" onerror="this.style.display=\'none\'">'
+                   : '<span style="font-size:11px;color:#54708f">' + String(sAt.entity).slice(-2) + '</span>';
+      if (isGen) {
+        inner += '<span class="genlv">' + (ent.visual && ent.visual.label ? ent.visual.label : 'GEN') + '</span>';
+        inner += img(genStamp, 'position:absolute;right:2px;bottom:2px;width:16px;height:16px', 'stamp');
+      }
+    }
+    if (ob && ob.type) {
+      const slot = OBSTACLE_SLOT[ob.type] || ob.type;
+      const url = ui[slot] || '';
+      // 网 / 冰下面压着的棋子：只有 JSON 明确写了 chip 才画。
+      // 「压住的棋子 = （默认）」= 不画任何 icon，画面上只看到网/冰本身。
+      if (ob.chip && ob.chip.entity) {
+        const cu = entityIcon(ob.chip.entity, ob.chip.level || 1);
+        if (cu) inner += `<img class="chip" src="${cu}" style="opacity:.92" onerror=${"this.style.display='none'"}>`;
+      }
+      inner += '<div class="obs" style="background-image:url(' + (url || '') + ')"></div>';
+      // 冰的倒计时：每格自己的秒数（没配就用关卡 ice_seconds）
+      if (ob.type === 'ice') {
+        let sec = (ob.seconds !== undefined && ob.seconds !== null) ? Number(ob.seconds) : null;
+        if (sec === null) sec = (lv.ice_seconds !== undefined) ? Number(lv.ice_seconds) : null;
+        if (sec !== null && sec > 0) {
+          const mm = String(Math.floor(sec / 60)).padStart(2, '0');
+          const ss = String(Math.floor(sec % 60)).padStart(2, '0');
+          inner += '<span class="icetimer">' + mm + ':' + ss + '</span>';
+        }
+      }
+    }
+    gridHtml += '<div class="cell' + selCls + doneCls + '" data-x="' + x + '" data-y="' + y + '"' +
+      (plate ? ' style="background-image:url(' + plate + ')"' : '') + '>' + inner + '</div>';
+  }
+
+  // ---------- 底栏 ----------
+  const meta = project.meta || {};
+  const shop = project.shop || {};
+  const title = shop.title || '壳木壳木，CamelCamel';
+  const sub = shop.subtitle || '美宜制作，Made by MeiXuan';
+  const reward = (shop.reward === undefined || shop.reward === null) ? 88 : shop.reward;
+  // 几何照搬 movie_scene 的 FilmLayout（1080 空间）除以 2，items 矩形 = (96.5, 41.5, 346.5, 91.5)
+  const P = { x: 96.5, y: 41.5, w: 346.5, h: 91.5 };
+  const coin = { x: P.x + P.w - 12 - 62, y: P.y + 23, s: 62 };
+  const bottomHtml =
+    img(ui['bar_board'] || ui['items'], 'position:absolute;left:' + P.x + 'px;top:' + P.y + 'px;width:' + P.w + 'px;height:' + P.h + 'px') +
+    img(ui['reminder'], 'position:absolute;left:' + (P.x + 17) + 'px;top:' + (P.y + 18) + 'px;width:28px;height:28px') +
+    '<div class="s-title" style="left:' + (P.x + 50) + 'px;top:' + (P.y + 15) + 'px;width:215px">' + title + '</div>' +
+    '<div class="s-line" style="left:' + (P.x + 50) + 'px;top:' + (P.y + 44) + 'px;width:' + (coin.x - 10 - (P.x + 50)) + 'px"></div>' +
+    '<div class="s-sub" style="left:' + (P.x + 22) + 'px;top:' + (P.y + 50) + 'px;width:220px">' + sub + '</div>' +
+    img(ui['coin_reward'], 'position:absolute;left:' + coin.x + 'px;top:' + coin.y + 'px;width:' + coin.s + 'px;height:' + coin.s + 'px') +
+    '<div class="s-buy" style="left:' + coin.x + 'px;top:' + (P.y + 6) + 'px;width:' + coin.s + 'px">Buy</div>' +
+    '<div class="s-reward" style="left:' + coin.x + 'px;top:' + (coin.y + 38) + 'px;width:' + coin.s + 'px">' + reward + '</div>' +
+    img(ui['exit'], 'position:absolute;left:8px;top:45px;width:82px;height:87px') +
+    img(ui['bag'], 'position:absolute;left:470px;top:53px;width:55px;height:74px');
+
+  // ---------- 柜子（多格一块，盖在对应格子上）----------
+  let safesHtml = '';
+  currentSafeboxes().forEach(b => {
+    const img = ui['safe_' + b.size] || '';
+    const left = (16 + b.x * (W ? (492 - 32) / W : 0)) ;
+    safesHtml += '<div class="safeblock" data-size="' + b.size + '" style="left:' +
+      ((b.x / W) * 100) + '%;top:' + ((b.y / H) * 100) + '%;width:' + ((b.w / W) * 100) + '%;height:' + ((b.h / H) * 100) + '%">' +
+      (img ? '<img src="' + img + '" style="width:100%;height:100%;object-fit:fill" class="autoimg">' : '') +
+      '<span class="sx">×' + b.charges + '</span>' +
+      '<span class="slv">Lv.' + b.level + '</span>' +
+      '</div>';
+  });
+
+  // ---------- 组装 ----------
+  const stage = $('stage');
+  stage.innerHTML =
+    img(ui['bg_top'], 'position:absolute;left:0;top:0;width:540px;height:205px;object-fit:cover', 'bgTop') +
+    img(ui['bg_bottom'], 'position:absolute;left:0;top:205px;width:540px;height:755px;object-fit:cover', 'bgBottom') +
+    '<div class="hudbar">' + hudHtml + '</div>' +
+    '<div class="orders" id="orders"><div class="orderrow" id="orderrow" style="transform:translateX(' + _bandOffset + 'px)">' + ordersHtml + '</div></div>' +
+    spHtml +
+    '<div class="boardwrap">' +
+      img(ui['board_frame'], 'position:absolute;inset:0;width:100%;height:100%', 'frame') +
+      '<div class="gridwrap">' +
+        '<div class="grid" id="grid" style="grid-template-columns:repeat(' + W + ',1fr);grid-template-rows:repeat(' + H + ',1fr)">' + gridHtml + '</div>' +
+        safesHtml +
+      '</div>' +
+    '</div>' +
+    '<div class="bottom">' + bottomHtml + '</div>';
+
+  stage.querySelectorAll('.autoimg').forEach(im => { im.onerror = () => { im.style.display = 'none'; }; });
+
+  // 订单带拖动：按住左右拖，松手停在当前位置（只动 transform，不重排）
+  const bandEl = stage.querySelector('#orders');
+  const rowEl = stage.querySelector('#orderrow');
+  if (bandEl && rowEl) {
+    const CARD_W = 212, CARD_SPAN = 205, PAD_LEFT = 113;
+    const total = Math.max(0, PAD_LEFT + orders.length * CARD_W + CARD_SPAN - 540);
+    _bandOffset = Math.max(-total, Math.min(0, _bandOffset));
+    rowEl.style.transform = 'translateX(' + _bandOffset + 'px)';
+    bandEl.style.cursor = total > 0 ? 'grab' : 'default';
+    bandEl.onpointerdown = (e) => {
+      if (total <= 0) return;
+      e.preventDefault();
+      const startX = e.clientX;
+      const startOffset = _bandOffset;
+      bandEl.setPointerCapture(e.pointerId);
+      bandEl.style.cursor = 'grabbing';
+      bandEl.dataset.moved = '0';
+      const move = (ev) => {
+        const dx = (ev.clientX - startX) * 0.65;
+        if (Math.abs(ev.clientX - startX) > 6) bandEl.dataset.moved = '1';      // 与实机的阻尼一致
+        _bandOffset = Math.max(-total, Math.min(0, startOffset + dx));
+        rowEl.style.transform = 'translateX(' + _bandOffset + 'px)';
+      };
+      const up = () => {
+        bandEl.style.cursor = 'grab';
+        bandEl.removeEventListener('pointermove', move);
+        bandEl.removeEventListener('pointerup', up);
+        bandEl.removeEventListener('pointercancel', up);
+      };
+      bandEl.addEventListener('pointermove', move);
+      bandEl.addEventListener('pointerup', up);
+      bandEl.addEventListener('pointercancel', up);
+    };
+  }
+
+  stage.querySelectorAll('.cell').forEach(el => {
+    el.onclick = () => {
+      if (_suppressCellClick) { _suppressCellClick = false; return; }
+      selCell = { x: Number(el.dataset.x), y: Number(el.dataset.y) };
+      syncCellPanel(); renderPreview();
+      openSection('cell');
+    };
+
+    // 拖动：按住有东西的格子拖到另一格 —— 松手即移动/交换；按住 Ctrl 是复制
+    el.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();          // 不产生文本选区 / 原生图片拖拽（蓝框的来源）
+      const fx = Number(el.dataset.x), fy = Number(el.dataset.y);
+      const lvNow = level();
+      const boxAt = safeCellAt(fx, fy);
+      const has = contentAt(lvNow, fx, fy);
+      if (!boxAt && !has.slot && !has.obstacle) return;
+
+      const startX = ev.clientX, startY = ev.clientY;
+      let ghost = null, moved = false, hovered = null;
+
+      const onMove = (e2) => {
+        if (!moved && Math.hypot(e2.clientX - startX, e2.clientY - startY) > 5) {
+          moved = true;
+          ghost = document.createElement('div');
+          ghost.className = 'dragghost';
+          if (boxAt) {
+            const art = ui['safe_' + boxAt.size] || '';
+            ghost.style.width = (36 * boxAt.w / Math.max(boxAt.h, 1)) + 'px';
+            ghost.innerHTML = art ? '<img src="' + art + '" alt="">' : '';
+          } else {
+            ghost.innerHTML = el.innerHTML;
+          }
+          document.body.appendChild(ghost);
+        }
+        if (!moved) return;
+        e2.preventDefault();
+        const gp = fixedPos(e2.clientX, e2.clientY);
+        ghost.style.left = gp.x + 'px';
+        ghost.style.top = gp.y + 'px';
+        const under = document.elementFromPoint(e2.clientX, e2.clientY);
+        const target = under && under.closest ? under.closest('.cell') : null;
+        if (hovered && hovered !== target) hovered.classList.remove('drop');
+        hovered = target;
+        if (hovered) hovered.classList.add('drop');
+      };
+
+      const onUp = (e2) => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        if (ghost) ghost.remove();
+        if (hovered) hovered.classList.remove('drop');
+        if (!moved) return;
+        _suppressCellClick = true;
+        setTimeout(() => { _suppressCellClick = false; }, 250);
+        const under = document.elementFromPoint(e2.clientX, e2.clientY);
+        const target = under && under.closest ? under.closest('.cell') : null;
+        if (!target) return;
+        const tx = Number(target.dataset.x), ty = Number(target.dataset.y);
+        const copy = e2.ctrlKey || e2.metaKey;
+        if (boxAt) {
+          // 柜子整体平移：不合法就抖动回弹（数据不动），合法才写
+          const nx = boxAt.x + (tx - fx);
+          const ny = boxAt.y + (ty - fy);
+          const moved = moveSafeboxTo(boxAt, nx, ny, copy);
+          if (!moved.ok) {
+            toast('柜子放不下：' + moved.reason);
+            const src = stage.querySelector('.cell[data-x="' + fx + '"][data-y="' + fy + '"]');
+            if (src) { src.classList.add('shake'); setTimeout(() => src.classList.remove('shake'), 320); }
+            return;
+          }
+          renderPreview(); validate();
+          popDrag((copy ? '复制柜子 ' : '移动柜子 ') +
+            '<b>(' + boxAt.x + ',' + boxAt.y + ')</b> <i>→</i> <b>(' + nx + ',' + ny + ')</b>',
+            e2.clientX, e2.clientY, true);
+          return;
+        }
+        if (moveCellContent({ x: fx, y: fy }, { x: tx, y: ty }, copy)) {
+          // 只重画，不选中、不动右栏 —— 落下来就是落下来，不当作点击
+          renderPreview();
+          validate();
+          const arrow = '<b>(' + fx + ',' + fy + ')</b> <i>→</i> <b>(' + tx + ',' + ty + ')</b>';
+          popDrag((copy ? '复制 ' : '移动 ') + arrow, e2.clientX, e2.clientY, true);
+        }
+      };
+
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  });
+
+  // 点顶栏 / 订单带 / 底栏 / 棋盘空白 → 展开对应的设置分区
+  const openOn = (sel, key, ignoreDrag) => {
+    const hit = stage.querySelector(sel);
+    if (!hit) return;
+    hit.addEventListener('click', (e) => {
+      if (ignoreDrag && hit.dataset.moved === '1') { hit.dataset.moved = '0'; return; }
+      if (e.target.closest('.cell')) return;      // 棋盘格子自己有处理
+      openSection(key);
+    });
+  };
+  openOn('.hudbar', 'topbar');
+  openOn('.orders', 'order');
+  openOn('.bottom', 'shop');
+  openOn('.boardwrap', 'cell');
+
+  fitPreview();
+  $('previewHint').textContent = '540 × 960 · ' + (lv.id || '') + '  ' + W + '×' + H +
+    '  棋子 ' + slotsArr.length + ' · 障碍 ' + (lv.obstacles || []).length +
+    ' · 订单 ' + orders.length + ' · 可交格子 ' + green.size;
+}
+
+// 实体表按种类报数，比"18 个实体"清楚（角色/特殊实体不是棋子，容易误会）。
+function entitySummary(){
+  const count = { chip: 0, generator: 0, character: 0, other: 0 };
+  Object.keys(project.entities || {}).forEach(id => {
+    const k = entityKind(id);
+    if (k === 'chip') count.chip++;
+    else if (k === 'generator') count.generator++;
+    else if (k === 'character') count.character++;
+    else count.other++;
+  });
+  const parts = ['棋子 ' + count.chip + ' 系列', '生成器 ' + count.generator, '角色 ' + count.character];
+  if (count.other) parts.push('特殊 ' + count.other);
+  return parts.join(' · ');
+}
+
+function entityKind(id){
+  const e = (project.entities || {})[id];
+  return e ? String(e.kind || 'chip') : '';
+}
+
+// 棋子下拉：只列 kind = chip 的实体（角色、生成器、SafeBox_X 这类特殊实体一律不出现）
+// 2026-11-12（操作者）：下拉别写 CleanSet_Ca，改成「Ca（饼干）」这种人话。
+const ENTITY_CN = {
+  Ca: '饼干', Cb: '面包卷', Cc: '小鱼干', Cd: '皮球',
+  Ce: '猫罐头', Cf: '毛刷', Cg: '绿猫垫', Ch: '紫猫垫',
+  Ci: '喷雾瓶', Cj: '医疗', Ck: '方形爪垫', Cl: '水碗',
+  CleanBox_C: '普通生成器', CleanBox_P: '高级生成器',
+};
+
+function entityLabel(id){
+  const sid = String(id || '');
+  const short = sid.replace(/^CleanSet_/, '');
+  // 2026-11-12：Ca -> C_A 这种写法（操作者口径）
+  const name = /^C[a-z]$/.test(short) ? 'C_' + short.charAt(1).toUpperCase() : short;
+  const cn = ENTITY_CN[short] || ENTITY_CN[sid];
+  return cn ? name + '（' + cn + '）' : name;
+}
+
+function fillEntitySelect(sel, value){
+  if (!sel) return;
+  sel.innerHTML='';
+  Object.keys(project.entities || {}).forEach(id => {
+    if (entityKind(id) !== 'chip') return;
+    const o = document.createElement('option'); o.value = id; o.textContent = entityLabel(id);
+    sel.appendChild(o);
+  });
+  if (value) sel.value = value;
+}
+
+const SHOP_DEFAULTS = { title: '壳木壳木，CamelCamel', subtitle: '美宜制作，Made by MeiXuan', reward: 88 };
+
+// 读进来的 shop 缺字段时用缺省值补齐，界面上直接显示真实内容
+function shopWithDefaults(){
+  if (!project) return { ...SHOP_DEFAULTS };
+  project.shop = project.shop || {};
+  const s = project.shop;
+  if (!s.title) s.title = SHOP_DEFAULTS.title;
+  if (!s.subtitle) s.subtitle = SHOP_DEFAULTS.subtitle;
+  if (s.reward === undefined || s.reward === null) s.reward = SHOP_DEFAULTS.reward;
+  return { title: s.title, subtitle: s.subtitle, reward: s.reward };
+}
+
+function renderInspector(){
+  if (!project) return;
+  // 关卡被删/切走时 selLevel 可能越界，先夹一下再渲染
+  selLevel = Math.max(0, Math.min(selLevel, project.levels.length - 1));
+  const lv = level();
+  if (!lv) return;
+  const lvIdEl = need('lvId'); if (lvIdEl) lvIdEl.value = lv.id || '';
+  const lvBlastEl = need('lvBlast');
+  if (lvBlastEl) lvBlastEl.value = (lv.blast === undefined ? 2 : lv.blast);
+  const lvNumEl = need('lvNumber');
+  if (lvNumEl) lvNumEl.value = (lv.level_number !== undefined ? lv.level_number
+    : ((project.hud || {}).level || (selLevel + 1)));
+  const hud = project.hud || {};
+  const hE = need('hudEnergy'); if (hE) hE.value = (hud.energy === undefined ? 0 : hud.energy);
+  const hC = need('hudCoin'); if (hC) hC.value = (hud.coin === undefined ? 0 : hud.coin);
+  const hG = need('hudGem'); if (hG) hG.value = (hud.gem === undefined ? 0 : hud.gem);
+
+
+  const sp = lv.stockpile || {};
+  const spOnEl = need('spOn'); if (spOnEl) spOnEl.checked = !!sp.enabled;
+  const spCountEl = need('spCount'); if (spCountEl) spCountEl.value = (sp.count === undefined ? 9 : sp.count);
+  const spGenEl = need('spGen');
+  const gens = Object.keys(project.generators || {});
+  if (spGenEl) spGenEl.innerHTML = gens.map(g => '<option value="' + g + '"' + ((sp.generator===g)?' selected':'') + '>' + g + '</option>').join('');
+
+  const addBtnEl = need('addOrder');
+  if (addBtnEl) addBtnEl.parentElement.style.display =
+    ((lv.orders || []).length >= ORDER_MAX ? 'none' : '');
+
+  const box = need('orderList');
+  if (!box) { setStatus('属性：找不到 #orderList（页面结构被改坏了）', 'err'); return; }
+  box.innerHTML='';
+  (lv.orders||[]).forEach((o, oi) => {
+    const card = document.createElement('div'); card.className='ordercard';
+    const chars = Object.keys(project.characters || {});
+    let mrows = '';
+    (o.mission||[]).forEach((m, mi) => {
+      const mCount = (o.mission || []).length;
+      mrows += '<div class="mrow" data-mi="' + mi + '">' +
+        '<select data-f="entity"></select>' +
+        '<input data-f="level" type="number" min="1" max="10" value="' + (m.level||1) + '">' +
+        '<input data-f="count" type="number" min="1" value="' + (m.count === undefined || m.count === null ? 1 : m.count) + '">' +
+        '<div class="rowtools">' +
+          '<button class="ibtn" data-upmission="' + mi + '" title="上移"' + (mi === 0 ? ' disabled' : '') + '>▲</button>' +
+          '<button class="ibtn" data-downmission="' + mi + '" title="下移"' +
+            (mi === mCount - 1 ? ' disabled' : '') + '>▼</button>' +
+          '<button class="ibtn danger" data-del="' + mi + '" title="删除这一行">✕</button>' +
+        '</div></div>';
+    });
+    card.innerHTML =
+      '<div class="row"><label>ID</label><input data-f="id" value="' + (o.id||'') + '" style="flex:1">' +
+        '<div class="headacts">' +
+          '<button class="ibtn" data-uporder="' + oi + '" title="上移"' + (oi === 0 ? ' disabled' : '') + '>▲</button>' +
+          '<button class="ibtn" data-downorder="' + oi + '" title="下移"' +
+            (oi === (lv.orders || []).length - 1 ? ' disabled' : '') + '>▼</button>' +
+          '<button class="ibtn danger" data-delorder="' + oi + '" title="删除这张订单">✕</button>' +
+        '</div></div>' +
+      '<div class="row"><label>角色</label><select data-f="character">' +
+        chars.map(c => '<option value="' + c + '"' + (o.character===c?' selected':'') + '>' + c + '</option>').join('') + '</select>' +
+        '<div class="charpreview">' +
+          (charIconUrl(o.character) ? '<img src="' + charIconUrl(o.character) + '" alt="">' : '') +
+        '</div></div>' +
+      '<div class="row"><label>奖励</label>金<input data-f="coin" type="number" value="' + (o.coin||0) + '">' +
+        '钻<input data-f="gem" type="number" value="' + (o.gem||0) + '">' +
+        '体<input data-f="energy" type="number" value="' + (o.energy||0) + '"></div>' +
+      '<div class="mrow mrowhead"><span>棋子</span><span>等级</span><span>数量</span><span class="op">操作</span></div>' +
+      '<div class="missions">' + mrows + '</div>' +
+      (((o.mission || []).length >= MISSION_MAX)
+        ? ''   // 满 4 行就把入口藏掉（操作者：4 个的时候把「＋ 任务行」隐藏）
+        : '<div class="row"><button class="ghost" data-addmission="' + oi + '">＋ 任务行</button></div>');
+    box.appendChild(card);
+
+    // 跳过表头行（它同样带 .mrow，没有 select，取到 null 会炸在 innerHTML 上）
+    card.querySelectorAll('.mrow:not(.mrowhead)').forEach((row, mi) => {
+      const sel = row.querySelector('select[data-f=entity]');
+      fillEntitySelect(sel, (o.mission[mi]||{}).entity);
+      row.querySelectorAll('[data-f]').forEach(inp => {
+        inp.onchange = () => {
+          const f = inp.dataset.f;
+          if (f === 'entity') o.mission[mi].entity = inp.value;
+          else o.mission[mi][f] = Number(inp.value);
+          validate(); renderPreview();
+        };
+      });
+      const mUp = row.querySelector('[data-upmission]');
+      if (mUp) mUp.onclick = () => moveMission(o, mi, mi - 1);
+      const mDown = row.querySelector('[data-downmission]');
+      if (mDown) mDown.onclick = () => moveMission(o, mi, mi + 1);
+
+      row.querySelector('[data-del]').onclick = () => {
+        if ((o.mission || []).length <= 1) { toast('每张订单至少要留 1 行任务'); return; }
+        o.mission.splice(mi, 1);
+        renderAll();
+      };
+    });
+
+    card.querySelectorAll('[data-f]').forEach(inp => {
+      if (inp.closest('.mrow')) return;
+      inp.onchange = () => {
+        const f = inp.dataset.f;
+        if (f === 'id' || f === 'character') o[f] = inp.value;
+        else o[f] = Number(inp.value);
+        if (f === 'character') {
+          const prev = card.querySelector('.charpreview');
+          if (prev) prev.innerHTML = charIconUrl(inp.value)
+            ? '<img src="' + charIconUrl(inp.value) + '" alt="">' : '';
+        }
+        validate(); renderPreview();
+      };
+    });
+    const upBtn = card.querySelector('[data-uporder]');
+    if (upBtn) upBtn.onclick = () => moveOrder(oi, oi - 1);
+    const downBtn = card.querySelector('[data-downorder]');
+    if (downBtn) downBtn.onclick = () => moveOrder(oi, oi + 1);
+
+    card.querySelector('[data-delorder]').onclick = async () => {
+      const label = (o.id || ('第 ' + (oi + 1) + ' 单'));
+      const okDel = await askConfirm({ title: '删除订单', text: '将删除订单 ' + label + '。删除后不能撤销，想留档请先点「备份当前」。', ok: '删除', danger: true });
+      if (!okDel) return;
+
+      lv.orders.splice(oi, 1);
+      renderAll();
+      toast('已删除 ' + label);
+    };
+    const addBtn = card.querySelector('[data-addmission]');
+    if (addBtn) addBtn.onclick = () => {
+      o.mission = o.mission || [];
+      if (o.mission.length >= MISSION_MAX) {
+        toast('一个订单最多 ' + MISSION_MAX + ' 行任务');
+        return;
+      }
+      o.mission.push({entity: Object.keys(project.entities)[0], level: 1, count: 1});
+      renderAll();
+    };
+  });
+
+  renderI18n();
+
+  const shop = shopWithDefaults();
+  const st = need('shopTitle'); if (st) st.value = shop.title;
+  const ss = need('shopSub'); if (ss) ss.value = shop.subtitle;
+  const sr = need('shopReward'); if (sr) sr.value = shop.reward;
+
+  _missingIds = _missingIds.filter((v, i, a) => a.indexOf(v) === i);
+  if (_missingIds.length) setStatus('属性面板缺少元素：#' + _missingIds.join('、#'), 'err');
+  _missingIds = [];
+
+  syncCellPanel();
+}
+
+// 角色立绘（订单卡上那个头像）——主题里按 char_xxx 命名
+function charIconUrl(name){
+  if (!name) return '';
+  const short = String(name).replace('char_', '');
+  return ui['char_' + short] || ui[name] || '';
+}
+
+function isGeneratorEntity(id){ return entityKind(id) === 'generator'; }
+
+function fillGeneratorSelect(sel, value){
+  if (!sel) return;
+  sel.innerHTML = '';
+  Object.entries(project.entities || {}).forEach(([id, e]) => {
+    if ((e.kind || 'chip') !== 'generator') return;
+    const o = document.createElement('option'); o.value = id; o.textContent = entityLabel(id);
+    sel.appendChild(o);
+  });
+  if (value) sel.value = value;
+}
+
+// 「压住的棋子」是必选项：没有「默认/空」，必须挑一个棋子系列
+function fillAnyEntitySelect(sel, value){
+  if (!sel) return;
+  sel.innerHTML = '';
+  const chips = Object.keys(project.entities || {}).filter(id => entityKind(id) === 'chip');
+  chips.forEach(id => {
+    const o = document.createElement('option'); o.value = id; o.textContent = entityLabel(id);
+    sel.appendChild(o);
+  });
+  if (value && chips.includes(value)) sel.value = value;
+  else if (chips.length) sel.value = chips[0];
+}
+
+let _safeCache = null;   // 柜子改成按坐标解析后不再需要缓存，保留占位让旧调用点安全
+
+// ---- 柜子（safebox）：2026-11-12 改成 JSON 指定坐标 ----
+// 数据形状（和游戏 src/core/safeboxes.gd 一致）：
+//   { "size": "2x4", "slot": [1, 6], "charges": 10, "level": 22 }
+// slot 是**左上角锚点**；charges 画成 ×N（默认 10）、level 画成 Lv.N（默认 22）。
+const SAFE_SPAN = { '1x7': [7, 1], '2x2': [2, 2], '2x3': [3, 2], '2x4': [4, 2] };
+const SAFE_SIZES = ['1x7', '2x2', '2x3', '2x4'];
+const SAFE_DEFAULT_CHARGES = 10;
+const SAFE_DEFAULT_LEVEL = 22;
+
+function boardSize(lv){
+  const b = ((lv || level()).board) || {};
+  return { w: b.width || 7, h: b.height || 9 };
+}
+
+// 原始条目（可能是旧字符串写法，保留原样好让校验点名）
+function rawSafes(lv){
+  const L = lv || level();
+  return Array.isArray(L.safes) ? L.safes : [];
+}
+
+// 解析成可画的柜子：只收对象写法 + size 合法 + 在棋盘内
+function parseSafes(lv){
+  const L = lv || level();
+  const { w: W, h: H } = boardSize(L);
+  const out = [];
+  rawSafes(L).forEach((raw, index) => {
+    if (!raw || typeof raw !== 'object') return;
+    const span = SAFE_SPAN[raw.size];
+    if (!span) return;
+    const slot = Array.isArray(raw.slot) ? raw.slot : [];
+    const x = Number(slot[0]), y = Number(slot[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (x < 0 || y < 0 || x + span[0] > W || y + span[1] > H) return;
+    out.push({
+      index, size: raw.size, x, y, w: span[0], h: span[1],
+      charges: Math.max(1, Math.floor(Number(raw.charges ?? SAFE_DEFAULT_CHARGES)) || SAFE_DEFAULT_CHARGES),
+      level: Math.max(1, Math.floor(Number(raw.level ?? SAFE_DEFAULT_LEVEL)) || SAFE_DEFAULT_LEVEL),
+    });
+  });
+  return out;
+}
+
+function currentSafeboxes(){ return parseSafes(); }
+
+// 把柜子移到 (nx,ny)：先校验，失败返回 {ok:false, reason}（数据不动）
+function moveSafeboxTo(box, nx, ny, copy){
+  const reason = safeConflict(box.size, nx, ny, copy ? -1 : box.index);
+  if (reason) return { ok: false, reason: reason };
+  const lv = level();
+  lv.safes = Array.isArray(lv.safes) ? lv.safes : [];
+  const entry = { size: box.size, slot: [nx, ny], charges: box.charges, level: box.level };
+  if (copy) lv.safes.push(entry);
+  else lv.safes[box.index] = entry;
+  return { ok: true, nx: nx, ny: ny };
+}
+
+
+// 某格属于哪个柜子（返回解析后的柜子，带 index）
+function safeCellAt(x, y){
+  for (const b of parseSafes()){
+    if (x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h) return b;
+  }
+  return null;
+}
+
+// 新柜子能不能放在 (x,y)：越界 / 撞别的柜子 / 压棋子 / 压障碍 都返回原因字符串
+function safeConflict(size, x, y, ignoreIndex, lv){
+  const L = lv || level();
+  const span = SAFE_SPAN[size];
+  if (!span) return '尺寸不对';
+  const { w: W, h: H } = boardSize(L);
+  if (x < 0 || y < 0) return '锚点不能是负数';
+  if (x + span[0] > W || y + span[1] > H)
+    return '超出棋盘（' + size + ' 需要 ' + span[0] + '×' + span[1] + '）';
+  const boxes = parseSafes(L);
+  for (let dy = 0; dy < span[1]; dy++) for (let dx = 0; dx < span[0]; dx++){
+    const cx = x + dx, cy = y + dy;
+    for (const b of boxes){
+      if (b.index === ignoreIndex) continue;
+      if (cx >= b.x && cx < b.x + b.w && cy >= b.y && cy < b.y + b.h)
+        return '与柜子 #' + (b.index + 1) + '（' + b.size + '）重叠于 (' + cx + ',' + cy + ')';
+    }
+    if (slotAt(cx, cy, L)) return '压住了棋子 (' + cx + ',' + cy + ')';
+    const ob = obstacleAt(cx, cy, L);
+    if (ob && ob.type) return '压住了 ' + ob.type + ' 障碍 (' + cx + ',' + cy + ')';
+  }
+  return '';
+}
+
+// 某格属于哪个柜子（返回解析后的柜子，带 index）
+// 棋盘属性面板右上角的图标预览：棋子 / 生成器 / 障碍 / 柜子都画一眼
+function updateCellPreview(){
+  const box = document.getElementById('cellPreview');
+  if (!box) return;
+  const kind = $('cellKind').value;
+  let url = '';
+  if (kind === 'chip') {
+    url = chipUrl($('cellEntity').value, Number($('cellLevel').value) || 1);
+  } else if (kind === 'generator') {
+    url = ui['generator'] || '';
+  } else if (kind === 'obstacle') {
+    const t = $('cellObstacle').value;
+    const obsUrl = t ? (ui[OBSTACLE_SLOT[t] || t] || '') : '';
+    if (['web', 'ice'].includes(t)) {
+      // 和棋盘一致：先画被压住的棋子，再把网/冰盖上去
+      const chipU = chipUrl($('cellChipEntity').value, Number($('cellChipLevel').value) || 1);
+      if (!chipU && !obsUrl) { box.hidden = true; box.innerHTML = ''; return; }
+      box.hidden = false;
+      box.innerHTML = (chipU ? '<img class="pchip" src="' + chipU + '" alt="">' : '') +
+        (obsUrl ? '<img class="pobs" src="' + obsUrl + '" alt="">' : '');
+      return;
+    }
+    url = obsUrl;
+  } else if (kind === 'safebox') {
+    url = ui['safe_' + $('safeSize').value] || '';
+  }
+  if (!url) { box.hidden = true; box.innerHTML = ''; return; }
+  box.hidden = false;
+  box.innerHTML = '<img src="' + url + '" alt="">';
+}
+
+function syncCellPanel(){
+  const has = !!selCell;
+  $('cellInfo').textContent = has ? ('(' + selCell.x + ', ' + selCell.y + ')') : '点棋盘选一格';
+  // 没选格子时，整块编辑控件都不显示（只留一句提示），不再摆一排空下拉
+  ['rowKind','rowEntity','rowLevel','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
+    .forEach(id => { const el = $(id); if (el) el.style.display = has ? '' : 'none'; });
+  ['cellKind','cellEntity','cellLevel','cellObstacle','cellSeconds','cellChipEntity','cellChipLevel','safeSize','safeX','safeY','safeCharges','safeLevel','clearCell']
+    .forEach(id => { const el = $(id); if (el) el.disabled = !has; });
+  if (!has) return;
+
+  const x = selCell.x, y = selCell.y;
+  const s = slotAt(x, y);
+  const ob = obstacleAt(x, y);
+  const box = safeCellAt(x, y);
+
+  if (box){
+    $('cellInfo').textContent = '(' + x + ', ' + y + ') · 柜子 ' + box.size;
+    $('cellKind').disabled = false;
+    $('cellKind').value = 'safebox';
+    $('safeSize').value = box.size;
+    $('safeX').value = box.x;
+    $('safeY').value = box.y;
+    $('safeCharges').value = box.charges;
+    $('safeLevel').value = box.level;
+    toggleCellRows();
+    return;
+  }
+  $('cellKind').disabled = false;
+
+  if (ob && OBSTACLES.includes(ob.type)) {
+    $('cellKind').value = 'obstacle';
+    $('cellObstacle').value = ob.type;
+    $('cellSeconds').value = (ob.seconds === undefined ? '' : ob.seconds);
+    fillAnyEntitySelect($('cellChipEntity'), ob.chip ? ob.chip.entity : '');
+    $('cellChipLevel').value = ob.chip ? (ob.chip.level || 1) : 1;
+  } else if (s && isGeneratorEntity(s.entity)) {
+    $('cellKind').value = 'generator';
+    fillGeneratorSelect($('cellEntity'), s.entity);
+    $('cellLevel').value = s.level || 1;
+  } else if (s) {
+    $('cellKind').value = 'chip';
+    fillEntitySelect($('cellEntity'), s.entity);
+    $('cellLevel').value = s.level || 1;
+    $('cellObstacle').value = '';
+  } else {
+    $('cellKind').value = 'empty';
+    $('cellObstacle').value = '';
+    $('cellSeconds').value = '';
+    fillAnyEntitySelect($('cellChipEntity'), '');
+  }
+  toggleCellRows();
+  updateCellPreview();
+}
+
+function toggleCellRows(){
+  const k = $('cellKind').value;
+  const chip = (k === 'chip');
+  const gen = (k === 'generator');
+  const obs = (k === 'obstacle');
+  const safe = (k === 'safebox');
+  $('rowSafeSize').style.display = safe ? '' : 'none';
+  $('rowSafeAnchor').style.display = safe ? '' : 'none';
+  $('rowSafeNum').style.display = safe ? '' : 'none';
+  $('rowSafeActions').style.display = safe ? '' : 'none';
+  $('rowEntity').style.display = (chip || gen) ? '' : 'none';
+  $('rowLevel').style.display = (chip || gen) ? '' : 'none';
+  $('rowObstacle').style.display = obs ? '' : 'none';
+  $('rowSeconds').style.display = (obs && $('cellObstacle').value === 'ice') ? '' : 'none';
+  $('rowTrapped').style.display = (obs && ['web','ice'].includes($('cellObstacle').value)) ? '' : 'none';
+  updateCellPreview();
+}
+
+function clearCell(x, y){
+  const lv = level();
+  lv.board.slots = (lv.board.slots||[]).filter(s => !(s.x===x && s.y===y));
+  lv.obstacles = (lv.obstacles||[]).filter(o => !(o.slot && o.slot[0]===x && o.slot[1]===y));
+}
+
+// ---------------- 棋盘拖动：移动 / 交换 / Ctrl 复制 ----------------
+let _suppressCellClick = false;
+
+function contentAt(lv, x, y){
+  const slot = (lv.board && lv.board.slots || []).find(s => s.x === x && s.y === y) || null;
+  const obstacle = (lv.obstacles || []).find(o =>
+    Array.isArray(o.slot) && o.slot[0] === x && o.slot[1] === y) || null;
+  return { slot, obstacle };
+}
+
+function removeContentAt(lv, x, y){
+  if (lv.board && lv.board.slots) {
+    lv.board.slots = lv.board.slots.filter(s => !(s.x === x && s.y === y));
+  }
+  lv.obstacles = (lv.obstacles || []).filter(o =>
+    !(Array.isArray(o.slot) && o.slot[0] === x && o.slot[1] === y));
+}
+
+function placeContentAt(lv, x, y, slot, obstacle){
+  if (slot) {
+    const copy = JSON.parse(JSON.stringify(slot));
+    copy.x = x; copy.y = y;
+    lv.board.slots.push(copy);
+  }
+  if (obstacle) {
+    const copy = JSON.parse(JSON.stringify(obstacle));
+    copy.slot = [x, y];
+    lv.obstacles.push(copy);
+  }
+}
+
+// copy=true（按着 Ctrl 拖）：目标格被覆盖，源格保留
+// copy=false：目标有东西就交换，空的就直接挪过去
+function moveCellContent(from, to, copy){
+  const lv = level();
+  if (!lv) return false;
+  if (from.x === to.x && from.y === to.y) return false;
+  if (safeCellAt(to.x, to.y)) return false;   // 柜子格不许落子
+  const a = contentAt(lv, from.x, from.y);
+  if (!a.slot && !a.obstacle) return false;
+  const b = contentAt(lv, to.x, to.y);
+
+  removeContentAt(lv, to.x, to.y);
+  if (!copy) removeContentAt(lv, from.x, from.y);
+  placeContentAt(lv, to.x, to.y, a.slot, a.obstacle);
+  if (!copy && (b.slot || b.obstacle)) placeContentAt(lv, from.x, from.y, b.slot, b.obstacle);
+  return true;
+}
+
+// 柜子：在 (x,y) 放一个新的，或改掉"当前选中格所属的那个"
+// 删掉覆盖 (x,y) 的那个柜子
+function removeSafeboxAt(x, y){
+  const lv = level();
+  const box = safeCellAt(x, y);
+  if (!box || !Array.isArray(lv.safes)) return;
+  lv.safes.splice(box.index, 1);
+}
+
+function applySafebox(x, y){
+  const lv = level();
+  const size = $('safeSize').value;
+  const ax = Number($('safeX').value);
+  const ay = Number($('safeY').value);
+  const charges = Math.max(1, Math.floor(Number($('safeCharges').value) || SAFE_DEFAULT_CHARGES));
+  const levelN = Math.max(1, Math.floor(Number($('safeLevel').value) || SAFE_DEFAULT_LEVEL));
+  const anchorX = Number.isFinite(ax) ? Math.max(0, Math.floor(ax)) : x;
+  const anchorY = Number.isFinite(ay) ? Math.max(0, Math.floor(ay)) : y;
+  const existing = safeCellAt(x, y);
+  const reason = safeConflict(size, anchorX, anchorY, existing ? existing.index : -1);
+  if (reason) { toast('柜子放不下：' + reason); return false; }
+  lv.safes = Array.isArray(lv.safes) ? lv.safes : [];
+  const entry = { size: size, slot: [anchorX, anchorY], charges: charges, level: levelN };
+  if (existing) lv.safes[existing.index] = entry;
+  else lv.safes.push(entry);
+  return true;
+}
+
+function applyCell(x, y){
+  const lv = level();
+  const kind = $('cellKind').value;
+  if (kind === 'safebox') {
+    if (applySafebox(x, y)) { renderAll(); }
+    return;
+  }
+  // 只在"这一格有柜子、但类型改成别的"时删掉柜子（改柜子自身走 applySafebox）
+  removeSafeboxAt(x, y);
+  clearCell(x, y);
+  if (kind === 'chip') {
+    let ent = $('cellEntity').value;
+    if (!ent || isGeneratorEntity(ent)) {
+      ent = Object.keys(project.entities || {}).find(id => !isGeneratorEntity(id)) || '';
+      if ($('cellEntity').value !== ent) fillEntitySelect($('cellEntity'), ent);
+    }
+    lv.board.slots.push({x, y, entity: ent, level: Number($('cellLevel').value) || 1});
+  } else if (kind === 'generator') {
+    lv.board.slots.push({x, y, entity: $('cellEntity').value, level: Number($('cellLevel').value) || 1});
+  } else if (kind === 'obstacle') {
+    const entry = {slot: [x, y], type: $('cellObstacle').value};
+    const sec = $('cellSeconds').value.trim();
+    // 留空按 30 秒写入：引擎默认是 10~20 分钟的确定性随机，太长了
+    if (entry.type === 'ice') entry.seconds = sec === '' ? 30 : Math.max(1, Math.floor(Number(sec) || 30));
+    if (['web','ice'].includes(entry.type)) {
+      // 必选：下拉拿不到就取第一个棋子系列，绝不写空
+      let chipEntity = $('cellChipEntity').value;
+      if (!chipEntity) {
+        chipEntity = Object.keys(project.entities || {}).find(id => entityKind(id) === 'chip') || '';
+        if (chipEntity) fillAnyEntitySelect($('cellChipEntity'), chipEntity);
+      }
+      if (chipEntity) {
+        entry.chip = {entity: chipEntity, level: Math.max(1, Number($('cellChipLevel').value) || 1)};
+      }
+    }
+    lv.obstacles.push(entry);
+  }
+}
+
+// 类型切换时，实体下拉要换成对应类别（棋子 ↔ 生成器），否则写进去的还是旧实体，
+// syncCellPanel 一看是生成器就把类型又切回「生成器」——操作者说的"跳不过去"。
+['safeSize','safeX','safeY','safeCharges','safeLevel'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    if ($('cellKind').value !== 'safebox') return;
+    if (!selCell) { toast('先点一个格子'); return; }
+    // 已有柜子 → 边改边生效；新建 → 等「放置柜子」
+    if (safeCellAt(selCell.x, selCell.y)) applyCell(selCell.x, selCell.y);
+    else toggleCellRows();
+  });
+});
+
+$('placeSafe').onclick = () => {
+  if (!selCell) { toast('先在棋盘上点一个格子'); return; }
+  $('cellKind').value = 'safebox';
+  if (applySafebox(selCell.x, selCell.y)) { renderAll(); toast('柜子已放置'); }
+};
+
+$('delSafe').onclick = () => {
+  if (!selCell) { toast('先在棋盘上点一个格子'); return; }
+  const box = safeCellAt(selCell.x, selCell.y);
+  if (!box) { toast('这一格没有柜子'); return; }
+  removeSafeboxAt(selCell.x, selCell.y);
+  renderAll();
+  toast('柜子已删除');
+};
+
+$('cellKind').addEventListener('change', () => {
+  const kind = $('cellKind').value;
+  if (kind === 'safebox') {
+    // 只是切到「柜子」：把锚点预填成当前格，等操作者选尺寸/按「放置柜子」再写
+    if (selCell) {
+      $('safeX').value = selCell.x;
+      $('safeY').value = selCell.y;
+      if (!$('safeCharges').value) $('safeCharges').value = SAFE_DEFAULT_CHARGES;
+      if (!$('safeLevel').value) $('safeLevel').value = SAFE_DEFAULT_LEVEL;
+    }
+    toggleCellRows();
+    return;
+  }
+  if (kind === 'chip' && isGeneratorEntity($('cellEntity').value)) {
+    fillEntitySelect($('cellEntity'), '');
+  } else if (kind === 'generator' && !isGeneratorEntity($('cellEntity').value)) {
+    fillGeneratorSelect($('cellEntity'), '');
+  }
+  toggleCellRows();
+  if (!selCell) return;
+  if (kind === 'obstacle' && !$('cellObstacle').value) $('cellObstacle').value = 'lock';
+  applyCell(selCell.x, selCell.y);
+  renderPreview();
+  validate();
+  syncCellPanel();
+});
+
+// 其余字段：改完立刻写回并重画
+['cellEntity','cellLevel','cellObstacle','cellSeconds','cellChipEntity','cellChipLevel'].forEach(id => {
+  $(id).addEventListener('change', () => {
+    toggleCellRows();
+    if (!selCell) return;
+    applyCell(selCell.x, selCell.y);
+    renderPreview();
+    validate();
+    syncCellPanel();
+  });
+});
+$('clearCell').onclick = () => {
+  if (!selCell) { toast('先点一个格子'); return; }
+  clearCell(selCell.x, selCell.y);
+  renderAll();
+};
+$('lvId').onchange = () => { level().id = $('lvId').value.trim(); renderLevelList(); renderPreview(); validate(); };
+// 顶栏三数写进 project.hud（全局初始值）；爪子数字写进本关 level_number
+[['hudEnergy', 'energy'], ['hudCoin', 'coin'], ['hudGem', 'gem']].forEach(([id, key]) => {
+  $(id).addEventListener('change', () => {
+    const v = Math.max(0, Math.floor(Number($(id).value) || 0));
+    project.hud = project.hud || {};
+    project.hud[key] = v;
+    $(id).value = v;
+    validate(); renderPreview();
+  });
+});
+
+$('lvNumber').onchange = () => {
+  const v = Number($('lvNumber').value);
+  if (!Number.isFinite(v) || v < 1) delete level().level_number;
+  else level().level_number = Math.floor(v);
+  validate(); renderPreview();
+};
+
+$('lvBlast').onchange = () => { level().blast = Math.max(1, Math.min(3, Number($('lvBlast').value)||1)); validate(); };
+['spOn','spCount','spGen'].forEach(id => $(id).addEventListener('change', () => {
+  const lv = level();
+  lv.stockpile = lv.stockpile || {};
+  lv.stockpile.enabled = $('spOn').checked;
+  lv.stockpile.count = Number($('spCount').value) || 0;
+  if ($('spGen').value) lv.stockpile.generator = $('spGen').value;
+  validate(); renderPreview();
+}));
+
+['shopTitle','shopSub','shopReward'].forEach(id => $(id).addEventListener('change', () => {
+  project.shop = project.shop || {};
+  const t = $('shopTitle').value.trim();
+  const sub = $('shopSub').value.trim();
+  const rw = $('shopReward').value.trim();
+  project.shop.title = t || SHOP_DEFAULTS.title;
+  project.shop.subtitle = sub || SHOP_DEFAULTS.subtitle;
+  project.shop.reward = (rw === '') ? SHOP_DEFAULTS.reward : Math.max(0, Number(rw));
+  renderPreview(); validate();
+}));
+
+$('addLevel').onclick = () => {
+  const copy = JSON.parse(JSON.stringify(level()));
+  copy.id = 'level_' + (project.levels.length + 1);
+  project.levels.push(copy); selLevel = project.levels.length-1; renderAll();
+};
+$('dupLevel').onclick = () => {
+  const copy = JSON.parse(JSON.stringify(level()));
+  copy.id = (level().id||'level') + '_copy';
+  project.levels.push(copy); selLevel = project.levels.length-1; renderAll();
+};
+$('delLevel').onclick = async () => {
+  if (project.levels.length <= 1) { toast('至少保留一关'); return; }
+  const name = level().id || ('第 ' + (selLevel + 1) + ' 关');
+  const orders = (level().orders || []).length;
+  const okDelLevel = await askConfirm({ title: '删除关卡', text: '将删除「' + name + '」，其中 ' + orders + ' 张订单。删除后不能撤销，想留档请先点「备份当前」。', ok: '删除', danger: true });
+  if (!okDelLevel) return;
+
+  project.levels.splice(selLevel, 1);
+  selLevel = Math.max(0, selLevel - 1);
+  _safeCache = null;
+  renderAll();
+  toast('已删除关卡 ' + name);
+};
+$('addOrder').onclick = () => {
+  const lv = level();
+  if ((lv.orders || []).length >= ORDER_MAX) { toast('一关最多 ' + ORDER_MAX + ' 张订单'); return; }
+  const ids = (lv.orders||[]).map(o => o.id);
+  let n = 1; while (ids.includes('order_' + n)) n++;
+  (lv.orders = lv.orders || []).push({
+    id: 'order_' + n, character: Object.keys(project.characters||{})[0] || '',
+    mission: [{entity: Object.keys(project.entities||{})[0], level: 1, count: 1}],
+    coin: 5, gem: 2, energy: 30
+  });
+  renderAll();
+};
+
+function validate(){
+  const errs = [];
+  if (!project) return errs;
+  const ents = project.entities || {};
+  const chars = project.characters || {};
+  const gens = project.generators || {};
+  const seen = new Set();
+  project.levels.forEach((lv, li) => {
+    const tag = lv.id || ('levels[' + li + ']');
+    if (seen.has(lv.id)) errs.push(tag + '：关卡 id 重复');
+    seen.add(lv.id);
+    if (lv.blast !== undefined && (lv.blast < 1 || lv.blast > 3)) errs.push(tag + '：blast 必须是 1~3');
+    const hudv = project.hud || {};
+    ['energy','coin','gem'].forEach(k => {
+      if (hudv[k] !== undefined && (!(hudv[k] >= 0) || Math.floor(hudv[k]) !== hudv[k]))
+        errs.push('hud.' + k + ' 必须是 ≥0 的整数');
+    });
+    if (lv.level_number !== undefined && (!(lv.level_number >= 1) || Math.floor(lv.level_number) !== lv.level_number))
+      errs.push(tag + '：小熊爪子数字必须是 ≥1 的整数');
+    if (lv.ice_seconds !== undefined && lv.ice_seconds < 0) errs.push(tag + '：ice_seconds 不能为负');
+    const W = lv.board.width||7, H = lv.board.height||9;
+    const occ = new Set();
+    (lv.board.slots||[]).forEach(s => {
+      if (s.x<0||s.x>=W||s.y<0||s.y>=H) errs.push(tag + '：格子 (' + s.x + ',' + s.y + ') 越界');
+      if (!ents[s.entity]) errs.push(tag + '：格子引用了不存在的实体 ' + s.entity);
+      else {
+        const k = entityKind(s.entity);
+        if (k !== 'chip' && k !== 'generator') errs.push(tag + '：格子 (' + s.x + ',' + s.y + ') 的实体 ' + s.entity + ' 不是棋子/生成器');
+      }
+      if (s.level<1||s.level>10) errs.push(tag + '：格子等级必须是 1~10');
+      if (occ.has(s.x+','+s.y)) errs.push(tag + '：格子 (' + s.x + ',' + s.y + ') 重复');
+      occ.add(s.x+','+s.y);
+    });
+    (lv.obstacles||[]).forEach(o => {
+      if (!o.slot || o.slot.length<2) { errs.push(tag + '：障碍缺少 slot'); return; }
+      if (['web','ice'].includes(o.type) && !(o.chip && o.chip.entity))
+        errs.push(tag + '：' + o.type + ' 必须指定「压住的棋子」');
+    if (!OBSTACLES.includes(o.type)) {
+        errs.push(tag + '：未知障碍类型 ' + o.type +
+          (o.type === 'bubble' ? '（泡泡是柜子上的装饰，不能当棋盘障碍）' : ''));
+      }
+    });
+      // 柜子：对象写法 + 尺寸 + 越界 + 重叠 + 压棋子/障碍
+    (Array.isArray(lv.safes) ? lv.safes : []).forEach((raw, si) => {
+      const tagS = tag + '.safes[' + si + ']';
+      if (typeof raw === 'string') {
+        errs.push(tagS + '：旧写法 "' + raw + '" 已废弃，请在「类型 = 柜子」里重新放一次');
+        return;
+      }
+      if (!raw || typeof raw !== 'object') { errs.push(tagS + '：必须是对象'); return; }
+      if (!SAFE_SPAN[raw.size]) { errs.push(tagS + '：size 必须是 ' + SAFE_SIZES.join(' / ')); return; }
+      const slot = Array.isArray(raw.slot) ? raw.slot : [];
+      if (slot.length !== 2 || !Number.isFinite(Number(slot[0])) || !Number.isFinite(Number(slot[1]))) {
+        errs.push(tagS + '：slot 必须是 [x, y]'); return;
+      }
+      if (raw.charges !== undefined && !(raw.charges >= 1)) errs.push(tagS + '：charges 必须是 ≥1 的整数');
+      if (raw.level !== undefined && !(raw.level >= 1)) errs.push(tagS + '：level 必须是 ≥1 的整数');
+      const reason = safeConflict(raw.size, Math.floor(Number(slot[0])), Math.floor(Number(slot[1])), si, lv);
+      if (reason) errs.push(tagS + '：' + reason);
+    });
+    if (!(lv.orders||[]).length) errs.push(tag + '：至少要有一个订单');
+    (lv.orders||[]).forEach(o => {
+      if (o.character && !chars[o.character]) errs.push(tag + '/' + o.id + '：角色 ' + o.character + ' 不存在');
+      if ((lv.orders || []).length > ORDER_MAX) errs.push(tag + '：最多 ' + ORDER_MAX + ' 张订单（现在 ' + lv.orders.length + ' 张）');
+      if (!(o.mission||[]).length) errs.push(tag + '/' + o.id + '：至少要有一行任务');
+      if ((o.mission||[]).length > MISSION_MAX) errs.push(tag + '/' + o.id + '：最多 ' + MISSION_MAX + ' 行任务（现在 ' + o.mission.length + ' 行）');
+      (o.mission||[]).forEach(m => {
+        if (!ents[m.entity]) errs.push(tag + '/' + o.id + '：任务实体 ' + m.entity + ' 不存在');
+        else if (entityKind(m.entity) !== 'chip') errs.push(tag + '/' + o.id + '：任务实体 ' + m.entity + ' 不是棋子');
+        if (m.level<1||m.level>10) errs.push(tag + '/' + o.id + '：任务等级必须是 1~10');
+        const cnt = (m.count === undefined || m.count === null) ? 1 : Number(m.count);
+        if (!(cnt >= 1)) errs.push(tag + '/' + o.id + '：任务数量必须 ≥1');
+      });
+      ['coin','gem','energy'].forEach(k => { if (o[k] !== undefined && o[k] < 0) errs.push(tag + '/' + o.id + '：' + k + ' 不能为负'); });
+    });
+    const sp = lv.stockpile;
+    if (sp && sp.enabled && sp.generator && !gens[sp.generator]) errs.push(tag + '：库存生成器 ' + sp.generator + ' 不存在');
+  });
+  const box = $('errors');
+  if (!errs.length) {
+    box.className = 'hint ok';
+    box.textContent = '本地校验通过。保存后建议再跑一次 Godot 校验（README 有命令）。';
+  } else {
+    box.className = '';
+    box.innerHTML = errs.map(e => '<div>· ' + e + '</div>').join('');
+  }
+  $('saveBtn').disabled = !dirHandle;   // 校验错误不再变灰：点保存时弹窗报错
+  return errs;
+}
+
+function stamp(){
+  const d = new Date(); const p = (n)=>String(n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds());
+}
+
+$('saveBtn').onclick = async () => {
+  const errs = validate();
+  if (errs.length) {
+    await askAlert({
+      title: '保存失败：有 ' + errs.length + ' 处需要修改',
+      html: '<ul class="errlist">' + errs.map(e => '<li>' + escapeHtml(e) + '</li>').join('') + '</ul>',
+      ok: '确定',
+    });
+    return;
+  }
+  if (!await ensureWrite()) return;
+  try {
+    const mainFh = await dirHandle.getFileHandle(MAIN);
+    const text = JSON.stringify(project, null, 2) + '\n';
+    const w = await mainFh.createWritable(); await w.write(text); await w.close();
+    setStatus('已保存 ' + MAIN + '（' + text.length + ' 字节）。要留档请点「备份当前」', 'ok');
+    toast('已保存（不自动备份）');
+  } catch(e){ setStatus('保存失败：' + e.message, 'err'); }
+};
+
+async function refreshBackups(){
+  const box = $('backupList');
+  if (!dirHandle) { box.innerHTML = '<div class="hint">打开工程后显示</div>'; return; }
+  try {
+    const bk = await dirHandle.getDirectoryHandle(BACKUP_DIR, {create:true});
+    const names = [];
+    for await (const [name, handle] of bk.entries()) {
+      if (handle.kind === 'file' && name.endsWith('.json')) names.push(name);
+    }
+    names.sort().reverse();
+    if (!names.length) { box.innerHTML = '<div class="hint">还没有备份</div>'; return; }
+    box.innerHTML = '';
+    names.forEach(name => {
+      const isOriginal = name === 'sample_project-original.json';
+      const raw = name.replace('sample_project-', '').replace('.json', '');
+      const m = raw.match(/^(\d{8})_(\d{6})$/);
+      const title = m ? (m[1].slice(0,4) + '-' + m[1].slice(4,6) + '-' + m[1].slice(6,8) + '  '
+        + m[2].slice(0,2) + ':' + m[2].slice(2,4) + ':' + m[2].slice(4,6)) : raw;
+      const row = document.createElement('div');
+      row.className = 'bk' + (isOriginal ? ' pinned' : '');
+      const main = document.createElement('div'); main.className = 'bkmain';
+      const nm = document.createElement('div'); nm.className = 'name';
+      nm.title = name; nm.textContent = title;
+      const meta = document.createElement('div'); meta.className = 'meta';
+      meta.textContent = isOriginal ? '原始档 · 只读基准' : (m ? '定时快照' : '手动备份');
+      main.appendChild(nm); main.appendChild(meta);
+
+      const acts = document.createElement('div'); acts.className = 'acts';
+      const restore = document.createElement('button');
+      restore.className = 'mini'; restore.textContent = '恢复';
+      restore.title = '用这份覆盖当前数据';
+      restore.onclick = () => restoreBackup(name);
+      const del = document.createElement('button');
+      del.className = 'mini danger'; del.textContent = '✕';
+      del.disabled = isOriginal;
+      del.title = isOriginal ? '原始档保留，不能删' : '删除这个备份';
+      del.onclick = () => deleteBackup(name);
+      acts.appendChild(restore); acts.appendChild(del);
+
+      row.appendChild(main); row.appendChild(acts);
+      box.appendChild(row);
+    });
+  } catch(e){ box.innerHTML = '<div class="hint err">读备份失败：' + e.message + '</div>'; }
+}
+
+function bkReport(msg, cls){
+  const el = $('bkMsg');
+  if (el) { el.className = 'hint ' + (cls || ''); el.textContent = msg; }
+  setStatus(msg, cls || '');
+  if (cls === 'err') toast(msg);
+}
+
+async function ensureWrite(){
+  if (!dirHandle) { bkReport('还没有打开工程目录', 'err'); return false; }
+  if (!project) { bkReport('还没有读到工程数据，先点「打开工程目录…」', 'err'); return false; }
+  try {
+    let perm = await dirHandle.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await dirHandle.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') { bkReport('这个目录只给了只读权限，重新「打开工程目录…」并允许编辑', 'err'); return false; }
+  } catch(e){ bkReport('权限检查失败：' + e.message, 'err'); return false; }
+  return true;
+}
+
+async function makeBackup(){
+  if (!await ensureWrite()) return;
+  const errs = validate();
+  if (errs.length) { bkReport('有 ' + errs.length + ' 条校验错误，先改再备份（见右下「校验」）', 'err'); return; }
+  try {
+    const raw = ($('bkName').value || '').trim();
+    const custom = raw.replace(/[^\w\-\u4e00-\u9fa5]+/g, '_').slice(0, 40);
+    const name = 'sample_project-' + (custom ? custom + '-' : '') + stamp() + '.json';
+    const bk = await dirHandle.getDirectoryHandle(BACKUP_DIR, {create:true});
+    const fh = await bk.getFileHandle(name, {create:true});
+    const text = JSON.stringify(project, null, 2) + '\n';
+    const w = await fh.createWritable(); await w.write(text); await w.close();
+    $('bkName').value = '';
+    bkReport('已备份到 backup/' + name, 'ok');
+    refreshBackups();
+  } catch(e){ bkReport('备份失败：' + e.name + ' / ' + e.message, 'err'); }
+}
+
+async function deleteBackup(name){
+  if (!await ensureWrite()) return;
+  if (name === 'sample_project-original.json') { toast('原始档保留，不能删'); return; }
+  const okDelBk = await askConfirm({ title: '删除备份', text: '将删除备份 ' + name + '。此操作不可撤销。', ok: '删除', danger: true });
+  if (!okDelBk) return;
+  try {
+    const bk = await dirHandle.getDirectoryHandle(BACKUP_DIR, {create:true});
+    await bk.removeEntry(name);
+    bkReport('已删除 ' + name, 'ok');
+    refreshBackups();
+  } catch(e){ bkReport('删除失败：' + e.name + ' / ' + e.message, 'err'); }
+}
+
+async function restoreBackup(name){
+  if (!await ensureWrite()) return;
+  const okRestore = await askConfirm({ title: '恢复备份', text: '将用 ' + name + ' 覆盖当前主文件。当前内容不会被自动备份，需要留档请先点「备份当前」。', ok: '恢复' });
+  if (!okRestore) return;
+  try {
+    const bk = await dirHandle.getDirectoryHandle(BACKUP_DIR, {create:true});
+    const fh = await bk.getFileHandle(name);
+    const data = JSON.parse(await (await fh.getFile()).text());
+    const mainFh = await dirHandle.getFileHandle(MAIN);
+    const w = await mainFh.createWritable(); await w.write(JSON.stringify(data, null, 2) + '\n'); await w.close();
+    project = data; selLevel = 0; selCell = null;
+    renderAll(); refreshBackups();
+    setStatus('已恢复 ' + name, 'ok');
+  } catch(e){ setStatus('恢复失败：' + e.message, 'err'); }
+}
+
+$('openBtn').onclick = openProject;
+$('reopenBtn').onclick = reopenLast;
+$('refreshBk').onclick = refreshBackups;
+$('makeBk').onclick = makeBackup;
+// 任何脚本异常都显示在备份区那行，避免"点了没反应"
+window.addEventListener('error', (e) => {
+  const el = document.getElementById('bkMsg');
+  if (el) { el.className = 'hint err'; el.textContent = '脚本错误：' + (e.message || e.type); }
+});
+
+bindSections();
+if (location.search.indexOf('selftest') >= 0) editorSelfTest();
+
+try {
+  const saved = readSplit();
+  applySplit(saved.left, saved.right, false);
+  bindSplitter($('splitL'), 'left');
+  bindSplitter($('splitR'), 'right');
+  window.addEventListener('resize', fitPreview);
+} catch(e){ console.error(e); }
+
+// ---------------------------------------------------------------- 自测（?selftest=1）
+// 用内存工程把"关卡列表 / 预览 / 属性 / 校验"全部跑一遍；有异常就写进 <title>，
+// 方便 headless 浏览器一条命令验证（tools/editor_selftest.sh）。
+function editorSelfTest(){
+  const errors = [];
+  const fakeProject = {
+    version: 2,
+    theme: 'themes/default',
+    meta: { title: 'selftest', locale: 'zh' },
+    locales: { zh: {} },
+    hud: { level: 3, energy: 88, energyTickSeconds: 120, energyTickMode: 'decrement', coin: 9, gem: 99, exp: 0 },
+    shop: { title: 'T', subtitle: 'S', reward: 32 },
+    entities: {
+      CleanSet_Ca: { kind: 'chip' }, CleanSet_Cb: { kind: 'chip' },
+      CleanBox_C: { kind: 'generator' }, SafeBox_X: { kind: 'special' },
+      char_a: { kind: 'character' }, char_b: { kind: 'character' },
+    },
+    generators: { CleanBox_C: {} },
+    characters: { char_a: {}, char_b: {} },
+    levels: [{
+      id: 'L1', blast: 2, ice_seconds: 30,
+      board: { width: 7, height: 9, slots: [
+        { x: 0, y: 0, entity: 'CleanSet_Ca', level: 1 },
+        { x: 1, y: 0, entity: 'CleanSet_Ca', level: 2 },
+        { x: 2, y: 0, entity: 'CleanBox_C', level: 1 },
+      ]},
+      obstacles: [
+        { slot: [3, 0], type: 'ice', seconds: 20, chip: { entity: 'CleanSet_Cb', level: 3 } },
+        { slot: [4, 0], type: 'web', chip: { entity: 'CleanSet_Ca', level: 1 } },
+        { slot: [5, 0], type: 'lock' }, { slot: [6, 0], type: 'bag' },
+      ],
+      safes: [{ size: '2x3', slot: [0, 6], charges: 12, level: 18 }],
+      stockpile: { enabled: true, count: 9, generator: 'CleanBox_C' },
+      orders: [
+        { id: 'o1', character: 'char_a', coin: 5, gem: 2, energy: 10,
+          mission: [{ entity: 'CleanSet_Ca', level: 1, count: 1 },
+                    { entity: 'CleanSet_Ca', level: 2, count: 2 }] },
+        { id: 'o2', character: 'char_b', coin: 3, mission: [
+                    { entity: 'CleanSet_Cb', level: 1, count: 1 }] },
+      ],
+    }],
+  };
+
+  const origError = window.onerror;
+  window.onerror = (msg, src, line) => { errors.push(msg + ' @' + line); return true; };
+
+  try {
+    project = fakeProject;
+    selLevel = 0;
+    selCell = { x: 1, y: 0 };
+    (function(){
+      const steps = { 关卡列表: renderLevelList, 预览: renderPreview, 属性: renderInspector, 校验: validate };
+      Object.keys(steps).forEach(name => {
+        try { steps[name](); }
+        catch (e) { errors.push(name + ': ' + e.message); }
+      });
+      // 若干交互路径：切单元格、改关卡字段、排序
+      try { syncCellPanel(); $('cellKind').value = 'obstacle'; toggleCellRows(); } catch (e) { errors.push('syncCellPanel: ' + e.message); }
+      try { moveLevel(0, 0); moveOrder(0, 1); moveMission(lvOrdersFix(), 0, 1); } catch (e) { errors.push('reorder: ' + e.message); }
+      try { shopWithDefaults(); entitySummary(); charIconUrl('char_a'); } catch (e) { errors.push('helpers: ' + e.message); }
+      try { applySplit(300, 460, false); fitPreview(); readSplit(); bindSplitter(null, 'left'); } catch (e) { errors.push('split: ' + e.message); }
+      try {
+        renderPreview();
+        window.dispatchEvent(new Event('resize'));
+        // 资源条贴图里自带图标和绿色「+」，预览不许再叠一层
+        if (document.querySelector('.hudbar .plus')) errors.push('资源条又叠了「+」');
+        ['hudEnergy','hudCoin','hudGem','lvNumber'].forEach(id => {
+          if (!document.getElementById(id)) errors.push('缺少字段 #' + id);
+        });
+        const bars = document.querySelectorAll('.hudbar .bar');
+        if (bars.length !== 3) errors.push('资源条数量应为 3，实际 ' + bars.length);
+        bars.forEach(b => { if (!b.querySelector('.val')) errors.push('资源条缺少数字'); });
+      } catch (e) { errors.push('hud: ' + e.message); }
+      // 拖动：移动 / 交换 / Ctrl 复制（直接调数据函数）
+      try {
+        selLevel = 0;
+        const lv = level();
+        const before = JSON.stringify(lv.board.slots);
+        // (0,0) 有 Ca1，(1,0) 有 Ca2 → 移动应为交换
+        if (!moveCellContent({x:0,y:0}, {x:1,y:0}, false)) errors.push('移动返回 false');
+        const s0 = contentAt(lv, 0, 0), s1 = contentAt(lv, 1, 0);
+        if (!(s0.slot && s0.slot.level === 2)) errors.push('交换后 (0,0) 应为 lv2');
+        if (!(s1.slot && s1.slot.level === 1)) errors.push('交换后 (1,0) 应为 lv1');
+        // Ctrl 复制：(0,0) → (5,1)（空格），源保留
+        if (!moveCellContent({x:0,y:0}, {x:5,y:1}, true)) errors.push('复制返回 false');
+        if (!contentAt(lv, 0, 0).slot) errors.push('复制后源格应保留');
+        if (!contentAt(lv, 5, 1).slot) errors.push('复制后目标格应有棋子');
+        // 障碍也要跟着走：(3,0) 是冰 → 移到 (6,1)
+        if (!moveCellContent({x:3,y:0}, {x:6,y:1}, false)) errors.push('障碍移动失败');
+        const ob = contentAt(lv, 6, 1).obstacle;
+        if (!ob || ob.type !== 'ice') errors.push('冰没有跟着移动');
+        if (ob && ob.chip && ob.chip.level !== 3) errors.push('冰里的棋子没有跟着移动');
+        // 拖放弹窗：能显示、能定位、会自己收起
+        popDrag('复制 <b>(0,0)</b> <i>→</i> <b>(5,1)</b>', 400, 300, true);
+        const pop = document.getElementById('popdrag');
+        if (!pop) errors.push('缺少拖放弹窗元素');
+        else if (pop.hidden || !pop.textContent.includes('→')) errors.push('弹窗没有显示/没有箭头');
+        else if (!pop.style.left || !pop.style.top) errors.push('弹窗没有定位');
+        else {
+          // zoom=1.25 下 400px 应落到 320px 左右（不能偏）
+          const lx = parseFloat(pop.style.left);
+          if (Math.abs(lx - (400 / bodyZoom() - pop.offsetWidth / bodyZoom() / 2)) > 2)
+            errors.push('弹窗坐标没有按 zoom 折算: left=' + lx);
+          pop.hidden = true;
+        }
+      } catch (e) { errors.push('drag: ' + e.message); }
+
+      // 保存不再因校验错误变灰；错误走弹窗
+      try {
+        const hadDir = dirHandle;
+        dirHandle = dirHandle || { name: 'selftest' };
+        validate();
+        if ($('saveBtn').disabled) errors.push('有校验错误时保存按钮不该变灰');
+        dirHandle = hadDir;
+        askAlert({ title: 't', html: '<ul class="errlist"><li>x</li></ul>', ok: '确定' });
+        const mm = document.getElementById('modalMask');
+        if (mm.hidden) errors.push('报错弹窗没弹出');
+        if (document.getElementById('modalCancel').style.display !== 'none')
+          errors.push('报错弹窗不该有取消按钮');
+        document.getElementById('modalOk').click();
+        if (!mm.hidden) errors.push('点确定后弹窗没关');
+      } catch (e) { errors.push('savedialog: ' + e.message); }
+
+      // 「压住的棋子」必选：下拉里不能出现空选项
+      try {
+        selCell = { x: 4, y: 0 }; syncCellPanel();
+        const opts = [...$('cellChipEntity').options].map(o => o.value);
+        if (!opts.length || opts.some(v => v === '')) errors.push('压住的棋子下拉不该有空选项');
+        // 写入时必带 chip
+        $('cellKind').value = 'obstacle'; $('cellObstacle').value = 'web';
+        if (!$('cellChipEntity').value) fillAnyEntitySelect($('cellChipEntity'), '');
+        applyCell(4, 0);
+        const obw = (level().obstacles || []).find(o => o.slot[0] === 4 && o.slot[1] === 0);
+        if (!(obw && obw.chip && obw.chip.entity)) errors.push('web 写入时没带 chip');
+        // 缺 chip 的旧数据要报错
+        if (!validate().some(e => e.includes('必须指定「压住的棋子」'))) {
+          const keep2 = obw.chip; delete obw.chip;
+          const flagged = validate().some(e => e.includes('必须指定「压住的棋子」'));
+          obw.chip = keep2;
+          if (!flagged) errors.push('缺 chip 时校验没报错');
+        }
+      } catch (e) { errors.push('trappedrequired: ' + e.message); }
+
+      // 网/冰「压住的棋子=默认」→ 格子内不画 chip
+      try {
+        const lvw = level();
+        const web = (lvw.obstacles || []).find(o => o.type === 'web');
+        if (web) {
+          const keep = web.chip; delete web.chip;
+          renderPreview();
+          const cellEl2 = document.querySelector('.stage .cell[data-x="' + web.slot[0] + '"][data-y="' + web.slot[1] + '"]');
+          if (cellEl2 && cellEl2.querySelector('img.chip'))
+            errors.push('压住的棋子=默认时不应画 chip');
+          if (keep) web.chip = keep; else delete web.chip;
+          renderPreview();
+        }
+      } catch (e) { errors.push('trappeddefault: ' + e.message); }
+
+      // 图标预览：按系列分组、每套 10 格、点别处切回
+      try {
+        openGallery();
+        const gal = document.getElementById('iconGallery');
+        const col = document.getElementById('colRight');
+        if (!gal || gal.hidden || !col.classList.contains('galleryOn'))
+          errors.push('图标预览没有切过去');
+        const groups = gal.querySelectorAll('.galgroup');
+        if (groups.length !== galleryEntities().length)
+          errors.push('图标预览分组数不对: ' + groups.length);
+        if (groups[0]) {
+          if (!/^C_/.test(groups[0].querySelector('h4').textContent))
+            errors.push('分组标题不是 C_X 形式: ' + groups[0].querySelector('h4').textContent);
+          if (groups[0].querySelectorAll('.galcell').length !== 10)
+            errors.push('每组应有 10 级');
+        }
+        document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+        if (galleryOpen || !gal.hidden) errors.push('点别处没有切回编辑');
+      } catch (e) { errors.push('gallery: ' + e.message); }
+
+      // 柜子校验必须用"自己那一关"的棋盘/障碍（以前读当前选中关卡 → level_2 保存会误报第一关）
+      try {
+        const mk = (id, safes, obstacles) => ({ id, board: { width: 7, height: 9, slots: [] }, safes, obstacles, orders: [] });
+        const a = mk('L1', [{ size: '2x3', slot: [4, 7], charges: 10, level: 22 }], []);
+        const b = mk('L2', [], [{ slot: [4, 7], type: 'ice' }]);
+        if (safeConflict('2x3', 4, 7, 0, a) !== '') errors.push('第一关的柜子被第 2 关的冰误伤');
+        if (!safeConflict('2x3', 4, 7, -1, b).includes('ice')) errors.push('第 2 关的冰没被识别');
+      } catch (e) { errors.push('safescope: ' + e.message); }
+
+      // 别名目录：Ca/Cb 的 7~10 级必须解析到 chips/ 而不是 ui/
+      try {
+        const m = { resources: { icon_10002110: { file_name: 'icon_10002110.png' } },
+                    aliases: { chip_clean_ca_lv10: 'icon_10002110' } };
+        buildAssetMaps(m, null);
+        const f = files['chip_clean_ca_lv10'];
+        if (!f || f.dir !== 'chips/' || f.name !== 'icon_10002110.png')
+          errors.push('别名解析到了错误目录: ' + JSON.stringify(f || null));
+      } catch (e) { errors.push('aliasdir: ' + e.message); }
+
+      // 实体下拉的显示名（Ca（饼干）这种）
+      try {
+        const sel = $('cellEntity');
+        fillEntitySelect(sel, 'CleanSet_Cb');
+        const opt = [...sel.options].find(o => o.value === 'CleanSet_Cb');
+        if (!opt || opt.textContent !== 'C_B（面包卷）')
+          errors.push('实体下拉没有人性化显示: ' + (opt ? opt.textContent : 'no option'));
+        if (entityLabel('CleanSet_Ca') !== 'C_A（饼干）')
+          errors.push('entityLabel 没去掉 CleanSet_ 前缀');
+      } catch (e) { errors.push('entitylabel: ' + e.message); }
+
+      // 棋盘属性面板的图标预览（棋子/生成器/障碍/柜子）
+      try {
+        selCell = { x: 3, y: 2 };
+        // 自测环境没有真实素材，塞一个假 URL 让预览有东西可画
+        chips['CleanSet_Ca'] = chips['CleanSet_Ca'] || {};
+        chips['CleanSet_Ca']['2'] = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+        ui['web'] = ui['web'] || 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+        $('cellKind').value = 'chip';
+        fillEntitySelect($('cellEntity'), 'CleanSet_Ca');
+        $('cellLevel').value = 2;
+        toggleCellRows();
+        const pv = document.getElementById('cellPreview');
+        if (!pv || pv.hidden || !pv.querySelector('img')) errors.push('棋子没有显示图标预览');
+        $('cellKind').value = 'empty';
+        toggleCellRows();
+        if (!pv.hidden) errors.push('空格时预览应隐藏');
+        // 网：棋子 + 网 两层都要画
+        chips['CleanSet_Ca'] = chips['CleanSet_Ca'] || {};
+        chips['CleanSet_Ca']['2'] = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+        $('cellKind').value = 'obstacle';
+        $('cellObstacle').value = 'web';
+        fillAnyEntitySelect($('cellChipEntity'), 'CleanSet_Ca');
+        $('cellChipLevel').value = 2;   // 上面给 Ca lv2 塞过假 URL
+        toggleCellRows();
+        if (pv.querySelectorAll('img').length < 2)
+          errors.push('网/冰预览没有把被压住的棋子画出来');
+      } catch (e) { errors.push('cellpreview: ' + e.message); }
+
+      // 国际化：语言下拉 + board.full 写回对应语言
+      try {
+        project.locales = { zh: {}, en: {} };
+        project.meta = project.meta || {};
+        project.meta.locale = 'zh';
+        renderInspector();
+        const sel = document.getElementById('i18nLocale');
+        if (!sel || [...sel.options].map(o => o.value).join(',') !== 'zh,en')
+          errors.push('国际化语言下拉不是 zh/en');
+        const row = document.querySelector('#i18nList .i18nrow input');
+        if (!row) errors.push('国际化面板没有 board.full 输入框');
+        else {
+          row.value = '改过的中文';
+          row.dispatchEvent(new Event('change'));
+          if (project.locales.zh['board.full'] !== '改过的中文')
+            errors.push('board.full 没写回 zh');
+        }
+        if (sel) {
+          sel.value = 'en';
+          sel.dispatchEvent(new Event('change'));
+          const en = document.querySelector('#i18nList .i18nrow input');
+          if (!en || en.value !== 'Board is full') errors.push('切到 en 后没显示英文默认值');
+          en.value = 'Board full!';
+          en.dispatchEvent(new Event('change'));
+          if (project.locales.en['board.full'] !== 'Board full!') errors.push('board.full 没写回 en');
+          if ((project.meta || {}).locale !== 'en') errors.push('切语言没写进 meta.locale');
+        }
+      } catch (e) { errors.push('i18n: ' + e.message); }
+
+      // 柜子：坐标解析 / 越界 / 重叠 / 压棋子 / 放置与移动
+      try {
+        const lvs = level();
+        const backupSafes = JSON.parse(JSON.stringify(lvs.safes || []));
+        lvs.safes = [
+          { size: '2x4', slot: [0, 5], charges: 4, level: 15 },
+          { size: '2x2', slot: [5, 0] },
+        ];
+        const boxes = parseSafes();
+        if (boxes.length !== 2) errors.push('柜子解析数量不对: ' + boxes.length);
+        if (boxes[0] && boxes[0].w !== 4) errors.push('2x4 宽度应为 4');
+        if (boxes[1] && (boxes[1].charges !== SAFE_DEFAULT_CHARGES || boxes[1].level !== SAFE_DEFAULT_LEVEL))
+          errors.push('柜子默认数值不对');
+        if (!safeConflict('2x4', 0, 8)) errors.push('越界没被拦住');
+        if (!safeConflict('2x2', 1, 5)) errors.push('柜子重叠没被拦住');
+        // 压棋子：临时清空棋子，放一枚在 (0,0) 再用 2x2 去压
+        const backupSlots = JSON.parse(JSON.stringify(lvs.board.slots || []));
+        lvs.board.slots = [{ x: 0, y: 0, entity: 'CleanSet_Ca', level: 1 }];
+        if (!safeConflict('2x2', 0, 0)) errors.push('压住棋子没被拦住');
+        lvs.board.slots = [];
+        // 放置：选 (0,0) 放一个 2x2
+        selCell = { x: 0, y: 0 };
+        $('cellKind').value = 'safebox'; $('safeSize').value = '2x2';
+        $('safeX').value = 0; $('safeY').value = 0; $('safeCharges').value = 7; $('safeLevel').value = 20;
+        if (!applySafebox(0, 0)) errors.push('合法柜子没放上去');
+        // 拖动：合法位移能改锚点；不合法（越界）数据不变 = 回弹
+        const moveBox = parseSafes().find(b => b.x === 0 && b.y === 0);
+        if (!moveBox) errors.push('找不到刚放的柜子');
+        else {
+          const okMove = moveSafeboxTo(moveBox, 2, 0, false);
+          if (!okMove.ok) errors.push('合法位移被拒绝: ' + okMove.reason);
+          const after = parseSafes().find(b => b.x === 2 && b.y === 0);
+          if (!after) errors.push('拖动后锚点没更新');
+          const badMove = moveSafeboxTo(after, 6, 8, false);   // 2x2 @ (6,8) 越界
+          if (badMove.ok) errors.push('越界位移没被拦住');
+          const still = parseSafes().find(b => b.x === 2 && b.y === 0);
+          if (!still) errors.push('非法拖动后数据被改了（应该回弹）');
+          moveSafeboxTo(still, 0, 0, false);   // 挪回去，后面的断言还看 (0,0)
+        }
+        // 切到「柜子」类型本身不该写数据（要先按放置）
+        const beforeCount = parseSafes().length;
+        $('cellKind').value = 'safebox';
+        $('cellKind').dispatchEvent(new Event('change'));
+        if (parseSafes().length !== beforeCount) errors.push('只切类型就写了数据');
+        const placed = parseSafes().find(b => b.x === 0 && b.y === 0);
+        if (!placed || placed.charges !== 7) errors.push('柜子没放上去或数字没写进数据');
+        // 旧字符串写法：校验必须报错
+        lvs.safes.push('2x4');
+        if (!validate().some(e => e.includes('旧写法'))) errors.push('旧字符串写法没被校验点名');
+        lvs.safes = backupSafes;
+        lvs.board.slots = backupSlots;
+        renderAll();
+      } catch (e) { errors.push('safebox: ' + e.message); }
+
+      // 没选格子时，棋盘属性分区只留提示
+      try {
+        const backupSel = selCell;
+        selCell = null; syncCellPanel();
+        const hidden = ['rowKind','rowEntity','rowLevel','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
+          .filter(id => (document.getElementById(id) || {}).style.display !== 'none');
+        if (hidden.length) errors.push('未选格子时仍显示: ' + hidden.join(','));
+        selCell = backupSel; syncCellPanel();
+      } catch (e) { errors.push('cellpanel: ' + e.message); }
+
+      // 订单上限 5：满 5 隐藏「新增订单」，6 张时校验报错
+      try {
+        const lv2 = level();
+        const backup = JSON.parse(JSON.stringify(lv2.orders));
+        while (lv2.orders.length < 5) lv2.orders.push({
+          id: 'tmp_' + lv2.orders.length, character: '', mission: [{entity:'CleanSet_Ca', level:1, count:1}], coin:1 });
+        renderInspector();
+        if (addOrderVisible()) errors.push('满 5 张时「新增订单」应隐藏');
+        lv2.orders.push({ id: 'tmp_x', character: '', mission: [{entity:'CleanSet_Ca', level:1, count:1}], coin:1 });
+        if (!validate().some(e => e.includes('最多 5 张订单'))) errors.push('6 张订单时校验没报错');
+        lv2.orders = backup;
+        renderInspector();
+        if (!addOrderVisible()) errors.push('恢复后「新增订单」应重新显示');
+      } catch (e) { errors.push('orderlimit: ' + e.message); }
+
+      // 分区顺序 + 折叠
+      try {
+        const order = [...document.querySelectorAll('#colRight .sect[data-sect]')].map(el => el.dataset.sect);
+        if (order.join(',') !== 'level,cell,topbar,shop,order,i18n,check') errors.push('分区顺序不对: ' + order.join(','));
+        const sect = document.querySelector('#colRight .sect[data-sect=cell]');
+        sect.querySelector('h3.shead').click();
+        if (!sect.classList.contains('collapsed')) errors.push('点击标题没有折叠');
+        if (!collapsedSet().has('cell')) errors.push('折叠状态没存下来');
+        sect.querySelector('h3.shead').click();
+        if (sect.classList.contains('collapsed')) errors.push('再点一次没有展开');
+        applyCollapsed();
+
+        // 手风琴：点棋盘 → 只开「棋盘属性设置」
+        const cellEl = document.querySelector('.stage .cell');
+        if (!cellEl) errors.push('棋盘没有格子元素');
+        else {
+          cellEl.click();
+          const open = [...document.querySelectorAll('#colRight .sect[data-sect]')]
+            .filter(el => !el.classList.contains('collapsed')).map(el => el.dataset.sect);
+          if (open.join(',') !== 'cell') errors.push('点棋盘应只开 cell，实际: ' + open.join(','));
+          const act = document.activeElement;
+          if (!act || !act.closest('#colRight .sect[data-sect=cell]'))
+            errors.push('点棋盘后焦点没落在棋盘属性分区');
+        }
+        // 之后再手点「关卡设置」→ 允许同时开两块（不强制手风琴）
+        document.querySelector('#colRight .sect[data-sect=level] h3.shead').click();
+        const open2 = [...document.querySelectorAll('#colRight .sect[data-sect]')]
+          .filter(el => !el.classList.contains('collapsed')).map(el => el.dataset.sect).sort();
+        if (open2.join(',') !== 'cell,level') errors.push('手动展开后应允许两块同时开，实际: ' + open2.join(','));
+        // 重渲染后不该把用户的选择覆盖掉
+        renderPreview(); renderInspector();
+        const open3 = [...document.querySelectorAll('#colRight .sect[data-sect]')]
+          .filter(el => !el.classList.contains('collapsed')).map(el => el.dataset.sect).sort();
+        if (open3.join(',') !== 'cell,level') errors.push('重渲染把折叠状态冲掉了: ' + open3.join(','));
+      } catch (e) { errors.push('sections: ' + e.message); }
+      try { validate(); } catch (e) { errors.push('validate: ' + e.message); }
+    })();
+  } catch (e) {
+    errors.push('selftest: ' + e.message);
+  }
+  window.onerror = origError;
+
+  const tag = errors.length ? ('SELFTEST FAIL ' + errors.join(' | ')) : 'SELFTEST PASS';
+  document.title = tag;
+  const box = document.createElement('div');
+  box.id = 'selftestResult';
+  box.textContent = tag;
+  document.body.appendChild(box);
+}
+
+function addOrderVisible(){
+  const btn = document.getElementById('addOrder');
+  return !!(btn && btn.parentElement && btn.parentElement.style.display !== 'none');
+}
+
+function lvOrdersFix(){ return (level().orders || [])[0]; }
+
+bootLast();
+</script>
+</body>
+</html>

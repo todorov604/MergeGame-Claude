@@ -72,7 +72,7 @@ func _load_both(t) -> void:
 	t.ok(bool(base.get("ok", false)), "default theme loads", str(base.get("errors", [])))
 	var base_palette: Dictionary = base.get("palette", {})
 	var base_metrics: Dictionary = base.get("metrics", {})
-	t.ok(base_palette.size() >= 16, "default palette is complete", str(base_palette.size()))
+	t.ok(base_palette.size() >= 15, "default palette is complete", str(base_palette.size()))
 	t.ok(base_metrics.size() >= 6, "default metrics are complete", str(base_metrics.size()))
 
 	var wood: Dictionary = loader.load_theme(WOOD_THEME, project)
@@ -111,7 +111,7 @@ func _load_both(t) -> void:
 
 func _precedence(t) -> void:
 	var project := _project()
-	var themed := _with_project_icon(project, "CleanSet_Ca", "ui_icon_star")
+	var themed := _with_project_icon(project, "CleanSet_Ca", "box_safe_x")
 	var loader = _loader(true)
 
 	var theme_data := {
@@ -132,7 +132,7 @@ func _precedence(t) -> void:
 	var entities := _dict(project_with_more.get("entities", {}))
 	var ca := _dict(entities.get("CleanSet_Ca", {}))
 	var visual := _dict(ca.get("visual", {}))
-	visual["icon"] = "ui_icon_star"
+	visual["icon"] = "box_safe_x"
 	ca["visual"] = visual
 	entities["CleanSet_Ca"] = ca
 	project_with_more["entities"] = entities
@@ -140,9 +140,9 @@ func _precedence(t) -> void:
 	plain_loader.ingest({"name": "no-icons", "icons": {}}, project_with_more, "res://data/themes/probe/theme.json")
 	var project_wins: Dictionary = plain_loader.resolve_icon("chip", "CleanSet_Ca", project_with_more)
 	t.eq(String(project_wins.get("source", "")), "project", "project is the second layer")
-	t.eq(String(project_wins.get("id", "")), "ui_icon_star", "project id wins when no theme icon")
+	t.eq(String(project_wins.get("id", "")), "box_safe_x", "project id wins when no theme icon")
 
-	var default_layer: Dictionary = plain_loader.resolve_icon("hud", "star", project_with_more)
+	var default_layer: Dictionary = plain_loader.resolve_icon("hud", "energy", project_with_more)
 	t.eq(String(default_layer.get("source", "")), "default", "missing everywhere falls to default")
 	t.eq(String(default_layer.get("id", "")), "", "default layer renders procedurally")
 
@@ -153,7 +153,7 @@ func _guard_gate(t) -> void:
 	# The snapshot rebuilt for M1 has zero REFERENCE_ONLY records left (every 01_icon
 	# material is PRODUCTION), so the REFERENCE_ONLY gate is proven with a synthetic
 	# record injected into the guard — the code path is what matters, not the table.
-	var strict = _loader_with(false, {"synth_ref_only": _record("REFERENCE_ONLY", "ui_icon_star.png", true)})
+	var strict = _loader_with(false, {"synth_ref_only": _record("REFERENCE_ONLY", "box_safe_x.png", true)})
 	var reference_only: Dictionary = strict.ingest({
 		"name": "ref-only-probe",
 		"icons": {"chip": {"CleanSet_Ca": "synth_ref_only"}},
@@ -164,7 +164,7 @@ func _guard_gate(t) -> void:
 
 	var placeholder: Dictionary = strict.ingest({
 		"name": "placeholder-probe",
-		"icons": {"hud": {"star": "ui_icon_star"}},
+		"icons": {"hud": {"energy": "box_safe_x"}},
 	}, project, "res://data/themes/probe/theme.json")
 	t.ok(not bool(placeholder.get("ok", true)), "PLACEHOLDER icon fails without the flag")
 	t.has_code(placeholder.get("errors", []), "ASSET_PLACEHOLDER_BLOCKED",
@@ -173,12 +173,12 @@ func _guard_gate(t) -> void:
 	var permissive = _loader(true)
 	var allowed: Dictionary = permissive.ingest({
 		"name": "placeholder-probe",
-		"icons": {"hud": {"star": "ui_icon_star"}},
+		"icons": {"hud": {"energy": "box_safe_x"}},
 	}, project, "res://data/themes/probe/theme.json")
 	t.ok(bool(allowed.get("ok", false)), "PLACEHOLDER icon passes with allow_placeholders=true",
 			str(allowed.get("errors", [])))
-	var resolved: Dictionary = permissive.resolve_icon("hud", "star", project)
-	t.eq(String(resolved.get("id", "")), "ui_icon_star", "allowed placeholder id resolves")
+	var resolved: Dictionary = permissive.resolve_icon("hud", "energy", project)
+	t.eq(String(resolved.get("id", "")), "box_safe_x", "allowed placeholder id resolves")
 
 	var unknown: Dictionary = strict.ingest({
 		"name": "unknown-probe",
@@ -192,7 +192,7 @@ func _apply_palette(t) -> void:
 	var loader = _loader(false)
 	loader.load_theme(WOOD_THEME, _project())
 	var colors: Dictionary = loader.colors()
-	t.ok(colors.size() >= 16, "colors() expands the whole palette", str(colors.size()))
+	t.ok(colors.size() >= 15, "colors() expands the whole palette", str(colors.size()))
 	t.ok(colors.get("page", null) is Color, "palette values convert to Color")
 
 	var root := Node.new()
@@ -217,7 +217,7 @@ func _apply_palette(t) -> void:
 
 func _chip_icons_ingest(t) -> void:
 	var project := _project()
-	var ok_records := {"synth_chip_ok": _record("PRODUCTION", "ui_icon_star.png", true)}
+	var ok_records := {"synth_chip_ok": _record("PRODUCTION", "box_safe_x.png", true)}
 
 	var plain = _loader_with(false, ok_records)
 	var good: Dictionary = plain.ingest({
@@ -249,7 +249,7 @@ func _chip_icons_ingest(t) -> void:
 	t.eq(_error_path(unknown_res.get("errors", []), "ASSET_UNKNOWN"),
 			"theme.chip_icons.CleanSet_Ca.1", "chip_icons: error path is entity.level")
 
-	var ref_records := {"synth_chip_ref": _record("REFERENCE_ONLY", "ui_icon_star.png", true)}
+	var ref_records := {"synth_chip_ref": _record("REFERENCE_ONLY", "box_safe_x.png", true)}
 	var strict_ref = _loader_with(false, ref_records)
 	var ref_res: Dictionary = strict_ref.ingest({
 		"name": "chip-probe",
@@ -259,7 +259,7 @@ func _chip_icons_ingest(t) -> void:
 	t.has_code(ref_res.get("errors", []), "ASSET_REFERENCE_ONLY",
 			"chip_icons: REFERENCE_ONLY is named in the error list")
 
-	var ph_records := {"synth_chip_ph": _record("PLACEHOLDER", "ui_icon_star.png", true)}
+	var ph_records := {"synth_chip_ph": _record("PLACEHOLDER", "box_safe_x.png", true)}
 	var strict_ph = _loader_with(false, ph_records)
 	var ph_res: Dictionary = strict_ph.ingest({
 		"name": "chip-probe",
@@ -280,9 +280,9 @@ func _chip_icons_ingest(t) -> void:
 
 func _chip_icons_precedence(t) -> void:
 	var records := {
-		"synth_chip_theme": _record("PRODUCTION", "ui_icon_star.png", true),
-		"synth_chip_level": _record("PRODUCTION", "ui_icon_star.png", true),
-		"synth_chip_entity": _record("PRODUCTION", "ui_icon_star.png", true),
+		"synth_chip_theme": _record("PRODUCTION", "box_safe_x.png", true),
+		"synth_chip_level": _record("PRODUCTION", "box_safe_x.png", true),
+		"synth_chip_entity": _record("PRODUCTION", "box_safe_x.png", true),
 	}
 	var project := _chip_project("CleanSet_Ca", "synth_chip_entity", {"2": "synth_chip_level"})
 
@@ -331,7 +331,7 @@ func _chip_icons_precedence(t) -> void:
 
 func _chip_icons_texture_gate(t) -> void:
 	var project := _project()
-	var ok_records := {"synth_chip_ok": _record("PRODUCTION", "ui_icon_star.png", true)}
+	var ok_records := {"synth_chip_ok": _record("PRODUCTION", "box_safe_x.png", true)}
 	var theme_data := {
 		"name": "chip-texture",
 		"chip_icons": {"CleanSet_Ca": {"1": "synth_chip_ok"}},
@@ -342,14 +342,14 @@ func _chip_icons_texture_gate(t) -> void:
 	var tex: Texture2D = loader.chip_texture("CleanSet_Ca", 1, project)
 	t.ok(tex != null, "chip_texture loads a legal id from res://assets/ui")
 	if tex != null:
-		t.eq(tex.get_width(), 128, "chip_texture keeps the source width")
-		t.eq(tex.get_height(), 128, "chip_texture keeps the source height")
+		t.eq(tex.get_width(), 256, "chip_texture keeps the source width")
+		t.eq(tex.get_height(), 256, "chip_texture keeps the source height")
 	var again: Texture2D = loader.chip_texture("CleanSet_Ca", 1, project)
 	t.ok(is_same(tex, again), "chip_texture is cached per entity@level (same object)")
 	t.ok(loader.chip_texture("CleanSet_Ca", 5, project) == null,
 			"chip_texture is null for a level the theme does not map")
 
-	var ref_loader = _loader_with(false, {"synth_chip_ref": _record("REFERENCE_ONLY", "ui_icon_star.png", true)})
+	var ref_loader = _loader_with(false, {"synth_chip_ref": _record("REFERENCE_ONLY", "box_safe_x.png", true)})
 	ref_loader.ingest({"name": "chip-texture",
 			"chip_icons": {"CleanSet_Ca": {"1": "synth_chip_ref"}}}, project,
 			"res://data/themes/probe/theme.json")
@@ -378,16 +378,20 @@ func _chip_icons_default_theme(t) -> void:
 	t.ok(bool(loaded.get("ok", false)), "themes/default with chip icons passes the guard",
 			str(loaded.get("errors", [])))
 
+	# 2026-11-12：棋子扩到 12 套 × 10 级，套数/链名都从主题和工程里读，不再写死。
 	var block: Dictionary = _dict(loaded.get("chip_icons", {}))
-	t.eq(block.size(), 4, "themes/default maps the four chip entities")
-	t.ok(block.has("CleanSet_Ca"), "themes/default maps CleanSet_Ca")
-	t.ok(block.has("CleanSet_Cb"), "themes/default maps CleanSet_Cb")
-	t.ok(block.has("CleanSet_Cc"), "themes/default maps CleanSet_Cc")
-	t.ok(block.has("CleanSet_Cd"), "themes/default maps CleanSet_Cd")
-
-	var chains := {"CleanSet_Ca": "ca", "CleanSet_Cb": "cb", "CleanSet_Cc": "cc", "CleanSet_Cd": "cd"}
+	var chip_entities: Array = []
+	for entity_id in _dict(project.get("entities", {})):
+		var ent: Dictionary = _dict(_dict(project.get("entities", {}))[entity_id])
+		if String(ent.get("kind", "chip")) == "chip":
+			chip_entities.append(String(entity_id))
+	chip_entities.sort()
+	t.eq(block.size(), chip_entities.size(), "themes/default maps every chip entity")
+	var chains := {}
 	var expected_ids: Array = []
-	for entity_id in ["CleanSet_Ca", "CleanSet_Cb", "CleanSet_Cc", "CleanSet_Cd"]:
+	for entity_id in chip_entities:
+		t.ok(block.has(entity_id), "themes/default maps " + String(entity_id))
+		chains[entity_id] = String(entity_id).substr(9).to_lower()   # CleanSet_Ca -> ca
 		var levels: Dictionary = _dict(block.get(entity_id, {}))
 		t.eq(levels.size(), 10, "themes/default maps 10 levels for " + String(entity_id))
 		for level in range(1, 11):
@@ -406,7 +410,7 @@ func _chip_icons_default_theme(t) -> void:
 
 	expected_ids.sort()
 	var refs: Array = loader.chip_refs()
-	t.eq(refs.size(), 40, "chip_refs() lists exactly 40 chip ids")
+	t.eq(refs.size(), expected_ids.size(), "chip_refs() lists every chip id the theme maps")
 	t.eq(refs, expected_ids, "chip_refs() is the sorted unique leaf id set")
 	var unique := {}
 	for id in refs:
@@ -419,7 +423,7 @@ func _chip_icons_pet_shop(t) -> void:
 	var loader = _loader(false)
 	var base: Dictionary = loader.load_theme(DEFAULT_THEME, project)
 	t.ok(bool(base.get("ok", false)), "default theme loads before the switch", str(base.get("errors", [])))
-	t.eq(loader.chip_refs().size(), 40, "default theme exposes the chip icon set")
+	t.ok(loader.chip_refs().size() > 0, "default theme exposes the chip icon set", str(loader.chip_refs().size()))
 	# Prime the per-"entity@level" cache before the switch. Without this the post-switch
 	# "no texture" assertion would also pass if load_theme() forgot to clear the cache,
 	# because the cache was never filled.

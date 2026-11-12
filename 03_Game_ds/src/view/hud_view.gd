@@ -1,16 +1,16 @@
 extends Control
-## Top HUD (M0 step 4): level badge, energy + plus, coin, star, gem, exp bar.
+## Top HUD (M0 step 4): level badge, energy + plus, coin, gem, exp bar.
 ##
 ## Everything is drawn procedurally; the only file it touches is the PRODUCTION
 ## font. No manifest icon id is used, so the strictest asset mode still renders.
 ##
 ## The eight HUD fields are explicit data from project.hud — nothing is derived
 ## from meta.duration or from the timeline:
-##   level / energy / energyTickSeconds / energyTickMode / coin / star / gem / exp
+##   level / energy / energyTickSeconds / energyTickMode / coin / gem / exp
 
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const FIELDS := [
-	"level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star", "gem", "exp",
+	"level", "energy", "energyTickSeconds", "energyTickMode", "coin", "gem", "exp",
 ]
 const DEFAULTS := {
 	"level": 1,
@@ -18,7 +18,6 @@ const DEFAULTS := {
 	"energyTickSeconds": 120,
 	"energyTickMode": "decrement",
 	"coin": 0,
-	"star": 0,
 	"gem": 0,
 	"exp": 0,
 }
@@ -54,7 +53,6 @@ func build_from_hud(hud_in: Dictionary) -> Dictionary:
 	values["level"] = int(values.get("level", 1))
 	values["energy"] = int(values.get("energy", 0))
 	values["coin"] = int(values.get("coin", 0))
-	values["star"] = int(values.get("star", 0))
 	values["gem"] = int(values.get("gem", 0))
 	values["exp"] = int(values.get("exp", 0))
 	values["energyTickSeconds"] = int(values.get("energyTickSeconds", 120))
@@ -75,7 +73,7 @@ func set_palette(colors: Dictionary) -> void:
 			queue_redraw()
 
 
-## Where a flying coin / star / gem should land, in this control's local space.
+## Where a flying coin / gem should land, in this control's local space.
 func counter_center(key: String) -> Vector2:
 	var pill := _pill_rect(key)
 	var icon := Vector2(pill.position.x + 40.0, pill.get_center().y)
@@ -90,13 +88,12 @@ func counter_center(key: String) -> Vector2:
 
 
 func debug_summary() -> String:
-	return "hud level=%d energy=%d tick=%ds/%s coin=%d star=%d gem=%d exp=%d" % [
+	return "hud level=%d energy=%d tick=%ds/%s coin=%d gem=%d exp=%d" % [
 		int(values.get("level", 0)),
 		int(values.get("energy", 0)),
 		int(values.get("energyTickSeconds", 0)),
 		String(values.get("energyTickMode", "?")),
 		int(values.get("coin", 0)),
-		int(values.get("star", 0)),
 		int(values.get("gem", 0)),
 		int(values.get("exp", 0)),
 	]
@@ -114,8 +111,6 @@ func _pill_rect(key: String) -> Rect2:
 			return Rect2(552.0, 20.0, 240.0, 84.0)
 		"gem":
 			return Rect2(804.0, 20.0, 252.0, 84.0)
-		"star":
-			return Rect2(150.0, 114.0, 200.0, 58.0)
 		"exp":
 			return Rect2(362.0, 114.0, 694.0, 58.0)
 	return Rect2(0.0, 0.0, 10.0, 10.0)
@@ -156,11 +151,6 @@ func _draw() -> void:
 	_gem(Vector2(_pill_rect("gem").position.x + 40.0, _pill_rect("gem").get_center().y))
 	_text_right(_pill_rect("gem").grow(-10.0), str(int(values.get("gem", 0))), 36, Color.WHITE,
 			52.0)
-
-	_pill(_pill_rect("star"), radius, panel, edge)
-	_star(Vector2(_pill_rect("star").position.x + 34.0, _pill_rect("star").get_center().y), 18.0)
-	_text_right(_pill_rect("star").grow(-10.0), str(int(values.get("star", 0))), 32, Color.WHITE,
-			46.0)
 
 	var exp_rect := _pill_rect("exp")
 	_pill(exp_rect, radius, panel, edge)
@@ -250,16 +240,6 @@ func _gem(c: Vector2) -> void:
 	draw_colored_polygon(pts, hue)
 	draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]),
 			hue.lightened(0.25), 2.0, true)
-
-
-func _star(c: Vector2, r: float) -> void:
-	var hue: Color = _c("star", Color("#F2B233"))
-	var pts := PackedVector2Array()
-	for i in 10:
-		var radius := r if i % 2 == 0 else r * 0.45
-		var angle := -PI * 0.5 + PI * float(i) / 5.0
-		pts.append(c + Vector2(cos(angle), sin(angle)) * radius)
-	draw_colored_polygon(pts, hue)
 
 
 func _text_left(pos: Vector2, text: String, size_px: int, color: Color) -> void:

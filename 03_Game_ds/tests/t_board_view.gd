@@ -7,6 +7,7 @@ extends RefCounted
 ## fonts and the optional PLACEHOLDER branch live in _ready(), which never runs for
 ## an instance that is not added to the tree.
 
+const ProjectModel := preload("res://src/core/project_model.gd")
 const BoardView = preload("res://src/view/board_view.gd")
 const ThemeLoader = preload("res://src/theme/theme_loader.gd")
 const AssetGuard = preload("res://src/assets/asset_guard.gd")
@@ -38,8 +39,8 @@ func run(t) -> void:
 	_chip_icons(t)
 	_ui_theme(t)
 	_degraded(t)
-	_box_ice(t)
 	_box_flash(t)
+	_trapped_chip_keys(t)
 	_melt_effect(t)
 
 
@@ -116,14 +117,14 @@ func _parsing(t) -> void:
 	var r: Dictionary = v.build_from_project(SAMPLE, 0)
 	t.ok(bool(r.get("ok", false)), "level 1 builds", String(r.get("error", "")))
 	t.eq(int(r.get("cells", 0)), 63, "7x9 board = 63 cells")
-	t.eq(int(r.get("items", 0)), 7, "level 1 has 7 items (6 chips + the generator)")
-	t.eq(int(r.get("obstacles", 0)), 43, "level 1 has 43 obstacles (outer two rings + the four specials)")
-	t.eq(String(r.get("level_id", "")), "level_1", "level id comes from the project")
+	t.eq(int(r.get("items", 0)), _level_slots(), "level 1 items follow the data")
+	t.eq(int(r.get("obstacles", 0)), _level_obstacles(), "level 1 obstacles follow the data")
+	t.eq(String(r.get("level_id", "")), String(_first_level_id()), "level id comes from the project")
 
 	var types: Array = r.get("obstacle_types", [])
 	types.sort()
 	t.eq(types, ["bag", "ice", "lock", "web"], "obstacle types == {lock,web,bag,ice} for level 1")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=7 obstacles=43"), "summary matches level 1 (0/4 mission needs six Ca1 chips on the board)",
+	t.ok(v.debug_summary().begins_with(_summary_prefix()), "summary matches level 1 (counts come from the data)",
 			v.debug_summary())
 	var first: String = v.debug_summary()
 	v.build_from_project(SAMPLE, 0)
@@ -131,8 +132,8 @@ func _parsing(t) -> void:
 
 	var r2: Dictionary = v.build_from_project(SAMPLE, 1)
 	t.ok(bool(r2.get("ok", false)), "level 2 builds", String(r2.get("error", "")))
-	t.eq(int(r2.get("items", 0)), 16, "level 2 has 16 items (15 chips + the generator)")
-	t.eq(int(r2.get("obstacles", 0)), 16, "level 2 has 16 obstacles（2 排冰块 14 + web + lock）")
+	t.eq(int(r2.get("items", 0)), _level_slots(1), "level 2 items follow the data")
+	t.eq(int(r2.get("obstacles", 0)), _level_obstacles(1), "level 2 obstacles follow the data")
 	t.eq(String(r2.get("level_id", "")), "level_2", "level 2 id")
 
 	var missing: Dictionary = v.build_from_project("res://data/does_not_exist.json", 0)
@@ -249,8 +250,8 @@ func _chip_icons(t) -> void:
 	if v.has_method("set_chip_icons"):
 		v.set_chip_icons(loader, project)
 	var resolved: int = v.chip_icon_count()
-	t.eq(resolved, 6, "level 1 resolves a chip texture for its six chips")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=7 obstacles=43"),
+	t.eq(resolved, _level_chips(), "level 1 resolves a chip texture for each chip")
+	t.ok(v.debug_summary().begins_with(_summary_prefix()),
 			"summary prefix is unchanged with chip icons", v.debug_summary())
 	t.ok(resolved <= v.item_count(), "chip_icon_count never exceeds the item count",
 			"%d of %d" % [resolved, v.item_count()])
@@ -318,7 +319,7 @@ func _degraded(t) -> void:
 	t.eq(v.chip_icon_count(), 0, "no loader -> chip_icon_count() is 0")
 	t.eq(v.ui_ids().size(), 0, "no loader -> ui_ids() is empty")
 	t.eq(v.ui_summary(), "", "no loader -> ui_summary() is empty")
-	t.ok(v.debug_summary().begins_with("board=7x9 items=7 obstacles=43"),
+	t.ok(v.debug_summary().begins_with(_summary_prefix()),
 			"summary keeps its prefix without a chip loader", v.debug_summary())
 	t.eq(v.cell_rect(0, 0), Rect2(48, 466, 140.428571, 140.333333),
 			"the geometry stays the §20.5 geometry without a theme")
@@ -339,38 +340,38 @@ func _project() -> Dictionary:
 	return {}
 
 
-## 2026-11-10：蓝盒子开出来的 `icebox` 必须被视图认下来 ——
-## 否则 sim 里那一格已经挡住了，画面上却什么都没有（操作者报"炸开之后什么都没有、还拖不进去"）。
-func _box_ice(t) -> void:
-	t.ok(BoardView.OBSTACLE_TYPES.has("icebox"), "OBSTACLE_TYPES 认识 icebox")
-	var v = BoardView.new()
-	var level := {
-		"id": "bv",
-		"board": {"width": 3, "height": 3, "slots": []},
-		"obstacles": [
-			{"slot": [0, 0], "type": "icebox"},
-			{"slot": [1, 1], "type": "web"},
-			{"slot": [2, 2], "type": "lock"},
-		],
-	}
-	var out: Dictionary = v.build_from_level_data(level, {}, {})
-	t.eq(int(out.get("obstacles", 0)), 3, "三种障碍都被接受（含 icebox）")
-	t.ok(v.obstacles_has_kind(Vector2i(0, 0), "icebox"), "icebox 落到格子上")
-	t.ok(not v.obstacles_has_kind(Vector2i(0, 0), "ice"), "icebox 不会误判成普通 ice")
-
-
 ## 2026-11-10：蓝盒子砸开时闪的图标 = 它变成的东西，不能是问号袋子。
 func _box_flash(t) -> void:
 	var v = BoardView.new()
-	v.unlock(Vector2i(1, 1), "box", 0.0, "icebox")
+	v.unlock(Vector2i(1, 1), "box", 0.0, "ice")
 	v.unlock(Vector2i(2, 2), "box", 0.0, "web")
 	var shown: Array = []
 	for row in v.unlock_rows():
 		shown.append(String((row as Dictionary).get("shown", "")))
-	t.eq(str(shown), str(["icebox", "web"]), "盒子炸开闪的是冰/网，不是问号")
+	t.eq(str(shown), str(["ice", "web"]), "盒子炸开闪的是冰/网，不是问号")
 
 
 ## 2026-11-10：冰到点自己化掉 → 播"扩大消失"（melt），倒计时数字用 sim 给的剩余秒数。
+## 2026-11-11：实机传 Vector2i 键、成片传 "x,y" 字符串键，视图必须两种都认，
+## 否则查不到就退回默认棋子（实机报"编辑器配的被盖住的棋子对不上"）。
+func _trapped_chip_keys(t) -> void:
+	var v = BoardView.new()
+	v.set_trapped_chips({Vector2i(2, 5): {"entity": "CleanSet_Cd", "level": 5}})
+	var by_cell: Dictionary = v._trapped_chip_for(Vector2i(2, 5))
+	t.eq(String(by_cell.get("entity", "")), "CleanSet_Cd", "Vector2i 键能被查到")
+	t.eq(int(by_cell.get("level", 0)), 5, "Vector2i 键的等级也对")
+
+	v.set_trapped_chips({"3,6": {"entity": "CleanSet_Ca", "level": 6}})
+	var by_text: Dictionary = v._trapped_chip_for(Vector2i(3, 6))
+	t.eq(String(by_text.get("entity", "")), "CleanSet_Ca", "字符串键能被查到")
+	t.eq(int(by_text.get("level", 0)), 6, "字符串键的等级也对")
+
+	# 没配的格子仍然回落到确定性默认，不崩
+	var fallback: Dictionary = v._trapped_chip_for(Vector2i(0, 0))
+	t.ok(fallback is Dictionary, "没配的格子走默认分支（无工程时为空字典）")
+	v.free()
+
+
 func _melt_effect(t) -> void:
 	var v = BoardView.new()
 	v.melt(Vector2i(2, 3), "ice", 0.0)
@@ -380,3 +381,50 @@ func _melt_effect(t) -> void:
 	t.eq(String((rows[0] as Dictionary).get("shown", "")), "ice", "画的是冰")
 	v.set_ice_remaining_map({Vector2i(2, 3): 45})
 	t.eq(int(v.ice_remaining_for(Vector2i(2, 3))), 45, "倒计时读 sim 给的 45 秒")
+
+
+## 第一关的 id（操作者会在编辑器里改名，测试不写死）。
+func _first_level_id() -> String:
+	var model = ProjectModel.new()
+	if not model.load_file("res://data/sample_project.json"):
+		return ""
+	return String(model.level(0).get("id", ""))
+
+
+## 下面几个数都从 data/sample_project.json 读（操作者会用编辑器改关卡，测试不写死）。
+func _level_json() -> Dictionary:
+	var model = ProjectModel.new()
+	if not model.load_file(SAMPLE):
+		return {}
+	return model.level(0)
+
+
+func _level_slots(index: int = 0) -> int:
+	var model = ProjectModel.new()
+	if not model.load_file(SAMPLE):
+		return 0
+	return (model.level(index).get("board", {}) as Dictionary).get("slots", []).size()
+
+
+func _level_obstacles(index: int = 0) -> int:
+	var model = ProjectModel.new()
+	if not model.load_file(SAMPLE):
+		return 0
+	return (model.level(index).get("obstacles", []) as Array).size()
+
+
+func _level_chips() -> int:
+	var n := 0
+	var entities: Dictionary = (ProjectModel.new().project if false else {})
+	var slots: Array = (_level_json().get("board", {}) as Dictionary).get("slots", [])
+	var model = ProjectModel.new()
+	model.load_file(SAMPLE)
+	for s in slots:
+		var ent := String((s as Dictionary).get("entity", ""))
+		if String(model.entity(ent).get("kind", "chip")) == "chip":
+			n += 1
+	return n
+
+
+func _summary_prefix() -> String:
+	return "board=7x9 items=%d obstacles=%d" % [_level_slots(), _level_obstacles()]

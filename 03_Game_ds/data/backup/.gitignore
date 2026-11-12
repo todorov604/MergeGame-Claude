@@ -1,0 +1,4 @@
+# 原始档（只读基准）入库；自动快照不入库。
+!sample_project-original.json
+sample_project-2*.json
+sample_project-baseline-*.json

@@ -3,7 +3,7 @@ extends Control
 ## sim through GameScreen, and never touches sim state: `play_event` only records
 ## a motion, `set_clock` only advances presentation time.
 ##
-## Handled events: deliver, order_claim, star_fly, coin_popup, character_leave,
+## Handled events: deliver, order_claim, coin_popup, character_leave,
 ## character_next, levelup, transition. Everything else returns false and is left
 ## to the caller.
 ##
@@ -12,7 +12,7 @@ extends Control
 
 const FONT_PATH := "res://assets/fonts/font_zh.otf"
 const HANDLED := [
-	"deliver", "order_claim", "deliver_chip", "star_fly", "coin_popup", "coin_spiral",
+	"deliver", "order_claim", "deliver_chip", "coin_popup", "coin_spiral",
 	"character_leave", "character_next", "levelup", "transition",
 ]
 const PAGE := Vector2(1080.0, 1920.0)
@@ -170,15 +170,6 @@ func play_event(ev: Dictionary) -> bool:
 				"hue": hue,
 			})
 			motions.append({"kind": "flash", "start": at, "dur": 0.7, "at": order_at})
-		"star_fly":
-			motions.append({
-				"kind": "stars",
-				"start": at,
-				"dur": dur if dur > 0.0 else 0.8,
-				"from": order_at,
-				"to": _hud_anchor("star"),
-				"n": maxi(1, int(payload.get("count", 1))),
-			})
 		"coin_popup":
 			var amount := int(payload.get("amount", 1))
 			motions.append({
@@ -263,8 +254,6 @@ func _hud_anchor(key: String) -> Vector2:
 	match key:
 		"coin":
 			return Vector2(592.0, 62.0)
-		"star":
-			return Vector2(184.0, 143.0)
 		"gem":
 			return Vector2(844.0, 62.0)
 	return Vector2(540.0, 62.0)
@@ -329,8 +318,6 @@ func _draw_motion(m: Dictionary) -> void:
 			_draw_deliver_chip(m, p, ease)
 		"coin_spiral":
 			_draw_coin_spiral(m, p)
-		"stars":
-			_draw_stars(m, p)
 		"coins":
 			_draw_coins(m, p, ease)
 		"flash":
@@ -419,21 +406,6 @@ func _draw_item(m: Dictionary, p: float, ease: float) -> void:
 	var box := Rect2(pos - Vector2(side * 0.5, side * 0.5), Vector2(side, side))
 	_rounded(box, 16, Color(accent.r, accent.g, accent.b, alpha))
 	_rounded_outline(box, 16, Color(1.0, 1.0, 1.0, alpha * 0.8), 2)
-
-
-func _draw_stars(m: Dictionary, p: float) -> void:
-	var from: Vector2 = m.get("from", Vector2.ZERO)
-	var to: Vector2 = m.get("to", Vector2.ZERO)
-	var n := int(m.get("n", 1))
-	for i in n:
-		var local := clampf(p - float(i) * 0.12, 0.0, 1.0)
-		if local <= 0.0:
-			continue
-		var ease := local * local * (3.0 - 2.0 * local)
-		var ctrl := (from + to) * 0.5 + Vector2(0.0, -140.0 - 30.0 * float(i))
-		var pos := _bezier(from, ctrl, to, ease)
-		var alpha := 1.0 - pow(local, 4.0)
-		_star(pos, lerpf(20.0, 11.0, ease), Color(1.0, 0.95, 0.55, alpha))
 
 
 func _draw_coins(m: Dictionary, p: float, ease: float) -> void:
@@ -552,15 +524,6 @@ func _box(radius: int, outline: bool) -> StyleBoxFlat:
 		box.anti_aliasing = true
 		_boxes[key] = box
 	return box
-
-
-func _star(c: Vector2, r: float, color: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 10:
-		var radius := r if i % 2 == 0 else r * 0.45
-		var angle := -PI * 0.5 + PI * float(i) / 5.0
-		pts.append(c + Vector2(cos(angle), sin(angle)) * radius)
-	draw_colored_polygon(pts, color)
 
 
 func _text(pos: Vector2, text: String, size_px: int, color: Color) -> void:

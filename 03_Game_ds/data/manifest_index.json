@@ -4,7 +4,7 @@
   "manifest_version": 7,
   "manifest_generated": "2026-11-04",
   "snapshot_date": "2026-11-05",
-  "count": 180,
+  "count": 177,
   "usage_levels": {
     "REFERENCE_ONLY": "only for reference; never package/render",
     "PLACEHOLDER": "allowed only with allow_placeholders=true",
@@ -215,7 +215,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "box_clean_c_lv02": {
       "usage": "PRODUCTION",
@@ -230,7 +230,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "box_safe_x": {
       "usage": "PLACEHOLDER",
@@ -469,21 +469,6 @@
       "target_size": "300×100",
       "actual_size": "144×180",
       "fit": "9-slice",
-      "animation": "static",
-      "in_project": true
-    },
-    "ui_icon_star": {
-      "usage": "PLACEHOLDER",
-      "status": "占位（可用）",
-      "priority": "P0",
-      "category": "UI",
-      "use": "星星图标",
-      "license": "Twemoji CC-BY 4.0 / PIL",
-      "file_name": "ui_icon_star.png",
-      "file_present": true,
-      "target_size": "64×64",
-      "actual_size": "128×128",
-      "fit": "scale",
       "animation": "static",
       "in_project": true
     },
@@ -742,21 +727,6 @@
       "animation": "static（序列帧待定）",
       "in_project": false
     },
-    "fx_star_fly": {
-      "usage": "PLACEHOLDER",
-      "status": "占位（可用）",
-      "priority": "P0",
-      "category": "特效",
-      "use": "星星飞行",
-      "license": "Twemoji CC-BY 4.0",
-      "file_name": "fx_star_fly.png",
-      "file_present": true,
-      "target_size": "256×256",
-      "actual_size": "256×256",
-      "fit": "scale",
-      "animation": "static（序列帧待定）",
-      "in_project": false
-    },
     "fx_firework": {
       "usage": "PLACEHOLDER",
       "status": "占位（可用）",
@@ -988,21 +958,6 @@
       "priority": "P2",
       "category": "音频",
       "use": "点击音效",
-      "license": "未补",
-      "file_name": "",
-      "file_present": false,
-      "target_size": "按需",
-      "actual_size": "—",
-      "fit": "n/a",
-      "animation": "static",
-      "in_project": false
-    },
-    "audio_star": {
-      "usage": "TODO",
-      "status": "未补",
-      "priority": "P2",
-      "category": "音频",
-      "use": "星星音效",
       "license": "未补",
       "file_name": "",
       "file_present": false,
@@ -1295,7 +1250,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001202": {
       "usage": "PRODUCTION",
@@ -1310,7 +1265,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001203": {
       "usage": "PRODUCTION",
@@ -1325,7 +1280,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001204": {
       "usage": "PRODUCTION",
@@ -1340,7 +1295,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001205": {
       "usage": "PRODUCTION",
@@ -1355,7 +1310,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001206": {
       "usage": "PRODUCTION",
@@ -1370,7 +1325,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001207": {
       "usage": "PRODUCTION",
@@ -1385,7 +1340,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001208": {
       "usage": "PRODUCTION",
@@ -1400,7 +1355,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001209": {
       "usage": "PRODUCTION",
@@ -1415,7 +1370,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10001210": {
       "usage": "PRODUCTION",
@@ -1430,7 +1385,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10002107": {
       "usage": "PRODUCTION",
@@ -1565,7 +1520,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004202": {
       "usage": "PRODUCTION",
@@ -1580,7 +1535,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004203": {
       "usage": "PRODUCTION",
@@ -1595,7 +1550,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004204": {
       "usage": "PRODUCTION",
@@ -1610,7 +1565,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004205": {
       "usage": "PRODUCTION",
@@ -1625,7 +1580,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004206": {
       "usage": "PRODUCTION",
@@ -1640,7 +1595,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004207": {
       "usage": "PRODUCTION",
@@ -1655,7 +1610,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004208": {
       "usage": "PRODUCTION",
@@ -1670,7 +1625,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004209": {
       "usage": "PRODUCTION",
@@ -1685,7 +1640,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10004210": {
       "usage": "PRODUCTION",
@@ -1700,7 +1655,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10005101": {
       "usage": "PRODUCTION",
@@ -1865,7 +1820,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007102": {
       "usage": "PRODUCTION",
@@ -1880,7 +1835,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007103": {
       "usage": "PRODUCTION",
@@ -1895,7 +1850,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007104": {
       "usage": "PRODUCTION",
@@ -1910,7 +1865,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007105": {
       "usage": "PRODUCTION",
@@ -1925,7 +1880,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007106": {
       "usage": "PRODUCTION",
@@ -1940,7 +1895,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007107": {
       "usage": "PRODUCTION",
@@ -1955,7 +1910,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007108": {
       "usage": "PRODUCTION",
@@ -1970,7 +1925,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007109": {
       "usage": "PRODUCTION",
@@ -1985,7 +1940,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007110": {
       "usage": "PRODUCTION",
@@ -2000,7 +1955,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007201": {
       "usage": "PRODUCTION",
@@ -2015,7 +1970,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007202": {
       "usage": "PRODUCTION",
@@ -2030,7 +1985,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007203": {
       "usage": "PRODUCTION",
@@ -2045,7 +2000,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007204": {
       "usage": "PRODUCTION",
@@ -2060,7 +2015,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007205": {
       "usage": "PRODUCTION",
@@ -2075,7 +2030,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007206": {
       "usage": "PRODUCTION",
@@ -2090,7 +2045,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007207": {
       "usage": "PRODUCTION",
@@ -2105,7 +2060,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007208": {
       "usage": "PRODUCTION",
@@ -2120,7 +2075,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007209": {
       "usage": "PRODUCTION",
@@ -2135,7 +2090,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10007210": {
       "usage": "PRODUCTION",
@@ -2150,7 +2105,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008101": {
       "usage": "PRODUCTION",
@@ -2165,7 +2120,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008102": {
       "usage": "PRODUCTION",
@@ -2180,7 +2135,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008103": {
       "usage": "PRODUCTION",
@@ -2195,7 +2150,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008104": {
       "usage": "PRODUCTION",
@@ -2210,7 +2165,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008105": {
       "usage": "PRODUCTION",
@@ -2225,7 +2180,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008106": {
       "usage": "PRODUCTION",
@@ -2240,7 +2195,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008107": {
       "usage": "PRODUCTION",
@@ -2255,7 +2210,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008108": {
       "usage": "PRODUCTION",
@@ -2270,7 +2225,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008109": {
       "usage": "PRODUCTION",
@@ -2285,7 +2240,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008110": {
       "usage": "PRODUCTION",
@@ -2300,7 +2255,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008201": {
       "usage": "PRODUCTION",
@@ -2315,7 +2270,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008202": {
       "usage": "PRODUCTION",
@@ -2330,7 +2285,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008203": {
       "usage": "PRODUCTION",
@@ -2345,7 +2300,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008204": {
       "usage": "PRODUCTION",
@@ -2360,7 +2315,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008205": {
       "usage": "PRODUCTION",
@@ -2375,7 +2330,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008206": {
       "usage": "PRODUCTION",
@@ -2390,7 +2345,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008207": {
       "usage": "PRODUCTION",
@@ -2405,7 +2360,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008208": {
       "usage": "PRODUCTION",
@@ -2420,7 +2375,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008209": {
       "usage": "PRODUCTION",
@@ -2435,7 +2390,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_10008210": {
       "usage": "PRODUCTION",
@@ -2450,7 +2405,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001003": {
       "usage": "PRODUCTION",
@@ -2465,7 +2420,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001004": {
       "usage": "PRODUCTION",
@@ -2480,7 +2435,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001005": {
       "usage": "PRODUCTION",
@@ -2495,7 +2450,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001006": {
       "usage": "PRODUCTION",
@@ -2510,7 +2465,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001007": {
       "usage": "PRODUCTION",
@@ -2525,7 +2480,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001008": {
       "usage": "PRODUCTION",
@@ -2540,7 +2495,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001009": {
       "usage": "PRODUCTION",
@@ -2555,7 +2510,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20001010": {
       "usage": "PRODUCTION",
@@ -2570,7 +2525,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002001": {
       "usage": "PRODUCTION",
@@ -2585,7 +2540,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002002": {
       "usage": "PRODUCTION",
@@ -2600,7 +2555,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002003": {
       "usage": "PRODUCTION",
@@ -2615,7 +2570,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002004": {
       "usage": "PRODUCTION",
@@ -2630,7 +2585,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002005": {
       "usage": "PRODUCTION",
@@ -2645,7 +2600,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002006": {
       "usage": "PRODUCTION",
@@ -2660,7 +2615,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002007": {
       "usage": "PRODUCTION",
@@ -2675,7 +2630,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002008": {
       "usage": "PRODUCTION",
@@ -2690,7 +2645,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002009": {
       "usage": "PRODUCTION",
@@ -2705,7 +2660,7 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     },
     "icon_20002010": {
       "usage": "PRODUCTION",
@@ -2720,20 +2675,19 @@
       "actual_size": "182×182",
       "fit": "scale",
       "animation": "static",
-      "in_project": false
+      "in_project": true
     }
   },
   "usage_counts": {
     "REFERENCE_ONLY": 0,
-    "PLACEHOLDER": 20,
+    "PLACEHOLDER": 18,
     "PRODUCTION": 155,
-    "TODO": 5
+    "TODO": 4
   },
   "missing_files": [
     "audio_bgm",
     "audio_merge",
     "audio_click",
-    "audio_star",
     "audio_levelup"
   ]
 }

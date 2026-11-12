@@ -113,12 +113,6 @@ func _draw_fit(key: String, rect: Rect2) -> bool:
 	return _draw_fit_rect(key, rect).size.x > 0.0
 
 
-func _font() -> Font:
-	if _metrics.has("_font_display_bold"):
-		return _metrics["_font_display_bold"]
-	return null
-
-
 var font_bold: Font = null
 var font_fallback: Font = null
 

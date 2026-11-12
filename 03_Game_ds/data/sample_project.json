@@ -26,12 +26,11 @@
   },
   "hud": {
     "level": 2,
-    "energy": 88,
+    "energy": 9999,
     "energyTickSeconds": 120,
     "energyTickMode": "decrement",
-    "coin": 9,
-    "star": 0,
-    "gem": 99,
+    "coin": 22,
+    "gem": 33,
     "exp": 0
   },
   "entities": {
@@ -175,6 +174,86 @@
         "label": "Box+",
         "icon": "ui_generator_premium"
       }
+    },
+    "CleanSet_Ce": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "ce",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#4FB3A5",
+        "label": "Ce"
+      }
+    },
+    "CleanSet_Cf": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cf",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#E86A8B",
+        "label": "Cf"
+      }
+    },
+    "CleanSet_Cg": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cg",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#5FA85F",
+        "label": "Cg"
+      }
+    },
+    "CleanSet_Ch": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "ch",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#9B7FD4",
+        "label": "Ch"
+      }
+    },
+    "CleanSet_Ci": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "ci",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#3E8FD8",
+        "label": "Ci"
+      }
+    },
+    "CleanSet_Cj": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cj",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#BFD4E8",
+        "label": "Cj"
+      }
+    },
+    "CleanSet_Ck": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "ck",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#6FBF73",
+        "label": "Ck"
+      }
+    },
+    "CleanSet_Cl": {
+      "kind": "chip",
+      "family": "Clean",
+      "chain": "cl",
+      "maxLevel": 10,
+      "visual": {
+        "hue": "#2F6FD0",
+        "label": "Cl"
+      }
     }
   },
   "generators": {
@@ -251,19 +330,13 @@
   },
   "levels": [
     {
-      "id": "level_1",
+      "id": "第一关",
       "board": {
         "width": 7,
         "height": 9,
         "slots": [
           {
             "x": 2,
-            "y": 2,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          },
-          {
-            "x": 3,
             "y": 2,
             "entity": "CleanSet_Ca",
             "level": 1
@@ -287,16 +360,34 @@
             "level": 1
           },
           {
+            "x": 5,
+            "y": 5,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
             "x": 3,
             "y": 4,
             "entity": "CleanBox_C",
             "level": 1
           },
           {
-            "x": 5,
-            "y": 5,
+            "x": 1,
+            "y": 2,
             "entity": "CleanSet_Ca",
             "level": 1
+          },
+          {
+            "x": 3,
+            "y": 2,
+            "entity": "CleanSet_Ca",
+            "level": 10
+          },
+          {
+            "x": 4,
+            "y": 2,
+            "entity": "CleanSet_Cg",
+            "level": 2
           }
         ]
       },
@@ -310,13 +401,6 @@
         },
         {
           "slot": [
-            2,
-            5
-          ],
-          "type": "web"
-        },
-        {
-          "slot": [
             4,
             4
           ],
@@ -324,13 +408,6 @@
         },
         {
           "slot": [
-            3,
-            6
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
             0,
             0
           ],
@@ -338,304 +415,273 @@
         },
         {
           "slot": [
-            1,
+            3,
             0
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            4,
+            0
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            0
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            0
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            4,
+            1
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            1
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            0,
+            2
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            2
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            2
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            0,
+            3
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            3
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            3
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            0,
+            4
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            4
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            4
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            0,
+            5
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            1,
+            5
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            5
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            6
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            6,
+            6
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            3,
+            7
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            3,
+            8
           ],
           "type": "lock"
         },
         {
           "slot": [
             2,
-            0
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            3,
-            0
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            4,
-            0
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            0
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            0
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            1,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            2,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            3,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            4,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            0,
-            2
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            1,
-            2
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            2
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            2
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            0,
-            3
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            1,
-            3
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            3
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            3
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            0,
-            4
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            4
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            4
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            0,
             5
           ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            1,
-            5
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            5
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            0,
-            6
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            1,
-            6
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            6
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            6
-          ],
-          "type": "lock"
+          "type": "web",
+          "chip": {
+            "entity": "CleanSet_Cd",
+            "level": 5
+          }
         },
         {
           "slot": [
             3,
-            7
+            6
           ],
-          "type": "lock"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 6
+          }
         },
         {
           "slot": [
             4,
-            7
+            5
           ],
-          "type": "lock"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 1
+          }
         },
         {
           "slot": [
             5,
-            7
+            1
           ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            7
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            3,
-            8
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            4,
-            8
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            8
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            6,
-            8
-          ],
-          "type": "lock"
+          "type": "web",
+          "chip": {
+            "entity": "CleanSet_Cc",
+            "level": 4
+          }
         }
       ],
       "orders": [
         {
-          "id": "order_1",
+          "id": "order_2",
           "character": "char_blonde",
           "mission": [
             {
               "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 1
+            }
+          ],
+          "coin": 5,
+          "gem": 2,
+          "energy": 30
+        },
+        {
+          "id": "order_1",
+          "character": "char_glasses",
+          "mission": [
+            {
+              "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 2
+            },
+            {
+              "entity": "CleanSet_Cb",
               "level": 2,
               "count": 1
             },
             {
               "entity": "CleanSet_Ca",
-              "level": 1,
-              "count": 4
+              "level": 2,
+              "count": 1
             }
           ],
-          "coin": 5,
-          "gem": 2,
-          "energy": 53
+          "coin": 22,
+          "gem": 33,
+          "energy": 44
         }
       ],
-      "safes": [
-        "2x3"
-      ],
-      "level_number": 8,
+      "level_number": 5,
       "notes": "2026-11-06: 外两圈盒子、生成器(3,4)、骨头/冰块靠中、开局无 Lv2 骨头（任务需合成）",
       "stockpile": {
         "enabled": true,
-        "count": 9,
+        "count": 5,
         "generator": "CleanBox_P"
       },
-      "blast": 2,
-      "ice_seconds": 45
+      "blast": 1,
+      "safes": [
+        {
+          "size": "2x2",
+          "slot": [
+            0,
+            7
+          ],
+          "charges": 27,
+          "level": 10
+        },
+        {
+          "size": "2x3",
+          "slot": [
+            4,
+            7
+          ],
+          "charges": 10,
+          "level": 22
+        }
+      ]
     },
     {
       "id": "level_2",
@@ -744,13 +790,6 @@
       "obstacles": [
         {
           "slot": [
-            0,
-            3
-          ],
-          "type": "web"
-        },
-        {
-          "slot": [
             6,
             0
           ],
@@ -758,104 +797,151 @@
         },
         {
           "slot": [
-            0,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            1,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            2,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            3,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            4,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            5,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            6,
-            7
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            0,
-            6
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
-            1,
-            6
-          ],
-          "type": "ice"
-        },
-        {
-          "slot": [
             2,
             6
           ],
-          "type": "ice"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
         },
         {
           "slot": [
             3,
             6
           ],
-          "type": "ice"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
         },
         {
           "slot": [
             4,
             6
           ],
-          "type": "ice"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
         },
         {
           "slot": [
             5,
             6
           ],
-          "type": "ice"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
         },
         {
           "slot": [
             6,
             6
           ],
-          "type": "ice"
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            2,
+            7
+          ],
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            3,
+            7
+          ],
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            4,
+            7
+          ],
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            5,
+            7
+          ],
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            6,
+            7
+          ],
+          "type": "ice",
+          "seconds": 30,
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 2
+          }
+        },
+        {
+          "slot": [
+            0,
+            3
+          ],
+          "type": "web",
+          "chip": {
+            "entity": "CleanSet_Ca",
+            "level": 6
+          }
         }
       ],
       "orders": [
+        {
+          "id": "order_1",
+          "character": "char_worker",
+          "mission": [
+            {
+              "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 1
+            }
+          ],
+          "coin": 5,
+          "gem": 2,
+          "energy": 30
+        },
         {
           "id": "order_2",
           "character": "char_waitress",
@@ -931,24 +1017,9 @@
           "coin": 30,
           "gem": 5,
           "energy": 47
-        },
-        {
-          "id": "order_6",
-          "character": "char_worker",
-          "mission": [
-            {
-              "entity": "CleanSet_Cc",
-              "level": 5
-            }
-          ],
-          "coin": 20,
-          "gem": 2,
-          "energy": 84
         }
       ],
-      "safes": [
-        "1x7"
-      ],
+      "safes": [],
       "level_number": 9,
       "stockpile": {
         "enabled": true,
@@ -963,7 +1034,7 @@
       "id": "e01",
       "channel": "sim",
       "type": "tap",
-      "at": 2.0,
+      "at": 2,
       "payload": {
         "target": {
           "slot": [
@@ -1001,7 +1072,7 @@
         "after": "e01",
         "offset": 0.2
       },
-      "duration": 2.0,
+      "duration": 2,
       "track": "text",
       "payload": {
         "text_key": "hook.question",
@@ -1014,7 +1085,7 @@
       "type": "highlight",
       "at": {
         "after": "e02",
-        "offset": 0.0
+        "offset": 0
       },
       "duration": 1.2,
       "payload": {
@@ -1032,7 +1103,7 @@
         "after": "e03",
         "offset": 1.6
       },
-      "duration": 1.0,
+      "duration": 1,
       "payload": {
         "slot": [
           5,
@@ -1053,7 +1124,7 @@
       "id": "e07",
       "channel": "sim",
       "type": "order_claim",
-      "at": 6.0,
+      "at": 6,
       "payload": {
         "order": "order_1"
       }
@@ -1066,7 +1137,7 @@
         "after": "e07",
         "offset": 0.2
       },
-      "duration": 1.0,
+      "duration": 1,
       "payload": {
         "amount": 5,
         "at": "order_panel"
@@ -1091,7 +1162,7 @@
       "type": "level_next",
       "at": {
         "after": "e07",
-        "offset": 2.0
+        "offset": 2
       },
       "payload": {}
     },
@@ -1101,7 +1172,7 @@
       "type": "transition",
       "at": {
         "after": "e10",
-        "offset": 0.0
+        "offset": 0
       },
       "duration": 0.6,
       "payload": {
@@ -1112,7 +1183,7 @@
       "id": "e12",
       "channel": "sim",
       "type": "merge",
-      "at": 10.0,
+      "at": 10,
       "duration": 0.3,
       "track": "board",
       "payload": {
@@ -1130,7 +1201,7 @@
       "id": "e13",
       "channel": "sim",
       "type": "merge",
-      "at": 12.0,
+      "at": 12,
       "duration": 0.3,
       "track": "board",
       "payload": {
@@ -1148,7 +1219,7 @@
       "id": "e14",
       "channel": "sim",
       "type": "merge",
-      "at": 14.0,
+      "at": 14,
       "duration": 0.3,
       "track": "board",
       "payload": {
@@ -1166,7 +1237,7 @@
       "id": "e15",
       "channel": "sim",
       "type": "tap",
-      "at": 16.0,
+      "at": 16,
       "payload": {
         "target": {
           "slot": [
@@ -1180,7 +1251,7 @@
       "id": "e16",
       "channel": "sim",
       "type": "order_claim",
-      "at": 18.0,
+      "at": 18,
       "payload": {
         "order": "order_2"
       }
@@ -1202,8 +1273,8 @@
       "id": "e18",
       "channel": "view",
       "type": "text",
-      "at": 24.0,
-      "duration": 2.0,
+      "at": 24,
+      "duration": 2,
       "track": "text",
       "payload": {
         "text_key": "level.complete"
@@ -1213,19 +1284,19 @@
       "id": "e19",
       "channel": "view",
       "type": "camera",
-      "at": 24.0,
+      "at": 24,
       "duration": 0.4,
       "track": "cam",
       "payload": {
-        "zoom": 1.0
+        "zoom": 1
       }
     },
     {
       "id": "e20",
       "channel": "view",
       "type": "cta",
-      "at": 28.0,
-      "duration": 2.0,
+      "at": 28,
+      "duration": 2,
       "payload": {
         "text_key": "cta.play"
       }
@@ -1238,7 +1309,7 @@
         "after": "e04",
         "offset": 0.5
       },
-      "duration": 1.0,
+      "duration": 1,
       "payload": {
         "slot": [
           5,
@@ -1246,5 +1317,10 @@
         ]
       }
     }
-  ]
+  ],
+  "shop": {
+    "reward": 32,
+    "title": "壳木壳木，CamelCamel",
+    "subtitle": "美宜制作，Made by MeiXuan"
+  }
 }

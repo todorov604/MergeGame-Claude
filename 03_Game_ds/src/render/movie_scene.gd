@@ -109,7 +109,6 @@ const LAYOUT_LEVEL_BADGE := Rect2(18.0, 8.0, 98.0, 84.0)
 const LAYOUT_ENERGY := Rect2(136.0, 16.0, 300.0, 88.0)
 const LAYOUT_COIN := Rect2(444.0, 16.0, 240.0, 88.0)
 const LAYOUT_GEM := Rect2(690.0, 16.0, 228.0, 88.0)
-const LAYOUT_STAR := Rect2(18.0, 96.0, 98.0, 32.0)
 const LAYOUT_SHOP := Rect2(930.0, 8.0, 142.0, 132.0)
 ## part1/part2 are the PSD slices at their own sizes; only the character part is
 ## drawn (the slices also bake in an order card + counters, which would double the
@@ -171,7 +170,6 @@ const COLOR_PILL_EDGE := Color("#B9CCE2")
 const COLOR_ACCENT := Color("#3E6FD6")
 const COLOR_ENERGY := Color("#F6B93B")
 const COLOR_COIN := Color("#E9B44C")
-const COLOR_STAR := Color("#F5C542")
 const COLOR_GEM := Color("#C86BFF")
 const COLOR_CTA := Color("#3FBF6A")
 const COLOR_DONE := Color("#8FD46B")
@@ -470,13 +468,6 @@ func _load_cursor() -> Texture2D:
 	return _load_font_texture(CURSOR_TEXTURE)
 
 
-func _draw_cursor() -> void:
-	_paint_cursor(self)
-
-
-## 光标画到指定 CanvasItem（成片里必须画在最上层 overlay，否则被托管组件盖住）。
-## 拖拽中的棋子：画在**最上层**（订单带之上），几何与实机 DragGhost 一致 —— 起点格
-## 那枚棋子跟着指针走，源格只留白角框（由棋盘画）。数据来自 take 的 drag 采样。
 func _paint_drag(target: CanvasItem) -> void:
 	if _live_board == null or _take.is_empty() or target == null:
 		return
@@ -666,10 +657,10 @@ func _draw_plate(texture: Texture2D, rect: Rect2, corner: float) -> void:
 
 ## Multi-cell safeboxes, same layout function as the live board.
 func _draw_safeboxes(level_index: int) -> void:
-	var sizes: Array = []
+	var entries: Array = []
 	if _model != null:
-		sizes = _model.level(level_index).get("safes", [])
-	var boxes: Array = Safeboxes.layout(_cols, _rows, seed_value, level_index, sizes)
+		entries = _model.level(level_index).get("safes", [])
+	var boxes: Array = Safeboxes.parse(entries, _cols, _rows)
 	for raw in boxes:
 		if typeof(raw) != TYPE_DICTIONARY:
 			continue
@@ -757,17 +748,6 @@ func _draw_finish_badge(cell: Vector2i) -> void:
 	draw_texture_rect(texture, Rect2(centre - size * 0.5, size), false)
 
 
-func _draw_ui_region(key: String, src: Rect2, r: Rect2) -> bool:
-	var texture := _ui(key)
-	if texture == null:
-		return false
-	draw_texture_rect_region(texture, r, src)
-	return true
-
-
-## Keeps the source aspect, fits inside `r`, centres it: the §20.5 boxes for the
-## exit/bag/shop buttons are not the assets' own sizes (156x174 -> 164x174,
-## 144x180 -> 109x147), so scaling by box would squash the art.
 func _draw_ui_fit(key: String, r: Rect2) -> bool:
 	var texture := _ui(key)
 	if texture == null:
@@ -1045,6 +1025,7 @@ func _draw() -> void:
 	_draw_view_layer()
 
 
+
 ## Bottom band: metrics.band_height is the one theme knob with no other consumer, so
 ## the band is what makes a "thicker band" a visible property of the film. It is
 ## clamped to start at the board's bottom edge, so the band never paints on the
@@ -1167,14 +1148,6 @@ func _dragged_from(cell: Vector2i, at: float) -> bool:
 	return at - best_t <= 1.2
 
 
-## 页面坐标点是否落在订单带上（用来判断这次交付是不是"拖到卡上"）。
-func _band_contains(point: Vector2) -> bool:
-	if _live_band == null:
-		return false
-	return Rect2(_live_band.position, _live_band.size).has_point(point)
-
-
-## 整单收满后的结算表现：奖励飞顶栏 + 数字 tick + 卡片 hold 后缩掉。
 func _play_settle_effects(order_id: String, at: float) -> void:
 	var coin_after := int(_evaluator.sim.hud.get("coin", 0))
 	var gained := _order_coin_from_model(order_id, int(_evaluator.sim.level_index))
@@ -1388,11 +1361,12 @@ func _sync_live_board() -> void:
 			if typeof(row) != TYPE_ARRAY or (row as Array).size() < 3:
 				continue
 			var kinds: Array = (row as Array)[2]
-			if not (kinds.has("ice") or kinds.has("icebox")):
+			if not kinds.has("ice"):
 				continue
 			var icell := Vector2i(int((row as Array)[0]), int((row as Array)[1]))
 			left[icell] = _evaluator.sim.ice_remaining(icell)
 		_live_board.set_ice_remaining_map(left)
+	_live_board.set_trapped_chips(_snap.get("board", {}).get("trapped", {}))
 	# FlyAnim 的起点/落点全部来自实机几何：每帧刷新，芯片才会从"被点的那个格子"起飞。
 	_refresh_flight_anchors()
 	# 拖动回放：手拖着棋子走，起点格保留四边选中框（与实机同一套绘制）
@@ -1631,6 +1605,8 @@ func _setup_live_bottom() -> void:
 	_live_bottom.font_regular = _font_display_regular
 	_live_bottom.font_num = _font_display_num
 	_live_bottom.set_asset_theme(_theme_loader, _model.project)
+	# 2026-11-11：底栏文案/金币与实机同源（JSON shop -> ShopCopy）。
+	_live_bottom.set_state(ShopCopy.from_project(_model.project))
 
 
 ## 订单带拖拽回放：**只认 take 里记的真实偏移**（`band: [[t, dx], ...]`），
@@ -1676,22 +1652,6 @@ func _sync_live_band() -> void:
 		_live_band.clear_stockpile()
 
 
-## 成片没有点击回放时，库存展示按第一张未完成订单的低一级（与实机进关规则一致）。
-func _stockpile_preview_from_snap() -> Dictionary:
-	var orders: Array = _snap.get("orders", [])
-	for raw in orders:
-		if typeof(raw) != TYPE_DICTIONARY or bool((raw as Dictionary).get("done", false)):
-			continue
-		var mission = (raw as Dictionary).get("mission", [])
-		if typeof(mission) != TYPE_ARRAY:
-			continue
-		for m in mission:
-			if typeof(m) == TYPE_ARRAY and (m as Array).size() >= 2:
-				return {"entity": String((m as Array)[0]),
-						"level": maxi(int((m as Array)[1]) - 1, 1)}
-	return {}
-
-
 func _draw_band() -> void:
 	var height := _metric("band_height", 0.0)
 	if height <= 0.0:
@@ -1709,32 +1669,6 @@ func _draw_band() -> void:
 func _draw_background() -> void:
 	_draw_ui_stretch("bg_bottom", LAYOUT_BG_BOTTOM)
 	_draw_ui_stretch("bg_top", LAYOUT_BG_TOP)
-
-
-## §20.5 order characters part1 373x370 / part2 373x524. Only the character region of
-## each slice is painted (the slices bake in their own order card + counters), scaled
-## to end exactly where the order cards start, and painted behind those cards.
-func _draw_characters() -> void:
-	# 2026-11-06: 每张卡上方各画自己的立绘，几何与实机 OrderPanel 一致，
-	# 队列里没有未完成的订单就不画人（part1/part2 兜底彻底下线）。
-	var cards := _order_cards(_snap)
-	var orders: Array = _snap.get("orders", [])
-	var i := 0
-	for raw in orders:
-		if typeof(raw) != TYPE_DICTIONARY:
-			continue
-		if bool((raw as Dictionary).get("done", false)):
-			continue
-		if i >= cards.size():
-			break
-		var who := String((raw as Dictionary).get("character", ""))
-		var card: Rect2 = cards[i]
-		var w := _portrait_width(who)
-		# 2026-11-09：与实机同一套 —— 头顶落在卡片上沿往上 PORTRAIT_TOP_ABOVE_CARD
-		var rect := Rect2(card.get_center().x - w * 0.5,
-				card.position.y - Layout.PORTRAIT_TOP_ABOVE_CARD, w, PORTRAIT_HEIGHT)
-		_draw_ui_fit(_portrait_key(who), rect)
-		i += 1
 
 
 func _draw_topbar(snap: Dictionary) -> void:
@@ -1760,15 +1694,9 @@ func _draw_topbar(snap: Dictionary) -> void:
 			str(int(hud.get("energy", 0))), HUD_FONT, _palette("ink", COLOR_INK))
 	_plus_slot(Rect2(er.position.x + er.size.x - 54.0, er.position.y + 22.0, 44.0, 44.0))
 
-	# Coin / star / gem: a money base plate behind the icon, then the counter.
+	# 2026-11-11：星标货币废弃（操作者要求整条链路删掉），顶栏只留金币 / 钻石。
 	_money_pill(LAYOUT_COIN, "coin", int(hud.get("coin", 0)))
 	_money_pill(LAYOUT_GEM, "gem", int(hud.get("gem", 0)))
-	# The star counter rides under the level badge (the PSD top bar has no fifth
-	# pill, but the sim's star value still has to be on screen).
-	_hud_pill(LAYOUT_STAR, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), 16)
-	_star(Vector2(LAYOUT_STAR.position.x + 22.0, LAYOUT_STAR.get_center().y), 11.0)
-	_text_left(Rect2(LAYOUT_STAR.position.x + 40.0, LAYOUT_STAR.position.y, 52.0, LAYOUT_STAR.size.y),
-			str(int(hud.get("star", 0))), 20, _palette("ink", COLOR_INK))
 
 	if not _draw_ui_fit("shop", LAYOUT_SHOP):
 		_hud_pill(LAYOUT_SHOP, _palette("accent", COLOR_ACCENT), Color(1, 1, 1, 0.55), 30)
@@ -1781,7 +1709,7 @@ func _draw_topbar(snap: Dictionary) -> void:
 		]), Color(1, 1, 1, 0.85))
 
 
-## One currency pill: money_bg art behind the icon, the procedural coin/star/gem,
+## One currency pill: money_bg art behind the icon, the procedural coin/gem,
 ## the counter, and the `plus` art (or a procedural + button).
 func _money_pill(r: Rect2, kind: String, value: int) -> void:
 	_hud_pill(r, _palette("card", COLOR_PILL), _palette("card_edge", COLOR_PILL_EDGE), _hud_radius())
@@ -1793,8 +1721,6 @@ func _money_pill(r: Rect2, kind: String, value: int) -> void:
 	match kind:
 		"coin":
 			_coin(c, 20.0)
-		"star":
-			_star(c, 20.0)
 		_:
 			_gem(c, 18.0)
 	_text_left(Rect2(r.position.x + 76.0, r.position.y, maxf(40.0, r.size.x - 146.0), r.size.y),
@@ -1827,6 +1753,7 @@ const OrderPanel := preload("res://src/view/order_panel.gd")
 const OrderRows := preload("res://src/view/order_rows.gd")
 const TopBarScene := preload("res://src/view/top_bar.gd")
 const BottomBarScene := preload("res://src/view/bottom_bar.gd")
+const ShopCopy := preload("res://src/core/shop_copy.gd")
 const BoardScene := preload("res://src/view/board_view.tscn")
 const FlyAnimScene := preload("res://src/view/fly_anim.gd")
 const CARD_H := Layout.CARD_H
@@ -1859,11 +1786,6 @@ func _portrait_width(character: String) -> float:
 	return PORTRAIT_HEIGHT * (texture.get_width() / maxf(texture.get_height(), 1.0))
 
 
-func _portrait_center(character: String) -> float:
-	return PORTRAIT_CENTER_LEFT
-
-
-## Card = as wide as its character, centred under it, bottom-aligned with the portrait.
 func _order_cards(snap: Dictionary) -> Array:
 	# 2026-11-06：几何只认 layout_shared（页面坐标），成片不再自己算一遍。
 	var orders: Array = snap.get("orders", [])
@@ -1906,11 +1828,6 @@ func _claim_texture(order_id: String) -> Texture2D:
 	return null
 
 
-func _draw_claim_flys() -> void:
-	_paint_claim_flys(self)
-
-
-## 交付飞行的芯片要压在订单卡/顶栏之上（实机是最上层），所以由 FilmOverlay 调它。
 func _paint_claim_flys(target: CanvasItem) -> void:
 	if target == null:
 		return
@@ -1943,104 +1860,6 @@ func _paint_claim_flys(target: CanvasItem) -> void:
 	_claim_flys = alive
 
 
-func _star_icon(c: Vector2, radius: float) -> void:
-	var pts := PackedVector2Array()
-	for i in 10:
-		var rr := radius if i % 2 == 0 else radius * 0.45
-		var angle := -PI * 0.5 + PI * float(i) / 5.0
-		pts.append(c + Vector2(cos(angle), sin(angle)) * rr)
-	draw_colored_polygon(pts, _palette("star", Color("#F2B233")))
-
-
-func _draw_board(snap: Dictionary) -> void:
-	# 2026-11-05 redesign: 单独格子.png as the big base (9-sliced), then 浅色格.png on
-	# every other cell. Themes/older takes without those ids keep the M1 frame + full
-	# slot_empty grid, so nothing that shipped before changes appearance.
-	var plate := _ui("board_plate")
-	if plate != null:
-		_draw_plate(plate, Rect2(_origin, _board_size), PLATE_CORNER)
-	else:
-		var frame := _ui("board_frame")
-		if frame != null:
-			draw_texture_rect(frame, Rect2(_origin, _board_size), false)
-		else:
-			var panel := Rect2(_origin - Vector2(12.0, 12.0), _board_size + Vector2(24.0, 24.0))
-			_hud_pill(panel, _palette("panel", BoardView.COLOR_PANEL),
-					_palette("panel_edge", BoardView.COLOR_PANEL_EDGE), _board_radius())
-			if _frame_tex != null:
-				draw_texture_rect(_frame_tex, Rect2(_origin, _board_size), false)
-
-	var board: Dictionary = snap.get("board", {})
-	var width := int(board.get("width", _cols))
-	var height := int(board.get("height", _rows))
-	var light := _ui("cell_light")
-	var cell_tex := _ui("cell")
-	for y in range(mini(height, _rows)):
-		for x in range(mini(width, _cols)):
-			if light != null:
-				if (x + y) % 2 == 0:
-					draw_texture_rect(light, _inner_cell_rect(_slot_rect(x, y).grow(-float(_cell_gap) * 0.5)), false)
-			else:
-				_cell_rect(x, y, cell_tex)
-
-	# 所见即所得: the same order-mission rule the live board uses paints the green
-	# cell here. Derived from the snapshot only, so the frame stays deterministic.
-	var completed: Array = CompletedCells.from_snapshot(snap)
-	for cell in completed:
-		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
-			continue
-		var pos := Vector2i(int((cell as Array)[0]), int((cell as Array)[1]))
-		_rounded(_slot_rect(pos.x, pos.y).grow(-float(_cell_gap)), 18, BoardView.COLOR_COMPLETE)
-
-	# metrics.tint_alpha washes the board base in palette.board_tint; at the default
-	# 0.0 nothing is painted, so the default film keeps its flat board.
-	var tint := _metric("tint_alpha", 0.0)
-	if tint > 0.0:
-		var tint_color: Color = _palette("board_tint", COLOR_WHITE)
-		draw_rect(Rect2(_origin, _board_size), Color(tint_color.r, tint_color.g, tint_color.b, tint), true)
-
-	var cells: Array = board.get("cells", [])
-	var flying_to: Array = []
-	for fly in _flys:
-		var to_raw = (fly.get("spawn", {}) as Dictionary).get("to", [])
-		if typeof(to_raw) == TYPE_ARRAY and (to_raw as Array).size() >= 2:
-			flying_to.append(Vector2i(int((to_raw as Array)[0]), int((to_raw as Array)[1])))
-	var now := float(_frame) / float(FPS)
-	var alive: Array = []
-	for fly in _flys:
-		if FlyPath.progress(float(fly.get("started", 0.0)), now) < 1.0:
-			alive.append(fly)
-	_flys = alive
-	for raw in cells:
-		if typeof(raw) == TYPE_ARRAY and (raw as Array).size() >= 4:
-			var item_pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
-			if flying_to.has(item_pos):
-				continue
-			_draw_item_pulsed(item_pos, String((raw as Array)[2]), int((raw as Array)[3]))
-
-	var obstacles: Array = board.get("obstacles", [])
-	for raw in obstacles:
-		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 3:
-			continue
-		var pos := Vector2i(int((raw as Array)[0]), int((raw as Array)[1]))
-		for kind in (raw as Array)[2]:
-			_draw_obstacle(pos, String(kind))
-
-	_draw_safeboxes(int(snap.get("level_index", 0)))
-
-	for fly in _flys:
-		_draw_fly(fly)
-
-	for cell in completed:
-		if typeof(cell) != TYPE_ARRAY or (cell as Array).size() < 2:
-			continue
-		_draw_finish_badge(Vector2i(int((cell as Array)[0]), int((cell as Array)[1])))
-
-
-## §20.5 bottom band: the items bar texture at (193,1731) 693x183, the exit button
-## bottom-left, the bag bottom-right. 2026-11-05: the white "LEVEL n / level_id"
-## plate was removed by request; the band is the texture alone until a text-free
-## items.png exists.
 func _draw_bottom_bar(snap: Dictionary) -> void:
 	# Layer 1: 任务背景板 9-sliced to the whole bar; Layer 2: 提醒 icon; Layer 3: the
 	# 奖励金币 button. Labels are drawn on top with the project display fonts.
@@ -2386,21 +2205,13 @@ func _draw_view_layer() -> void:
 				if active:
 					_popup("+%d" % int(payload.get("coin", 5)),
 							Vector2(LAYOUT_COIN.get_center().x, 150.0 - 54.0 * p), 1.0 - p * 0.7)
-			"star_fly":
-				if active:
-					# The star starts just above the board (never on top of it) and
-					# lands on the top bar's star counter.
-					var from := Vector2(_origin.x + _board_size.x * 0.5, _origin.y - 16.0)
-					var to := LAYOUT_STAR.get_center()
-					var pos2 := from.lerp(to, p)
-					_star(pos2, 22.0 * (1.0 - 0.4 * p))
 			"transition":
 				if active:
 					draw_rect(Rect2(Vector2.ZERO, _page), Color(0.06, 0.09, 0.13, 0.55 * (1.0 - p)), true)
 	if sel.x >= 0:
 		_selection_ring(sel, Color(0.35, 0.84, 0.42))
 	if hl.x >= 0:
-		_selection_ring(hl, _palette("star", COLOR_STAR))
+		_selection_ring(hl, _palette("accent", COLOR_ACCENT))
 
 
 func _payload_slot(payload: Dictionary) -> Vector2i:
@@ -2677,41 +2488,12 @@ func _coin(c: Vector2, r: float) -> void:
 	draw_circle(c, r * 0.45, Color(0.94, 0.79, 0.42), true, -1.0, true)
 
 
-func _star(c: Vector2, r: float) -> void:
-	var pts := PackedVector2Array()
-	for i in range(10):
-		var a := -PI * 0.5 + float(i) * PI / 5.0
-		var rad := r if i % 2 == 0 else r * 0.46
-		pts.append(c + Vector2(cos(a), sin(a)) * rad)
-	draw_colored_polygon(pts, _palette("star", COLOR_STAR))
-
-
 func _gem(c: Vector2, r: float) -> void:
 	var pts := PackedVector2Array([
 		c + Vector2(0.0, -r), c + Vector2(r, -r * 0.15), c + Vector2(0.0, r), c + Vector2(-r, -r * 0.15),
 	])
 	draw_colored_polygon(pts, _palette("gem", COLOR_GEM))
 	draw_polyline(_closed(pts), Color(1.0, 1.0, 1.0, 0.5), 2.0, true)
-
-
-func _check_dot(c: Vector2, done: bool) -> void:
-	if done:
-		draw_circle(c, 18.0, _palette("done", COLOR_DONE), true, -1.0, true)
-		var mark := PackedVector2Array([c + Vector2(-8.0, 0.0), c + Vector2(-2.0, 7.0), c + Vector2(9.0, -7.0)])
-		draw_polyline(mark, COLOR_WHITE, 5.0, true)
-	else:
-		draw_circle(c, 16.0, Color(1, 1, 1, 0.55), false, 3.0, true)
-
-
-func _character_badge(r: Rect2, who: String, done: bool) -> void:
-	# Small portrait chip in the card's top-right corner: the character's skin tone
-	# plus the first glyphs of its display name. (The full character art sits behind
-	# the card, so this chip only has to carry the name.)
-	_rounded(r, 18, Color("#B8E39A") if done else Color("#F2C6A0"))
-	_rounded(Rect2(r.position + Vector2(6.0, 6.0), Vector2(r.size.x - 12.0, r.size.y * 0.36)), 12,
-			Color("#3A2A22"))
-	_text_in(Rect2(r.position.x, r.position.y + r.size.y * 0.34, r.size.x, r.size.y * 0.66),
-			who.substr(0, 2), 22, _palette("ink", COLOR_INK))
 
 
 func _short_label(entity_id: String) -> String:

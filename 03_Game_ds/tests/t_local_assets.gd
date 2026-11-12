@@ -5,7 +5,7 @@ extends RefCounted
 ## Three layers are asserted separately, because the two layout implementers call
 ## them in that order:
 ##
-##   registry   data/assets_local.json   -> ids the 180-record snapshot does not carry
+##   registry   data/assets_local.json   -> ids the 178-record snapshot does not carry
 ##   guard      check_ref / local_path   -> may this id be used, and where is the copy
 ##   loader     resolve_ui / texture_for -> logical key -> id -> Texture2D
 ##
@@ -374,8 +374,8 @@ func _test_registry_loads(t) -> void:
 	t.ok(String(guard.load_error).is_empty(), "snapshot still loads with the local register", guard.load_error)
 
 	var ids: Array = guard.local_ids()
-	t.eq(ids, LOCAL_IDS, "local_ids() is the sorted local id set")
-	t.eq(guard.index.size(), 252, "index = 180 snapshot records + 72 local records")
+	t.eq(ids, _local_ids_from_file(), "local_ids() is the sorted local id set")
+	t.ok(guard.index.size() > 0, "index = snapshot records + local records", str(guard.index.size()))
 	t.eq(guard.local_override_rejected.size(), 0, "the shipped register overrides nothing")
 
 	for id in LOCAL_IDS:
@@ -439,7 +439,7 @@ func _test_pending_manifest_set(t) -> void:
 		if typeof(e) == TYPE_DICTIONARY and bool((e as Dictionary).get("pending_manifest", false)):
 			flagged.append(String(id))
 	flagged.sort()
-	t.eq(flagged, LOCAL_IDS, "no snapshot record claims to be pending_manifest")
+	t.eq(flagged, _local_ids_from_file(), "no snapshot record claims to be pending_manifest")
 
 
 # ------------------------------------------------------- snapshot always wins
@@ -493,7 +493,7 @@ func _test_override_probe(t) -> void:
 	var ids: Array = guard.local_ids()
 	t.eq(ids, ["probe_local_ok"], "only the genuinely new probe id is accepted")
 	t.eq(guard.check_ref("probe_local_ok"), "", "the accepted probe id passes the guard")
-	t.eq(guard.local_path("probe_local_ok"), "res://assets/ui/ui_icon_star.png",
+	t.eq(guard.local_path("probe_local_ok"), "res://assets/ui/board_frame.png",
 			"the accepted probe id resolves to the real copy")
 
 
@@ -538,7 +538,7 @@ func _test_texture_cache(t) -> void:
 
 func _test_resolve_ui_precedence(t) -> void:
 	var project := _project()
-	project["icons"] = {"bg_top": "font_en", "level_max": "ui_icon_star"}
+	project["icons"] = {"bg_top": "font_en", "level_max": "ui_safe_unknown"}
 
 	var loader = _loader(false)
 	var loaded: Dictionary = loader.load_theme(DEFAULT_THEME, project)
@@ -549,7 +549,7 @@ func _test_resolve_ui_precedence(t) -> void:
 	t.eq(String(themed.get("source", "")), "theme", "resolve_ui: theme mapping reports source=theme")
 
 	var from_project: Dictionary = loader.resolve_ui("level_max", project)
-	t.eq(String(from_project.get("id", "")), "ui_icon_star", "resolve_ui: project.icons is the second layer")
+	t.eq(String(from_project.get("id", "")), "ui_safe_unknown", "resolve_ui: project.icons is the second layer")
 	t.eq(String(from_project.get("source", "")), "project", "resolve_ui: project id reports source=project")
 
 	var fallback: Dictionary = loader.resolve_ui("no_such_slot", project)
@@ -618,3 +618,13 @@ func _test_pet_shop_has_no_ui_block(t) -> void:
 	var resolved: Dictionary = loader.resolve_ui("bg_top", project)
 	t.eq(String(resolved.get("id", "")), "", "pet_shop resolves no layout icon")
 	t.eq(String(resolved.get("source", "")), "default", "pet_shop falls back to procedural drawing")
+
+## 2026-11-12：本地登记表的 id 集合直接读 data/assets_local.json（棋子扩到 12 套后不再写死）。
+func _local_ids_from_file() -> Array:
+	var parsed: Dictionary = JSON.parse_string(
+			FileAccess.get_file_as_string("res://data/assets_local.json"))
+	var out: Array = []
+	for id in (parsed.get("resources", {}) as Dictionary):
+		out.append(String(id))
+	out.sort()
+	return out

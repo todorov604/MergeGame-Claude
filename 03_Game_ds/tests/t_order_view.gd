@@ -13,7 +13,7 @@ const EventEvaluator = preload("res://src/core/event_evaluator.gd")
 
 const SAMPLE := "res://data/sample_project.json"
 const HANDLED := [
-	"deliver", "order_claim", "star_fly", "coin_popup",
+	"deliver", "order_claim", "coin_popup",
 	"character_leave", "character_next", "levelup", "transition",
 ]
 
@@ -37,12 +37,12 @@ func _cards(t) -> void:
 	t.ok(bool(built.get("ok", false)), "level_1 builds into order cards")
 	t.eq(int(built.get("cards", 0)), 1, "level_1 has exactly one order card")
 	t.eq(int(built.get("missions", 0)), 2, "level_1 order needs two mission rows")
-	t.eq(String(built.get("level_id", "")), "level_1", "card build reports the level id")
+	t.eq(String(built.get("level_id", "")), String(_first_level_id()), "card build reports the level id")
 	t.eq(panel.cards.size(), 1, "panel keeps one card")
 
 	var card: Dictionary = panel.cards[0]
 	t.eq(String(card.get("id", "")), "order_1", "card uses the order id")
-	t.eq(String(card.get("character", "")), "char_blonde", "card points at the blonde character")
+	t.eq(String(card.get("character", "")), String(_l1_order_char()), "card points at the 1st order character")
 	var mission: Array = card.get("mission", [])
 	t.eq(mission.size(), 2, "mission has two entries")
 	var item: Dictionary = mission[0]
@@ -50,12 +50,11 @@ func _cards(t) -> void:
 	t.eq(int(item.get("level", 0)), 2, "mission level matches the data")
 	t.eq(int(item.get("need", 0)), 1, "first mission needs 1")
 	t.eq(int(item.get("have", -1)), 0, "mission starts with have=0")
-	# 2026-11-10：第二行要 2 枚（角标显示 0/2）
+	# 2026-11-11：第二行要几枚以数据为准（操作者会在内容编辑器里改，测试不写死）。
 	var second: Dictionary = mission[1]
 	t.eq(int(second.get("level", 0)), 1, "second mission is the lv1 row")
-	t.eq(int(second.get("need", 0)), 4, "second mission needs 4")
+	t.eq(int(second.get("need", 0)), _l1_second_need(), "second mission need matches the data")
 	t.eq(int(card.get("coin", -1)), 5, "card shows the coin reward")
-	t.eq(int(card.get("star", 0)), 0, "level 1 has no star reward")
 
 	var summary: String = panel.debug_summary()
 	t.ok(summary.contains("cards=1"), "summary reports one card", summary)
@@ -110,7 +109,7 @@ func _done_state(t) -> void:
 	t.ok(panel.set_order_done("order_1", true), "set_order_done accepts a known order")
 	var summary: String = panel.debug_summary()
 	t.ok(summary.contains("done=1"), "summary carries the done mark", summary)
-	t.ok(summary.contains("order_1:char_blonde:CleanSet_Ca@2"), "summary keeps the mission row",
+	t.ok(summary.contains("order_1:" + _l1_order_char() + ":CleanSet_Ca@2"), "summary keeps the mission row",
 			summary)
 	t.ok(panel.set_mission_have("order_1", 0, 1), "set_mission_have accepts a known slot")
 	t.ok(panel.debug_summary().contains("1/1"), "mission progress is readable",
@@ -129,7 +128,7 @@ func _hud(t) -> void:
 	var project := _project()
 	var hud = HudView.new()
 	var resolved: Dictionary = hud.build_from_hud(_dict(project.get("hud", {})))
-	var fields := ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star",
+	var fields := ["level", "energy", "energyTickSeconds", "energyTickMode", "coin",
 			"gem", "exp"]
 	for key in fields:
 		t.ok(resolved.has(String(key)), "hud exposes field " + String(key))
@@ -138,7 +137,6 @@ func _hud(t) -> void:
 	t.eq(int(resolved.get("energyTickSeconds", 0)), 120, "hud energyTickSeconds")
 	t.eq(String(resolved.get("energyTickMode", "")), "decrement", "hud energyTickMode")
 	t.eq(int(resolved.get("coin", 0)), 9, "hud coin")
-	t.eq(int(resolved.get("star", 0)), 0, "hud star")
 	t.eq(int(resolved.get("gem", 0)), 99, "hud gem")
 	t.eq(int(resolved.get("exp", 0)), 0, "hud exp")
 	t.eq(int(hud.get_value("energy")), 88, "hud keeps the last value readable")
@@ -150,9 +148,6 @@ func _hud(t) -> void:
 	t.ok(hud.counter_center("coin").x > hud.counter_center("level").x,
 			"coin counter sits right of the level badge",
 			str(hud.counter_center("coin")))
-	t.ok(hud.counter_center("star").y > hud.counter_center("coin").y,
-			"star counter sits on the second HUD row",
-			str(hud.counter_center("star")))
 
 	var empty: Dictionary = hud.build_from_hud({})
 	t.eq(int(empty.get("energyTickSeconds", 0)), 120, "missing hud falls back to defaults")
@@ -163,7 +158,7 @@ func _hud(t) -> void:
 
 func _presentation_only(t) -> void:
 	var model := ProjectModel.new()
-	t.ok(model.load_file(SAMPLE), "sample project loads for the sim isolation check")
+	t.ok(model.load_data(_project()), "self-made project loads for the sim isolation check")
 	var sim = Sim.new()
 	sim.setup(model, 21)
 	var before: String = sim.digest()
@@ -200,6 +195,7 @@ func _presentation_only(t) -> void:
 ## Full-timeline proof: same seed, one run without a sink and one run with the
 ## presentation layer attached, digest-for-digest identical.
 func _full_timeline_parity(t) -> void:
+	# 这条只比"有没有挂表现层"的 digest，用真样例的时间轴（内容与断言无关）
 	var model := ProjectModel.new()
 	if not model.load_file(SAMPLE):
 		t.ok(false, "sample project loads for the timeline parity check")
@@ -233,11 +229,63 @@ func _full_timeline_parity(t) -> void:
 
 # --------------------------------------------------------------------- helpers
 
+## 2026-11-12（AGENTS §6.35）：改用自造工程，形状照原来的断言造
+## （hud level=2 / energy=88 / coin=9 / gem=99；第 1 关 1 张单 2 行任务；第 2 关 5 张单）。
 func _project() -> Dictionary:
-	var parsed = JSON.parse_string(FileAccess.get_file_as_string(SAMPLE))
-	if typeof(parsed) == TYPE_DICTIONARY:
-		return parsed
-	return {}
+	return {
+		"version": 2,
+		"hud": {"level": 2, "energy": 88, "energyTickSeconds": 120, "energyTickMode": "decrement",
+			"coin": 9, "gem": 99, "exp": 0},
+		"entities": {
+			"CleanSet_Ca": {"kind": "chip", "family": "Clean", "chain": "Ca", "maxLevel": 10,
+				"visual": {"hue": "#F2A65A", "label": "Ca"}},
+			"CleanSet_Cb": {"kind": "chip", "family": "Clean", "chain": "Cb", "maxLevel": 10,
+				"visual": {"hue": "#8FC7E8", "label": "Cb"}},
+			"char_x": {"kind": "character"},
+		},
+		"characters": {"char_x": {"display": "X"}},
+		"generators": {},
+		"levels": [
+			{
+				"id": "mini_1",
+				"board": {"width": 7, "height": 9, "slots": [
+					{"x": 0, "y": 0, "entity": "CleanSet_Ca", "level": 1},
+					{"x": 1, "y": 0, "entity": "CleanSet_Ca", "level": 1},
+					{"x": 2, "y": 0, "entity": "CleanSet_Ca", "level": 1},
+					{"x": 3, "y": 0, "entity": "CleanSet_Ca", "level": 1},
+				]},
+				"obstacles": [],
+				"orders": [{
+					"id": "order_1", "character": "char_x", "coin": 5, "gem": 0, "energy": 0,
+					"mission": [
+						{"entity": "CleanSet_Ca", "level": 2, "count": 1},
+						{"entity": "CleanSet_Ca", "level": 1, "count": 2},
+					],
+				}],
+			},
+			{
+				"id": "mini_2",
+				"board": {"width": 7, "height": 9, "slots": []},
+				"obstacles": [],
+				"orders": [
+					{"id": "o1", "character": "char_x", "coin": 5, "mission": [{"entity": "CleanSet_Ca", "level": 2, "count": 1}]},
+					{"id": "o2", "character": "char_x", "coin": 5, "mission": [{"entity": "CleanSet_Cb", "level": 2, "count": 1}]},
+					{"id": "o3", "character": "char_x", "coin": 5, "mission": [
+						{"entity": "CleanSet_Ca", "level": 1, "count": 1},
+						{"entity": "CleanSet_Cb", "level": 1, "count": 1},
+						{"entity": "CleanSet_Ca", "level": 2, "count": 1}]},
+					{"id": "o4", "character": "char_x", "coin": 5, "mission": [
+						{"entity": "CleanSet_Ca", "level": 2, "count": 1},
+						{"entity": "CleanSet_Cb", "level": 1, "count": 1},
+						{"entity": "CleanSet_Cb", "level": 2, "count": 1}]},
+					{"id": "o5", "character": "char_x", "coin": 5, "mission": [
+						{"entity": "CleanSet_Cb", "level": 2, "count": 1},
+						{"entity": "CleanSet_Ca", "level": 1, "count": 1},
+						{"entity": "CleanSet_Ca", "level": 2, "count": 1}]},
+				],
+			},
+		],
+	}
 
 
 func _level(index: int) -> Dictionary:
@@ -264,3 +312,36 @@ func _is_ascii(text: String) -> bool:
 		if text.unicode_at(i) > 126:
 			return false
 	return true
+
+
+## level_1 第一单的角色（从数据里读，不写死）。
+func _l1_order_char() -> String:
+	var model = ProjectModel.new()
+	if not model.load_data(_project()):
+		return ""
+	var orders: Array = model.level(0).get("orders", [])
+	if orders.is_empty():
+		return ""
+	return String((orders[0] as Dictionary).get("character", ""))
+
+
+## level_1 第一单第二行要几枚（从数据读）。
+func _l1_second_need() -> int:
+	var model = ProjectModel.new()
+	if not model.load_data(_project()):
+		return 0
+	var orders: Array = model.level(0).get("orders", [])
+	if orders.is_empty():
+		return 0
+	var mission: Array = (orders[0] as Dictionary).get("mission", [])
+	if mission.size() < 2:
+		return 0
+	return int((mission[1] as Dictionary).get("count", 1))
+
+
+## 第一关的 id（从数据读）。
+func _first_level_id() -> String:
+	var model = ProjectModel.new()
+	if not model.load_data(_project()):
+		return ""
+	return String(model.level(0).get("id", ""))

@@ -16,7 +16,7 @@ const RulesUsage = preload("res://src/validate/rules_usage.gd")
 
 const SCHEMA_VERSION := 2
 const REQUIRED_TOP := ["version", "meta", "theme", "locales", "hud", "entities", "generators", "characters", "levels", "timeline"]
-const HUD_FIELDS := ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "star", "gem", "exp"]
+const HUD_FIELDS := ["level", "energy", "energyTickSeconds", "energyTickMode", "coin", "gem", "exp"]
 const KNOWN_TICK_MODES := ["decrement", "static"]
 const M0_RESOLUTION := [1080, 1920]
 const M0_FPS := 60
@@ -196,7 +196,7 @@ static func _schema(ctx) -> void:
 		var h: Dictionary = hud
 		for f in HUD_FIELDS:
 			if not h.has(f):
-				ctx.err("HUD_MISSING_FIELD", "hud." + str(f), "hud.%s is required in M0 (level/energy/energyTickSeconds/energyTickMode/coin/star/gem/exp)" % str(f))
+				ctx.err("HUD_MISSING_FIELD", "hud." + str(f), "hud.%s is required in M0 (level/energy/energyTickSeconds/energyTickMode/coin/gem/exp)" % str(f))
 				continue
 			if f == "energyTickMode":
 				if not ValidateCtx.is_string(h[f]):

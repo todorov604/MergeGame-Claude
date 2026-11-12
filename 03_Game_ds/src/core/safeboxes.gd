@@ -1,18 +1,20 @@
 extends RefCounted
-## Multi-cell "safebox" layout for the bottom of the board.
+## Multi-cell "safebox" — pure decoration, placed by JSON coordinates.
 ##
-## Four art sizes exist (1x7 / 2x2 / 2x3 / 2x4). The layout is a pure function of
-## (board size, seed, level index) so the live board and the film place the boxes on
-## the same cells, and the sim can block exactly those cells.
+## 2026-11-12（操作者改口径）：柜子不再由算法排布，改成关卡 JSON 里逐个数：
 ##
-##  * 1x7  : pinned to the last row (the wide locker row)
-##  * 2x4 + 2x3 : the two rows right above it, order shuffled
-##  * 2x2  : two rows above that, random column
+##   "safes": [
+##     { "size": "2x4", "slot": [1, 6], "charges": 10, "level": 22 },
+##     { "size": "1x7", "slot": [0, 8] }
+##   ]
 ##
-## Each box also carries its two labels: the lightning charge (<= 30) and the
-## level badge (10..20), both drawn with the project display font.
-
-const Rng := preload("res://src/core/rng.gd")
+## `slot` 是**左上角锚点**；`size` 决定占位（1x7=7x1、2x2=2x2、2x3=3x2、2x4=4x2）。
+## `charges`（画成 xN）默认 10，`level`（画成 Lv.N）默认 22。
+##
+## 旧的字符串写法 `["2x4","2x3"]`（只写尺寸、位置靠算法）**已废弃**：
+## `validate_entries()` 会把它报成 SAFE_LEGACY_STRING。
+##
+## 规则上柜子只是"占格阻挡"：棋子不能落进去，爆炸不会破坏它，没有倒计时也没有解锁。
 
 const SIZE_1X7 := "1x7"
 const SIZE_2X2 := "2x2"
@@ -43,96 +45,126 @@ const BOX_SPECS := {
 }
 
 
-## `sizes` is the level's declaration (e.g. ["1x7","2x4","2x3","2x2"]); an empty list
-## means the level has no safeboxes at all, so every other fixture stays unchanged.
-static func layout(width: int, height: int, seed_value: int, level_index: int, sizes: Array,
-		avoid: Array = []) -> Array:
+## 每个柜子的默认数值（JSON 不写时使用）
+const DEFAULT_CHARGES := 10
+const DEFAULT_LEVEL := 22
+
+
+## 一个 size 在棋盘上占几格宽 / 几格高。
+static func span_of(size: String) -> Vector2i:
+	return BOX_SPECS.get(size, Vector2i.ZERO)
+
+
+## 柜子覆盖的所有格子（左上角锚点 + 宽高）。
+static func cells_of(size: String, x: int, y: int) -> Array:
+	var spec := span_of(size)
 	var out: Array = []
-	if width <= 0 or height <= 0 or sizes.is_empty():
-		return out
-	var rng = Rng.make(seed_value + 9173, 7 + level_index)
-
-	# 2026-11-09: 宽的 1x7 柜子可以要**多个**（操作者：多加几个 7*1 那样的盒子）。
-	# 从最后一行往上叠，一行一个；行数不够就停止。原来只认一个，多写的会被静默丢掉。
-	var wide: Vector2i = BOX_SPECS[SIZE_1X7]
-	var wide_count := 0
-	for size in sizes:
-		if String(size) == SIZE_1X7:
-			wide_count += 1
-	for i in wide_count:
-		var row := height - wide.y - i
-		if row < 0:
-			break
-		out.append(_box(SIZE_1X7, 0, row, mini(wide.x, width), wide.y, rng))
-
-	# Two-row boxes pack left to right, one shuffled order, overflowing upwards.
-	var tall: Array = []
-	for size in sizes:
-		if size != SIZE_1X7 and BOX_SPECS.has(size):
-			tall.append(String(size))
-	# deterministic shuffle (Fisher-Yates on the layout RNG)
-	for i in range(tall.size() - 1, 0, -1):
-		var j: int = rng.next_int(i + 1)
-		var tmp = tall[i]
-		tall[i] = tall[j]
-		tall[j] = tmp
-
-	# Cells already holding level items must stay playable, so a box slides right (or
-	# up a band) until it no longer covers one of them.
-	var blocked := {}
-	for cell in avoid:
-		if typeof(cell) == TYPE_VECTOR2I:
-			blocked[cell] = true
-		elif typeof(cell) == TYPE_ARRAY and (cell as Array).size() >= 2:
-			blocked[Vector2i(int((cell as Array)[0]), int((cell as Array)[1]))] = true
-
-	# Without the wide locker the two-row boxes anchor to the very bottom row instead
-	# of leaving an empty row underneath them.
-	var cursor_x := 0
-	var band_y := height - (2 + wide_count)
-	# Keep every box inside the bottom four rows: a box that cannot fit there is
-	# dropped instead of floating in the middle of the board.
-	var band_floor := maxi(height - 5 - wide_count, 0)
-	for size in tall:
-		var spec: Vector2i = BOX_SPECS[size]
-		if spec.y > height:
-			continue
-		var placed := false
-		while band_y >= band_floor:
-			if cursor_x + spec.x > width:
-				cursor_x = 0
-				band_y -= spec.y
-				continue
-			if _overlaps(cursor_x, band_y, spec.x, spec.y, blocked):
-				cursor_x += 1
-				continue
-			out.append(_box(String(size), cursor_x, band_y, spec.x, spec.y, rng))
-			cursor_x += spec.x
-			placed = true
-			break
-		if not placed:
-			break
+	for dy in spec.y:
+		for dx in spec.x:
+			out.append(Vector2i(x + dx, y + dy))
 	return out
 
 
-static func _overlaps(x: int, y: int, w: int, h: int, blocked: Dictionary) -> bool:
-	for dy in h:
-		for dx in w:
-			if blocked.has(Vector2i(x + dx, y + dy)):
-				return true
-	return false
+## 校验一关的 `safes` 声明。返回 `[{index, code, msg, cells}]`，空数组 = 全部合法。
+## `occupied` 是"已经被占用的格子 -> 原因"（棋子 / 障碍），用于报"压住东西"。
+static func validate_entries(entries, width: int, height: int, occupied: Dictionary = {}) -> Array:
+	var errs: Array = []
+	if entries == null:
+		return errs
+	if typeof(entries) != TYPE_ARRAY:
+		errs.append({"index": -1, "code": "SAFE_TYPE", "msg": "safes must be an array", "cells": []})
+		return errs
+	var taken := {}
+	for i in (entries as Array).size():
+		var raw = entries[i]
+		var tag := "safes[%d]" % i
+		if typeof(raw) == TYPE_STRING:
+			errs.append({"index": i, "code": "SAFE_LEGACY_STRING",
+				"msg": "%s uses the removed string form \"%s\"; write {\"size\": \"%s\", \"slot\": [x, y]} instead" % [tag, String(raw), String(raw)],
+				"cells": []})
+			continue
+		if typeof(raw) != TYPE_DICTIONARY:
+			errs.append({"index": i, "code": "SAFE_TYPE", "msg": tag + " must be an object", "cells": []})
+			continue
+		var box: Dictionary = raw
+		var size := String(box.get("size", ""))
+		if not BOX_SPECS.has(size):
+			errs.append({"index": i, "code": "SAFE_SIZE", "msg": tag + ".size must be one of " + str(BOX_SPECS.keys()), "cells": []})
+			continue
+		var slot = box.get("slot", null)
+		if typeof(slot) != TYPE_ARRAY or (slot as Array).size() != 2:
+			errs.append({"index": i, "code": "SAFE_SLOT", "msg": tag + ".slot must be [x, y]", "cells": []})
+			continue
+		var x := int((slot as Array)[0])
+		var y := int((slot as Array)[1])
+		var spec := span_of(size)
+		if x < 0 or y < 0:
+			errs.append({"index": i, "code": "SAFE_OOB", "msg": "%s (%s @ (%d,%d)) has a negative anchor" % [tag, size, x, y], "cells": []})
+			continue
+		if x + spec.x > width or y + spec.y > height:
+			errs.append({"index": i, "code": "SAFE_OOB",
+				"msg": "%s (%s @ (%d,%d)) is outside %dx%d: needs %dx%d" % [tag, size, x, y, width, height, spec.x, spec.y],
+				"cells": []})
+			continue
+		for key in ["charges", "level"]:
+			if box.has(key) and int(box.get(key, 0)) < 1:
+				errs.append({"index": i, "code": "SAFE_NUMBER",
+					"msg": "%s.%s must be an integer >= 1" % [tag, key], "cells": []})
+		var cells := cells_of(size, x, y)
+		var clash := ""
+		for cell in cells:
+			if taken.has(cell):
+				clash = "overlaps %s at (%d,%d)" % [String(taken[cell]), cell.x, cell.y]
+				break
+			if occupied.has(cell):
+				clash = "covers %s at (%d,%d)" % [String(occupied[cell]), cell.x, cell.y]
+				break
+		if not clash.is_empty():
+			errs.append({"index": i, "code": "SAFE_OVERLAP", "msg": "%s (%s @ (%d,%d)) %s" % [tag, size, x, y, clash], "cells": cells})
+			continue
+		for cell in cells:
+			taken[cell] = "safes[%d]" % i
+	return errs
 
 
-static func _box(size: String, x: int, y: int, w: int, h: int, rng) -> Dictionary:
-	return {
-		"size": size,
-		"x": x,
-		"y": y,
-		"w": w,
-		"h": h,
-		"charges": 1 + rng.next_int(30),
-		"level": 10 + rng.next_int(11),
-	}
+## sim / 成片用：只取合法的柜子，产出
+## `{size, x, y, w, h, charges, level, cells}`（字段与 board_view.set_safeboxes 一致）。
+static func parse(entries, width: int, height: int, occupied: Dictionary = {}) -> Array:
+	var out: Array = []
+	if entries == null or typeof(entries) != TYPE_ARRAY:
+		return out
+	for raw in (entries as Array):
+		if typeof(raw) != TYPE_DICTIONARY:
+			continue
+		var box: Dictionary = raw
+		var size := String(box.get("size", ""))
+		if not BOX_SPECS.has(size):
+			continue
+		var slot = box.get("slot", null)
+		if typeof(slot) != TYPE_ARRAY or (slot as Array).size() != 2:
+			continue
+		var x := int((slot as Array)[0])
+		var y := int((slot as Array)[1])
+		var spec := span_of(size)
+		if x < 0 or y < 0 or x + spec.x > width or y + spec.y > height:
+			continue
+		var cells := cells_of(size, x, y)
+		var blocked := false
+		for cell in cells:
+			if occupied.has(cell):
+				blocked = true
+				break
+		if blocked:
+			continue
+		out.append({
+			"size": size, "x": x, "y": y, "w": spec.x, "h": spec.y,
+			"charges": maxi(int(box.get("charges", DEFAULT_CHARGES)), 1),
+			"level": maxi(int(box.get("level", DEFAULT_LEVEL)), 1),
+			"cells": cells,
+		})
+		for cell in cells:
+			occupied[cell] = "safebox"
+	return out
 
 
 ## Cells covered by the layout, so the sim can mark them blocked.

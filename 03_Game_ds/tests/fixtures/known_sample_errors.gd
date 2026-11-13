@@ -16,6 +16,9 @@ const KNOWN := [
 	"ORDER_MISSION_DUP", "ORDER_MISSION_DUP",
 	"SLOT_LEVEL_RANGE",
 	"SAFE_OVERLAP",
+	# 2026-11-12：第一关 order_2 改成要 CleanSet_Cg lv1，但本关生成器只出 Ca/Cb
+	# → ORDER_UNREACHABLE。这是内容问题（要么改产出，要么改任务），不是代码回归。
+	"ORDER_UNREACHABLE",
 ]
 
 

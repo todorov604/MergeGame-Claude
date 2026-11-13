@@ -693,6 +693,156 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 （含 Ca/Cb 7~10 级别名解析）。
 
 
+### 6.41 图标覆盖（slot.icon / stockpile.icon）全链路（2026-11-12）
+
+**操作者口径**：「实体给打开，再加上 Icon 选项，用系列图标可以选。棋盘里的也一样。」
+→「启用不要了，固定肯定启用。」→ 选 B：「我要动态的，不要固定的。改吧。」
+
+**数据结构**（都在关卡里，旧数据不写这两个键行为不变）：
+
+```json
+"board": { "slots": [ { "x": 1, "y": 1, "entity": "CleanSet_Cb", "level": 2, "icon": "CleanSet_Ce" } ] },
+"stockpile": { "enabled": true, "count": 5, "generator": "CleanBox_P", "icon": "CleanSet_Cj" }
+```
+
+- `icon` = 想画哪一套系列图（实体 id）；空/缺省 = 跟 `entity`
+- `stockpile.enabled` 恒为 `true`（编辑器不再给开关）
+
+**游戏侧链路**（一处来源，实机与成片共用）：
+
+| 位置 | 改动 |
+|---|---|
+| `src/core/board_state.gd` | `put(pos, entity, level, icon="")` 存进 item；`load_level` 读 `slot.icon`；`snapshot()` 的格子行第 5 位带 icon（旧读者只看前 4 位） |
+| `src/core/sim.gd` | `snapshot().stockpile` 增加 `icon` |
+| `src/view/board_view.gd` | `_chip_texture()` 用 `item.icon` 优先；`item_texture(..., icon="")` |
+| `src/view/order_panel.gd` | `set_stockpile(..., icon="")` + `_stockpile_icon`，画的时候优先它 |
+| `src/view/game_screen.gd` | 从快照 cell 第 5 位还原 `slot.icon`；`set_stockpile` 传 `cfg.icon` |
+| `src/render/movie_scene.gd` | `_item_at_cell()` 带上 icon；`set_stockpile` 传快照里的 icon |
+| `src/validate/rules_board.gd` | 新增 `SLOT_ICON_TYPE/SLOT_ICON_UNKNOWN/SLOT_ICON_TYPE_ENTITY` 与 `STOCKPILE_ICON_*`（必须是已登记的棋子系列） |
+
+**编辑器**：棋盘属性设置里「图标」下拉（默认 / C_A…C_L），库存模式也有一份；
+`stockpile` 只留「实体 + 图标 + 投放次数」，启用去掉。
+
+**测试**：`t_sim` 快照行改 5 元组 + `_test_icon_override_flows_through`（slot.icon / stockpile.icon 进快照）；
+`t_board_view` 断言 `item_texture(..., icon)` 取到的就是被选系列那张图（与 entity 原图字节不同）。
+
+**2026-11-12 追加：图标还能选等级**（操作者：「生成器的选项出来 icon 了，不过不能选等级呀。加一下。」）
+
+- JSON 加 `iconLevel`（1..10，缺省 = 用该格自己的 `level`；库存缺省 = 第 1 级）
+  ```json
+  { "icon": "CleanSet_Cc", "iconLevel": 6 }
+  ```
+- 编辑器：「图标」下拉右边多一个数字框（1–10），库存/棋盘两处都有
+- 游戏侧：快照格子行第 6 位带 `icon_level`；`item_texture(..., icon, icon_level)` 与
+  `_chip_texture()` 都按 icon_level 取图；库存 `set_stockpile(..., icon, icon_level)`
+- 校验：`SLOT_ICON_LEVEL_TYPE/RANGE`、`STOCKPILE_ICON_LEVEL_TYPE/RANGE`
+- 测试：`t_sim` 快照带 iconLevel、`t_board_view` 断言 iconLevel=6 取到的就是该系列第 6 级那张图
+
+**2026-11-12 追加：成片侧漏了两处（操作者 00109 帧报的）**
+
+操作者原话：「飞出来的生成器还是原来的默认图标；棋盘上的普通生成器，图标没改。
+我玩游戏的时候没有，这是渲染才出的。」
+
+| 漏点 | 原因 |
+|---|---|
+| 成片棋盘全是默认图 | `board_view.set_chips()`（成片**每帧**用快照覆盖棋盘）只读了 `[x, y, entity, level]` 四位，把第 5/6 位的 `icon / icon_level` 丢了 |
+| 成片不按关卡重建棋盘 | `_sync_live_band()` 抢先把 `_board_level` 设成 idx，导致 `_sync_live_board()` 里"换关才重建"永远不成立，棋盘 items 一直是 `board_view._ready()` 用 SAMPLE_PROJECT 建的样例 |
+
+修法：`set_chips()` 补读第 5/6 位；`_sync_live_band()` 改用独立变量 `_band_level`，`_board_level` 只归棋盘的 `_sync_live_board()`。
+
+**自造探针（这次按操作者要求先造数据再渲染）**：
+`tools/make_icon_probe.py` → `output/probe/icon_project.json`（生成器 (1,1) 与参照片子 (3,1) 都用 C_A lv5 覆盖；库存 C_E lv4）
++ `icon_project_plain.json`（同一关卡去掉 icon 作对照）+ `icon.take.json`（1.0s 点一次库存）。
+`bash tools/render.sh --take output/probe/icon.take.json --project res://output/probe/icon_project.json --out output/render/icon_probe.mp4`
+→ 抽帧 30：生成器格与参照片子格像素差 **39.19 → 6.45**（残差是生成器的体力角标）；
+帧 90 看到库存放出的生成器在飞/落地都是 C_E 的图。修复前两份渲染逐帧完全相同（0.45 的差只是水印级噪声）。
+
+**结果**：Godot **3719 checks / 0 failures**；`validate --strict` ok=true；编辑器自测 PASS。
+
+
+### 6.42 生成器产出逻辑重写：真随机 / 指定顺序 / 库存两种投放（2026-11-12）
+
+**操作者口径**（十问确认，缺一不可）：
+
+| # | 口径 |
+|---|---|
+| 1 | 真随机池 = 本关**所有订单（含已完成）**的每个子任务，该系列 **lv1..需求等级**；完成过的也算（增难度） |
+| 2 | 权重废掉旧 `outputs`：例 Ca4 + Cb3 → Ca1/Ca2/Ca3/Ca4/Cb1/Cb2/Cb3 共 7 条，**各 1/7** |
+| 3 | 指定顺序：每行 1 枚；**吐完转随机池**；**每台生成器各自一条队列**（同一关两台各配各的） |
+| 4 | **关卡级**：这一关 random、下一关 sequence 可以不同 |
+| 5 | 库存飞棋子：**受 count 限制** |
+| 6 | 库存飞生成器：落地那台**继承库存的 mode/sequence** |
+| 7 | 图标 / 图标等级保留 |
+| 8 | 体力消耗 + cooldown 不变 |
+| 9 | 飞生成器模式**只能点一次**，之后后台失效，画面不提示 |
+| 10 | 顺序行可像订单任务那样**上下移**、显示序号 1,2,3… |
+
+**JSON**（都写在关卡里，slot 级 = 每台独立）：
+
+```jsonc
+"board": { "slots": [
+  { "x": 1, "y": 1, "entity": "CleanBox_C", "level": 1,
+    "mode": "sequence",
+    "sequence": [ {"entity": "CleanSet_Ca", "level": 2}, {"entity": "CleanSet_Cb", "level": 3} ] }
+]}
+"stockpile": { "enabled": true, "count": 2,
+  "drop": "chip",              // "chip" | "generator"
+  "generator": "CleanBox_P", "mode": "sequence", "sequence": [ ... ] }
+```
+
+**规则层**（`src/core/sim.gd`）：
+
+- `random_pool()`：订单（含 done）→ 每个 `(entity, level 1..need)` 去重、等权
+- `pick_generator_output(pos, item, entity_id)`：`mode=="sequence"` 先吐队列（游标 `gen_seq_index[pos]`），
+  吐完回随机池；都没有再退旧 `tap_pool()`（老夹具兜底）
+- 库存：`drop=="chip"` 走 `count`，顺序优先、吐完随机；`drop=="generator"` 只一次（`stockpile_used`），
+  落点 item 带库存的 `mode/sequence`；两种都照常扣体力/cooldown
+- `board_state.put(..., extra)` 带 `mode/sequence`；`_do_move` 把配置 + 游标 + 图标覆盖一起搬走
+- 快照 `stockpile` 增加 `drop` / `used`（成片与实机同源）
+
+**校验**：`SEQUENCE_TYPE / SEQUENCE_ITEM / SEQUENCE_ENTITY_TYPE|UNKNOWN|KIND / SEQUENCE_LEVEL_TYPE|RANGE`、
+`GEN_MODE_INVALID`；可达性口径：只要本关有带 `mode` 的生成器或库存启用，随机池覆盖 lv1..需求 → 直接可达
+（旧的 outputs 判据只对没写 mode 的老数据生效）。
+
+**编辑器**（`05_editor`）：生成器格子多「产出模式」+「指定顺序」列表（序号 / 系列 / 等级 / ↑ / ↓ / ✕ / + 加一行）；
+库存模式多「投放物（飞棋子/飞生成器）」+「产出模式」+ 同一条队列。
+
+**证据**（`bash tools/render.sh`，7 个 case 全部 `same=YES`）：
+
+| case | 内容 | 轨迹 |
+|---|---|---|
+| `case1_random` | 订单 Ca4+Cb3，点 6 次 | Cb3 / Ca1 / Ca1 / Cb1 / Cb1 / Cb3（都在 lv1..需求内） |
+| `case2_sequence` | 队列 Ca2,Cb3,Ce1，点 4 次 | Ca2 / Cb3 / Ce1 / **Ca4（转随机）** |
+| `case3_per_cell` | 两台各一条队列 | 先右 → Cl3；再左 → Ce2 |
+| `case4_stockpile_chip` | count=2 飞棋子 | Cf2 / Ck2，计数 2→0，第 3 次 `SIM_STOCKPILE_EMPTY` |
+| `case5_stockpile_generator` | 飞生成器 | 第一次出 `CleanBox_P@2(generator)`，第二次 `SIM_STOCKPILE_SPENT` |
+| `case6a_level1_random` | L1 真随机 | Ca4 / Ca1 / Ca1 |
+| `case6b_level2_sequence` | 同工程 L2 顺序 | level_next 后 Ch3 / Cd2 |
+
+截图：`output/render/sheet_case*.png`、`output/render/full_case4_stockpile_chip_crop.png`、
+`output/render/full_case5_stockpile_generator_crop.png`。
+
+**2026-11-13 追加：库存飞棋子把"生成器图标"盖到棋子上（操作者报的）**
+
+现象：库存选「飞棋子 + 指定顺序 Ca/Cb/Cc/Cd」并配了图标 C_G lv9，结果飞出来的 5 枚 clip **全是同一个
+生成器样子的图**；左上角面板图标也跟着队列在变。
+
+| 漏点 | 原因 | 修法 |
+|---|---|---|
+| 棋子被库存图标覆盖 | `_do_stockpile_tap` 把 `cfg.icon/iconLevel` 一并交给 `board.put`，棋子全画成 C_G | 飞棋子时 `spawn_icon=""`、`spawn_icon_level=0`，棋子用自己的系列图 |
+| 面板图标跟着变 | 快照里 `stockpile.entity` 取的是"下一枚棋子"预览，面板没图标时就成了流水灯 | 新增 `_stockpile_panel_entity()`：配了 icon 用生成器实体，没配才用预览；`icon/iconLevel` 恒定下发 |
+
+**证据**：`output/probe/case7_stockpile_chip_icon.json`（drop=chip + icon C_G 9 + 队列 Ca/Cb/Cc/Cd）+ take 点 4 次
+→ `output/render/gen_case7_stockpile_chip_icon.mp4`（same=YES）；
+`output/render/sheet_case7_chip_icon.png`：面板图标始终是 C_G，棋盘上是**饼干 / 面包卷 / 皮球 / 小鱼干**四枚不同棋子，计数 5→1。
+
+**测试**：新增 `_test_stockpile_chip_ignores_stockpile_icon`（棋子不带 icon/iconLevel、快照图标恒定）；
+全量 **3754 checks / 0 failures**。
+
+**测试**：新增 `tests/t_generator_modes.gd`（28 checks：随机池覆盖/含已完成、顺序+转随机、每台独立、
+库存 count/once、移动带走配置）；全量 **3746 checks / 0 failures**；
+`validate --strict` ok=true；`bash 05_editor/selftest.sh` PASS。
+
 ## 7. 接力须知（2026-11-09 收口，最新事实覆盖 §4 的旧数字）
 
 **状态快照在 `03_Game_ds/docs/HANDOFF-2026-11-09.md`**，开工先读它；本节只记"规则"和"别再踩的坑"。
@@ -735,6 +885,22 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 5. **一次只改一个行为**：改完 编译 → 测试 → 一张图，再进下一个。
 6. **不要自动提交**（2026-11-09 操作者定）：改完把代码**注释写清楚**、测试与出片跑完就停；
    `git commit` / `git push` 等操作者说「提」再执行。工作区留脏是常态，别自作主张清理。
+7. **涉及渲染的改动必须自造用例并出片**（2026-11-12 操作者定）：
+   「以后改动涉及渲染的时候，要自己设计 Json 的测试用例并实际渲染，然后把截图证据反馈给我看。」
+
+   缺一条都算没做完：
+
+   | 步 | 要求 |
+   |---|---|
+   | 1 | 写 `tools/make_<feature>_probe.py/gd`，生成**自造关卡 JSON + take** 到 `output/probe/`（不碰操作者数据） |
+   | 2 | 需要对照时同时生成"去掉新字段"的对照工程，两份都出片 |
+   | 3 | `bash tools/render.sh --take output/probe/<x>.take.json --project res://output/probe/<x>.json --out output/render/<x>.mp4` |
+   | 4 | 用脚本量像素/区域差（`PIL` 或 `tools/verify_*.py`），给出**修复前 vs 修复后**的数字 |
+   | 5 | 抽关键帧存成 PNG，**在回复里贴图**给操作者看（`output/render/*.png`） |
+   | 6 | 单元测试之外补一条能反向失败的断言（去掉修复必须红） |
+
+   教训（2026-11-12）：图标覆盖只跑了单测 + 实机，没出片，结果成片侧 `set_chips()` 丢字段、
+   棋盘从不按关卡重建 —— 操作者先看到 00109 帧才发现。
 
 ## 8. 双画面同步（2026-11-09 操作者亲自定的硬规矩，优先级最高）
 

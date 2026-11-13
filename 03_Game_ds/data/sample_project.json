@@ -29,8 +29,8 @@
     "energy": 9999,
     "energyTickSeconds": 120,
     "energyTickMode": "decrement",
-    "coin": 22,
-    "gem": 33,
+    "coin": 44,
+    "gem": 55,
     "exp": 0
   },
   "entities": {
@@ -330,6 +330,269 @@
   },
   "levels": [
     {
+      "id": "level_4",
+      "level_number": 4,
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {
+            "x": 2,
+            "y": 1,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
+            "x": 3,
+            "y": 1,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          }
+        ]
+      },
+      "obstacles": [
+        {
+          "slot": [
+            4,
+            1
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            1
+          ],
+          "type": "lock"
+        }
+      ],
+      "safes": [],
+      "orders": [
+        {
+          "id": "order_4",
+          "character": "char_01",
+          "coin": 10,
+          "gem": 0,
+          "energy": 0,
+          "mission": [
+            {
+              "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "stockpile": {
+        "enabled": true,
+        "count": 5,
+        "generator": "CleanBox_P"
+      },
+      "blast": 2
+    },
+    {
+      "id": "level_3",
+      "level_number": 4,
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {
+            "x": 3,
+            "y": 3,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 1,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 2,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 3,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 4,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 5,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 6,
+            "y": 7,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 6,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 5,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 4,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 3,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 2,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "x": 1,
+            "y": 8,
+            "entity": "CleanSet_Cl",
+            "level": 1
+          }
+        ]
+      },
+      "obstacles": [
+        {
+          "slot": [
+            4,
+            2
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            4,
+            4
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            2,
+            4
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            2,
+            2
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            1,
+            3
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            3
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            3,
+            1
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            3,
+            5
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            4,
+            3
+          ],
+          "type": "bag"
+        },
+        {
+          "slot": [
+            2,
+            3
+          ],
+          "type": "bag"
+        },
+        {
+          "slot": [
+            3,
+            2
+          ],
+          "type": "bag"
+        },
+        {
+          "slot": [
+            3,
+            4
+          ],
+          "type": "bag"
+        }
+      ],
+      "safes": [],
+      "orders": [
+        {
+          "id": "order_3",
+          "character": "char_01",
+          "coin": 10,
+          "gem": 0,
+          "energy": 0,
+          "mission": [
+            {
+              "entity": "CleanSet_Cl",
+              "level": 1,
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "stockpile": {
+        "enabled": true,
+        "count": 5,
+        "generator": "CleanBox_P",
+        "sequence": [],
+        "icon": "CleanSet_Cf",
+        "iconLevel": 10,
+        "drop": "generator",
+        "mode": "random"
+      },
+      "blast": 2
+    },
+    {
       "id": "第一关",
       "board": {
         "width": 7,
@@ -366,12 +629,6 @@
             "level": 1
           },
           {
-            "x": 3,
-            "y": 4,
-            "entity": "CleanBox_C",
-            "level": 1
-          },
-          {
             "x": 1,
             "y": 2,
             "entity": "CleanSet_Ca",
@@ -388,6 +645,60 @@
             "y": 2,
             "entity": "CleanSet_Cg",
             "level": 2
+          },
+          {
+            "x": 3,
+            "y": 4,
+            "entity": "CleanBox_C",
+            "level": 1,
+            "mode": "sequence",
+            "sequence": [
+              {
+                "entity": "CleanSet_Cl",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Cb",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Cc",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Cd",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Ce",
+                "level": 1
+              }
+            ],
+            "icon": "CleanSet_Ci",
+            "iconLevel": 10
+          },
+          {
+            "x": 1,
+            "y": 1,
+            "entity": "CleanBox_C",
+            "level": 1,
+            "mode": "sequence",
+            "sequence": [
+              {
+                "entity": "CleanSet_Cj",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Ck",
+                "level": 1
+              },
+              {
+                "entity": "CleanSet_Cl",
+                "level": 1
+              }
+            ],
+            "icon": "CleanSet_Cl",
+            "iconLevel": 10
           }
         ]
       },
@@ -555,20 +866,6 @@
         },
         {
           "slot": [
-            3,
-            7
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            3,
-            8
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
             2,
             5
           ],
@@ -612,6 +909,13 @@
             "entity": "CleanSet_Cc",
             "level": 4
           }
+        },
+        {
+          "slot": [
+            2,
+            1
+          ],
+          "type": "lock"
         }
       ],
       "orders": [
@@ -620,7 +924,7 @@
           "character": "char_blonde",
           "mission": [
             {
-              "entity": "CleanSet_Ca",
+              "entity": "CleanSet_Cg",
               "level": 1,
               "count": 1
             }
@@ -658,8 +962,34 @@
       "notes": "2026-11-06: 外两圈盒子、生成器(3,4)、骨头/冰块靠中、开局无 Lv2 骨头（任务需合成）",
       "stockpile": {
         "enabled": true,
-        "count": 5,
-        "generator": "CleanBox_P"
+        "count": 10,
+        "generator": "CleanBox_P",
+        "icon": "CleanSet_Cg",
+        "iconLevel": 10,
+        "drop": "generator",
+        "mode": "sequence",
+        "sequence": [
+          {
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "entity": "CleanSet_Cl",
+            "level": 1
+          },
+          {
+            "entity": "CleanSet_Ck",
+            "level": 1
+          },
+          {
+            "entity": "CleanSet_Cj",
+            "level": 1
+          },
+          {
+            "entity": "CleanSet_Ci",
+            "level": 1
+          }
+        ]
       },
       "blast": 1,
       "safes": [
@@ -1319,7 +1649,7 @@
     }
   ],
   "shop": {
-    "reward": 32,
+    "reward": 88,
     "title": "壳木壳木，CamelCamel",
     "subtitle": "美宜制作，Made by MeiXuan"
   }

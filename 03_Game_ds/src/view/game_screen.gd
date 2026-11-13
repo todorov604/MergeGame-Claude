@@ -1185,6 +1185,8 @@ func _level_from_snapshot(snap: Dictionary) -> Dictionary:
 			"y": int((row as Array)[1]),
 			"entity": String((row as Array)[2]),
 			"level": int((row as Array)[3]),
+			"icon": String((row as Array)[4]) if (row as Array).size() > 4 else "",
+			"iconLevel": int((row as Array)[5]) if (row as Array).size() > 5 else 0,
 		})
 	var obstacles: Array = []
 	for row in _as_array(board_snap.get("obstacles", [])):
@@ -1588,7 +1590,9 @@ func _push_stockpile() -> void:
 		return
 	var preview: Dictionary = evaluator.sim.stockpile_preview()
 	orders.set_stockpile(int(evaluator.sim.stockpile_remaining()),
-			String(preview.get("entity", "")), int(preview.get("level", 0)))
+			String(preview.get("entity", "")), int(preview.get("level", 0)),
+			String(preview.get("kind", "generator")),
+			String(cfg.get("icon", "")), int(cfg.get("iconLevel", 0)))
 
 
 ## Advance the displayed coin number by one tick at a time; snap when ticks run dry.
@@ -1748,8 +1752,14 @@ func _play_gem_reward(order_id: String) -> void:
 func _play_claim_flight(order_id: String, cell: Vector2i, item: Dictionary, delay: float = 0.0) -> void:
 	if fly == null:
 		return
-	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
-			int(item.get("level", 1)))
+	# 2026-11-12：这一枚如果被编辑器改过图标，飞的就是改过的那张
+	var tex_entity := String(item.get("icon", ""))
+	var tex_level := int(item.get("level", 1))
+	if tex_entity.is_empty():
+		tex_entity = String(item.get("entity", ""))
+	elif int(item.get("icon_level", 0)) > 0:
+		tex_level = int(item.get("icon_level", 0))
+	var texture: Texture2D = board.chip_texture(tex_entity, tex_level)
 	if texture == null:
 		return
 	var card: Rect2 = orders.card_rect(order_id)
@@ -2356,8 +2366,14 @@ func _play_deliver_flight(order_id: String, row: int, cell: Vector2i, item: Dict
 		from_point: Vector2 = Vector2(-1, -1), dur: float = 0.0, delay: float = 0.0) -> void:
 	if fly == null or orders == null:
 		return
-	var texture: Texture2D = board.chip_texture(String(item.get("entity", "")),
-			int(item.get("level", 1)))
+	# 2026-11-12：这一枚如果被编辑器改过图标，飞的就是改过的那张
+	var tex_entity := String(item.get("icon", ""))
+	var tex_level := int(item.get("level", 1))
+	if tex_entity.is_empty():
+		tex_entity = String(item.get("entity", ""))
+	elif int(item.get("icon_level", 0)) > 0:
+		tex_level = int(item.get("icon_level", 0))
+	var texture: Texture2D = board.chip_texture(tex_entity, tex_level)
 	if texture == null:
 		return
 	var target: Vector2 = orders.position + orders.mission_row_center(order_id, row)

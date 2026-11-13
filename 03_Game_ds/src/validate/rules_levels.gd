@@ -345,6 +345,33 @@ static func _level_availability(ctx, li: int) -> Dictionary:
 			seen_generators[eid] = true
 			placed_generators.append(eid)
 
+	# ---- 1.5) 2026-11-12 新产出模式：真随机池覆盖"任务要求的 lv1..需求等级"，
+	# 只要有一台带 mode 的生成器（或库存已启用），订单一定可达 —— 旧 outputs 判据不再适用。
+	var new_style := false
+	for s2 in slots:
+		if typeof(s2) == TYPE_DICTIONARY and (s2 as Dictionary).has("mode"):
+			new_style = true
+			break
+	var sp_raw = (lv as Dictionary).get("stockpile", {})
+	if typeof(sp_raw) == TYPE_DICTIONARY and bool((sp_raw as Dictionary).get("enabled", false)):
+		new_style = true
+	if new_style:
+		# 键要用 _chain_key（可用性表的口径），不是实体 id；等级从键尾 @N 取
+		var wanted_all := _order_mission_keys(lv)
+		for key in wanted_all.keys():
+			var parts := String(key).split("@")
+			var eid2 := String(parts[0]) if parts.size() > 0 else ""
+			var ent2 = (entities as Dictionary).get(eid2, null)
+			if typeof(ent2) != TYPE_DICTIONARY:
+				continue
+			var ckey := _chain_key(eid2, ent2)
+			var need2 := 1
+			if parts.size() > 1:
+				need2 = maxi(1, int(parts[1]))
+			for lvl2 in range(1, need2 + 1):
+				_add_bucket(avail, ckey, lvl2, 99)
+		return avail
+
 	# ---- 2) charges of the generators actually placed on this board ----
 	var generators = ctx.project.get("generators", {})
 	if typeof(generators) != TYPE_DICTIONARY:

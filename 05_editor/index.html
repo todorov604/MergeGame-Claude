@@ -47,7 +47,7 @@ h3{margin:0 0 10px;font-size:15px;color:#cfe0f5}
 .hudbar .bar img.art{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:fill}
 .hudbar .bar .val{position:absolute;left:33%;right:20%;top:50%;transform:translateY(-50%);text-align:center;font-weight:900;font-size:19px;color:#31517d;text-shadow:0 1px #fff;letter-spacing:.5px;white-space:nowrap}
 .hudbar .plus{position:absolute;top:16px;width:24px;height:24px;background:url() center/contain no-repeat}
-.stockpile{position:absolute;left:10px;top:112px;width:74px;height:74px;z-index:5}
+.stockpile{position:absolute;left:10px;top:112px;width:74px;height:74px;z-index:5;cursor:pointer}
 .stockpile img.frame{position:absolute;inset:0;width:100%;height:100%}
 .stockpile b{position:absolute;right:-4px;top:-6px;background:#e8503a;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff}
 .phone{width:351px;height:624px;border-radius:20px;background:#07111e;border:7px solid #091321;position:relative;overflow:hidden;flex:none}
@@ -262,7 +262,6 @@ input:focus,select:focus,textarea:focus{outline:2px solid #eaf3ff;outline-offset
         <div class="row"><label>关卡名</label><input id="lvId" style="flex:1"></div>
         <div class="row"><label>合并爆炸范围</label><input id="lvBlast" type="number" min="1" max="3" title="1 = 上下左右；2 = 再向外一层（菱形）"></div>
         <div class="row"><label>柜子</label><span class="hint">在棋盘上配置：点格子 → 类型选「柜子」</span></div>
-        <div class="row"><label>右上生成器库存</label><input type="checkbox" id="spOn"><input id="spCount" type="number" min="0" style="width:80px"><select id="spGen"></select></div>
       </div>
 
       <div class="sect" data-sect="cell">
@@ -279,7 +278,22 @@ input:focus,select:focus,textarea:focus{outline:2px solid #eaf3ff;outline-offset
         </div>
         <div id="cellPreview" class="cellpreview" hidden></div>
         <div class="row" id="rowEntity"><label>实体</label><select id="cellEntity"></select></div>
+        <div class="row" id="rowIcon" style="display:none"><label>图标</label>
+          <select id="cellIcon" style="flex:1;min-width:140px"></select>
+          <input id="cellIconLevel" type="number" min="1" max="10" value="1" style="width:78px" title="图标用第几级的图（默认 1）">
+        </div>
         <div class="row" id="rowLevel"><label>等级</label><input id="cellLevel" type="number" min="1" max="10" value="1"></div>
+        <div class="row" id="rowGenMode"><label>产出模式</label>
+          <select id="cellGenMode">
+            <option value="random">真随机（按订单子任务 lv1..需求）</option>
+            <option value="sequence">指定顺序</option>
+          </select>
+        </div>
+        <div id="genSeqBox" style="display:none">
+          <div class="hint" style="margin:2px 0 6px">顺序吐完自动转真随机；每行 1 枚</div>
+          <div id="genSeqList"></div>
+          <div class="row"><button id="genSeqAdd" class="ghost">+ 加一行</button></div>
+        </div>
         <div class="row" id="rowObstacle"><label>障碍</label>
           <select id="cellObstacle"><option value="">（无）</option><option value="lock">锁盒 lock</option><option value="web">蜘蛛网 web</option><option value="ice">冰 ice</option><option value="bag">问号袋 bag</option></select>
         </div>
@@ -298,6 +312,24 @@ input:focus,select:focus,textarea:focus{outline:2px solid #eaf3ff;outline-offset
         <div class="row" id="rowSafeNum"><label>×N / Lv.N</label>
           <input id="safeCharges" type="number" min="1" style="width:80px"><input id="safeLevel" type="number" min="1" style="width:80px">
         </div>
+        <div class="row" id="rowSpDrop" style="display:none"><label>投放物</label>
+          <select id="cellSpDrop">
+            <option value="chip">飞棋子（受次数限制）</option>
+            <option value="generator">飞生成器（只飞一次）</option>
+          </select>
+        </div>
+        <div class="row" id="rowSpMode" style="display:none"><label>产出模式</label>
+          <select id="cellSpMode">
+            <option value="random">真随机（按订单子任务 lv1..需求）</option>
+            <option value="sequence">指定顺序</option>
+          </select>
+        </div>
+        <div id="spSeqBox" style="display:none">
+          <div class="hint" style="margin:2px 0 6px">库存自己的顺序队列；吐完转真随机</div>
+          <div id="spSeqList"></div>
+          <div class="row"><button id="spSeqAdd" class="ghost">+ 加一行</button></div>
+        </div>
+        <div class="row" id="rowSpCount" style="display:none"><label>投放次数</label><input id="cellSpCount" type="number" min="0" value="9"></div>
         <div class="row" id="rowSafeActions">
           <button id="placeSafe">放置柜子</button>
           <button id="delSafe" class="ghost">删除柜子</button>
@@ -793,6 +825,24 @@ async function loadHandle(){
 
 // 真正读取数据（打开目录 / 继续上次都走这里）
 // 2026-11-11：星标废弃 —— 读进来的订单统一把 star 字段删掉，保存出去就不会再带。
+// 2026-11-13：关卡缺 blast 时补 1（和 sim.blast_radius() 的缺省一致）。
+// 否则界面能显示 2、JSON 里却没有这个键，游戏按 1 跑 —— 看起来就是"爆炸范围不对"。
+// 2026-11-13：改了但没保存时给个明确提示（这次 blast 的问题就是界面 2、JSON 里没有）
+function markDirty(){
+  try { setStatus('● 有未保存修改 —— 记得点「保存」再按 F5', 'warn'); } catch (e) {}
+}
+
+
+function normalizeBlast(){
+  if (!project || !Array.isArray(project.levels)) return;
+  project.levels.forEach(lv => {
+    if (!lv || typeof lv !== 'object') return;
+    const b = Number(lv.blast);
+    lv.blast = Number.isFinite(b) ? Math.max(1, Math.min(3, b)) : 1;
+  });
+}
+
+
 function stripStar(){
   if (!project) return;
   (project.levels || []).forEach(lv => (lv.orders || []).forEach(o => { delete o.star; }));
@@ -809,6 +859,7 @@ async function loadFromHandle(){
   buildChipMap();
   buildUiMap();
   stripStar();
+  normalizeBlast();
   selLevel = 0; selCell = null;
   $('saveBtn').disabled = false;
   setStatus('已读取 ' + dirHandle.name + '/' + MAIN + '：' + project.levels.length + ' 关 · ' + entitySummary(), 'ok');
@@ -859,6 +910,15 @@ function level(){ return project.levels[selLevel]; }
 function slotAt(x,y,lv){ const L = lv || level(); return (L.board.slots || []).find(s => s.x===x && s.y===y); }
 function obstacleAt(x,y,lv){ const L = lv || level(); return (L.obstacles || []).find(o => o.slot && o.slot[0]===x && o.slot[1]===y); }
 function chipUrl(entity, lv){ return (chips[entity] && chips[entity][String(lv)]) || ''; }
+
+// 预览兜底：这张具体图没登记时，拿第一张可用棋子图，别让右侧空一块
+function firstChipUrl(){
+  for (const id of Object.keys(chips || {})) {
+    const levels = chips[id] || {};
+    for (const lv of Object.keys(levels)) if (levels[lv]) return String(levels[lv]);
+  }
+  return '';
+}
 
 // 任何一段渲染抛错都不要把整个界面弄白：分段兜底，错误写到顶栏。
 // 右栏分区折叠（状态存 localStorage）
@@ -1090,9 +1150,9 @@ function renderPreview(){
     const genEnt = (project.entities || {})[genId] || {};
     const genIcon = genEnt.visual && genEnt.visual.icon ? assetUrl(genEnt.visual.icon) : '';
     spHtml =
-      '<div class="stockpile">' +
+      '<div class="stockpile" title="左上角生成器（点这里在右侧配置）" onclick="selectStockpile(event)">' +
         img(ui['stockpile_frame'], 'position:absolute;inset:0;width:100%;height:100%', 'frame') +
-        img(genIcon || ui['generator'], 'position:absolute;left:8px;top:8px;width:58px;height:58px;object-fit:contain') +
+        img((sp.icon ? chipUrl(sp.icon, Number(sp.iconLevel) || 1) : '') || genIcon || ui['generator'], 'position:absolute;left:8px;top:8px;width:58px;height:58px;object-fit:contain') +
         '<b>' + (sp.count === undefined ? 9 : sp.count) + '</b>' +
         img(ui['stockpile_arrows'], 'position:absolute;right:-6px;bottom:-10px;width:34px;height:40px') +
       '</div>';
@@ -1145,7 +1205,7 @@ function renderPreview(){
     if (sAt && !covered) {
       const ent = (project.entities || {})[sAt.entity] || {};
       const isGen = (ent.kind || 'chip') === 'generator';
-      const url = entityIcon(sAt.entity, sAt.level);
+      const url = entityIcon(sAt.icon || sAt.entity, sAt.icon ? (Number(sAt.iconLevel) || 1) : sAt.level);
       inner += url ? '<img class="chip" src="' + url + '" onerror="this.style.display=\'none\'">'
                    : '<span style="font-size:11px;color:#54708f">' + String(sAt.entity).slice(-2) + '</span>';
       if (isGen) {
@@ -1448,7 +1508,9 @@ function renderInspector(){
   if (!lv) return;
   const lvIdEl = need('lvId'); if (lvIdEl) lvIdEl.value = lv.id || '';
   const lvBlastEl = need('lvBlast');
-  if (lvBlastEl) lvBlastEl.value = (lv.blast === undefined ? 2 : lv.blast);
+  // 2026-11-13：缺省值必须和 sim.blast_radius() 一致（那边缺省是 1）。
+  // 以前这里显示 2、JSON 里却没有、游戏按 1 跑 —— 操作者看到的"范围不对"就是这个。
+  if (lvBlastEl) lvBlastEl.value = (lv.blast === undefined ? 1 : lv.blast);
   const lvNumEl = need('lvNumber');
   if (lvNumEl) lvNumEl.value = (lv.level_number !== undefined ? lv.level_number
     : ((project.hud || {}).level || (selLevel + 1)));
@@ -1459,11 +1521,7 @@ function renderInspector(){
 
 
   const sp = lv.stockpile || {};
-  const spOnEl = need('spOn'); if (spOnEl) spOnEl.checked = !!sp.enabled;
-  const spCountEl = need('spCount'); if (spCountEl) spCountEl.value = (sp.count === undefined ? 9 : sp.count);
-  const spGenEl = need('spGen');
-  const gens = Object.keys(project.generators || {});
-  if (spGenEl) spGenEl.innerHTML = gens.map(g => '<option value="' + g + '"' + ((sp.generator===g)?' selected':'') + '>' + g + '</option>').join('');
+  // 库存生成器现在在「棋盘属性设置」里配（点棋盘左上角那个图标）
 
   const addBtnEl = need('addOrder');
   if (addBtnEl) addBtnEl.parentElement.style.display =
@@ -1599,15 +1657,44 @@ function charIconUrl(name){
 
 function isGeneratorEntity(id){ return entityKind(id) === 'generator'; }
 
+// 图标覆盖：默认跟实体，也可以直接挑某一套系列图标（写进 slot.icon / stockpile.icon）
+// allowDefault=false：生成器/库存必须挑一套系列（操作者：不用实体原图）
+function fillIconSelect(sel, value, allowDefault = true){
+  if (!sel) return '';
+  sel.innerHTML = '';
+  if (allowDefault) {
+    const def = document.createElement('option');
+    def.value = ''; def.textContent = '默认（用实体自己的图）';
+    sel.appendChild(def);
+  }
+  const series = Object.keys(project.entities || {})
+    .filter(id => entityKind(id) === 'chip')
+    .sort((a, b) => entityLabel(a).localeCompare(entityLabel(b), 'zh'));
+  series.forEach(id => {
+    const o = document.createElement('option');
+    o.value = id; o.textContent = entityLabel(id);
+    sel.appendChild(o);
+  });
+  if (value && series.includes(value)) sel.value = value;
+  else sel.value = allowDefault ? '' : (series[0] || '');
+  return sel.value;
+}
+
 function fillGeneratorSelect(sel, value){
   if (!sel) return;
   sel.innerHTML = '';
-  Object.entries(project.entities || {}).forEach(([id, e]) => {
-    if ((e.kind || 'chip') !== 'generator') return;
+  // 生成器的权威清单是 project.generators（sim 读它）；实体表里只是补个图标
+  const ids = Object.keys(project.generators || {});
+  if (!ids.length) {
+    Object.entries(project.entities || {}).forEach(([id, e]) => {
+      if ((e.kind || 'chip') === 'generator') ids.push(id);
+    });
+  }
+  ids.forEach(id => {
     const o = document.createElement('option'); o.value = id; o.textContent = entityLabel(id);
     sel.appendChild(o);
   });
-  if (value) sel.value = value;
+  if (value && ids.includes(value)) sel.value = value;
 }
 
 // 「压住的棋子」是必选项：没有「默认/空」，必须挑一个棋子系列
@@ -1720,11 +1807,15 @@ function updateCellPreview(){
   const box = document.getElementById('cellPreview');
   if (!box) return;
   const kind = $('cellKind').value;
+  // 图标覆盖优先：这一格选了系列就画那一套（生成器也一样）
+  const slotOv = (selCell && selCell.x !== undefined && !isStockpileSel()) ? slotAt(selCell.x, selCell.y) : null;
+  const ovIcon = slotOv && slotOv.icon ? String(slotOv.icon) : '';
+  const ovLv = slotOv && Number(slotOv.iconLevel) > 0 ? Number(slotOv.iconLevel) : 0;
   let url = '';
   if (kind === 'chip') {
     url = chipUrl($('cellEntity').value, Number($('cellLevel').value) || 1);
   } else if (kind === 'generator') {
-    url = ui['generator'] || '';
+    url = ovIcon ? chipUrl(ovIcon, ovLv || 1) : (ui['generator'] || '');
   } else if (kind === 'obstacle') {
     const t = $('cellObstacle').value;
     const obsUrl = t ? (ui[OBSTACLE_SLOT[t] || t] || '') : '';
@@ -1741,16 +1832,163 @@ function updateCellPreview(){
   } else if (kind === 'safebox') {
     url = ui['safe_' + $('safeSize').value] || '';
   }
+  if (isStockpileSel()) {
+    const sp = level().stockpile || {};
+    // 2026-11-13（操作者）：这里是"面板外观"，必须固定 —— 配了 icon 就一直是它，
+    // 不要跟着队列里下一枚棋子在变（飞出去的棋子自己用自己的图）。
+    url = sp.icon ? chipUrl(sp.icon, Number(sp.iconLevel) || 1) : (ui['generator'] || '');
+  }
+  // 预览兜底：这张具体图没登记时，拿第一张可用棋子图，别让右侧空一块
+  if (!url && (kind === 'chip' || kind === 'generator' || isStockpileSel())) url = firstChipUrl();
   if (!url) { box.hidden = true; box.innerHTML = ''; return; }
   box.hidden = false;
   box.innerHTML = '<img src="' + url + '" alt="">';
 }
 
+// ---------------------------------------------------------------- 产出模式 / 顺序队列
+// 2026-11-12（操作者）：普通生成器每台一条队列；库存也有一条。每行 1 枚，序号 1,2,3…，可上下移。
+function genSeqList(){
+  if (isStockpileSel()) {
+    const sp = level().stockpile || (level().stockpile = {});
+    if (!Array.isArray(sp.sequence)) sp.sequence = [];
+    return sp.sequence;
+  }
+  if (!selCell || selCell.x === undefined) return null;
+  const slot = slotAt(selCell.x, selCell.y);
+  if (!slot) return null;
+  if (!Array.isArray(slot.sequence)) slot.sequence = [];
+  return slot.sequence;
+}
+
+function chipSeriesIds(){
+  return Object.keys(project.entities || {})
+    .filter(id => entityKind(id) === 'chip')
+    .sort((a, b) => entityLabel(a).localeCompare(entityLabel(b), 'zh'));
+}
+
+function renderSequence(listEl, addBtn, list, mode){
+  if (!listEl) return;
+  const show = mode === 'sequence';
+  const box = listEl.closest ? listEl.parentElement : null;
+  if (box) box.style.display = show ? '' : 'none';
+  listEl.innerHTML = '';
+  if (!show || !list) return;
+  const series = chipSeriesIds();
+  list.forEach((row, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'row seqrow';
+    wrap.style.cssText = 'gap:6px;align-items:center';
+    const idx = document.createElement('span');
+    idx.textContent = String(i + 1);
+    idx.style.cssText = 'width:18px;text-align:right;color:#93aecb;font-size:12px';
+    const sel = document.createElement('select');
+    sel.style.flex = '1';
+    series.forEach(id => {
+      const o = document.createElement('option'); o.value = id; o.textContent = entityLabel(id);
+      sel.appendChild(o);
+    });
+    sel.value = series.includes(String(row.entity)) ? String(row.entity) : (series[0] || '');
+    const lv = document.createElement('input');
+    lv.type = 'number'; lv.min = '1'; lv.max = '10'; lv.value = Number(row.level) || 1;
+    lv.style.width = '64px';
+    // 2026-11-13（操作者）：顺序队列每行要能看到这一枚的画面预览。
+    const prev = document.createElement('img');
+    prev.className = 'seqprev';
+    prev.style.cssText = 'width:30px;height:30px;object-fit:contain;border-radius:6px;background:rgba(255,255,255,.06)';
+    const syncPrev = () => {
+      const url = chipUrl(String(sel.value || ''), Math.max(1, Math.min(10, Number(lv.value) || 1)));
+      // 资源表还没加载（自测/首次打开）时给个透明占位，避免空 src 视觉上是破图
+      prev.src = url || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      prev.title = entityLabel(String(sel.value || '')) + ' Lv.' + String(lv.value || 1);
+    };
+    syncPrev();
+    sel.onchange = () => { row.entity = sel.value; syncPrev(); validate(); renderPreview(); };
+    lv.onchange = () => { row.level = Math.max(1, Math.min(10, Number(lv.value) || 1)); syncPrev(); validate(); renderPreview(); };
+    const up = document.createElement('button');
+    up.className = 'ibtn'; up.textContent = '↑'; up.title = '上移';
+    up.onclick = () => { if (i === 0) return; const t = list[i - 1]; list[i - 1] = list[i]; list[i] = t; renderAll(); validate(); };
+    const down = document.createElement('button');
+    down.className = 'ibtn'; down.textContent = '↓'; down.title = '下移';
+    down.onclick = () => { if (i === list.length - 1) return; const t = list[i + 1]; list[i + 1] = list[i]; list[i] = t; renderAll(); validate(); };
+    const del = document.createElement('button');
+    del.className = 'ibtn danger'; del.textContent = '✕'; del.title = '删除这一行';
+    del.onclick = () => { list.splice(i, 1); renderAll(); validate(); };
+    wrap.appendChild(idx); wrap.appendChild(sel); wrap.appendChild(lv);
+    wrap.appendChild(prev);
+    wrap.appendChild(up); wrap.appendChild(down); wrap.appendChild(del);
+    listEl.appendChild(wrap);
+  });
+}
+
+// 左上角库存生成器：格子/类型固定，只配「实体 + 次数 + 启用」
+function isStockpileSel(){ return !!(selCell && selCell.special === 'stockpile'); }
+
+function selectStockpile(ev){
+  if (ev) ev.stopPropagation();
+  selCell = { special: 'stockpile' };
+  syncCellPanel(); renderPreview(); openSection('cell');
+}
+
 function syncCellPanel(){
+  if (isStockpileSel()) {
+    const sp = level().stockpile || {};
+    const gens = Object.keys(project.generators || {});
+    const info = need('cellInfo'); if (info) info.textContent = '左上角生成器（固定）';
+    const kind = need('cellKind'); if (kind) { kind.value = 'generator'; kind.disabled = true; }
+    fillGeneratorSelect(need('cellEntity'), sp.generator || gens[0]);
+    if (need('cellLevel')) need('cellLevel').value = 1;
+    if (need('cellSpCount')) need('cellSpCount').value = (sp.count === undefined ? 9 : sp.count);
+    fillIconSelect(need('cellIcon'), sp.icon || '', false);
+    if (need('cellIconLevel')) need('cellIconLevel').value = Number(sp.iconLevel || 1);
+    ['rowEntity','rowLevel','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor',
+     'rowSafeNum','rowSafeActions','rowSpCount','rowIcon'].forEach(id => {
+      const el = need(id); if (el) el.style.display = 'none';
+    });
+    if (need('rowEntity')) need('rowEntity').style.display = '';
+    if (need('rowSpCount')) need('rowSpCount').style.display = '';
+    if (need('rowIcon')) need('rowIcon').style.display = '';
+    // 库存：投放物 / 产出模式 / 顺序队列
+    // 2026-11-13（操作者报的 bug）：从生成器格切到库存时，生成器那块「产出模式 + 队列」
+    // 没被隐藏，看起来像库存长了上一条格的 5 行。这里显式收掉。
+    ['rowGenMode', 'genSeqBox'].forEach(id => { const el = need(id); if (el) el.style.display = 'none'; });
+    // 2026-11-13（操作者）：左上角库存的实体固定是「高级生成器」，下拉锁死不让改。
+    if (need('cellEntity')) {
+      need('cellEntity').disabled = true;
+      need('cellEntity').title = '左上角库存固定使用高级生成器（不可修改）';
+      // 固定就是高级生成器：不跟随 JSON 里的旧值（老关卡可能写着别的）
+      const fixedGen = 'CleanBox_P';
+      sp.generator = fixedGen;
+      const entSel = need('cellEntity');
+      if (![...entSel.options].some(o => o.value === fixedGen)) {
+        // 列表里没有这个选项（比如夹具工程没登记 CleanBox_P）时补一条，保证显示固定值。
+        // 注意：不要用 fillAnyEntitySelect 重建列表，它会把生成器选项冲掉。
+        if (![...entSel.options].some(o => o.value === fixedGen)) {
+          const o = document.createElement('option');
+          o.value = fixedGen;
+          o.textContent = entityLabel(fixedGen);
+          entSel.appendChild(o);
+        }
+      }
+      entSel.value = fixedGen;
+    }
+    if (need('rowSpDrop')) need('rowSpDrop').style.display = '';
+    if (need('rowSpMode')) need('rowSpMode').style.display = '';
+    if (need('cellSpDrop')) need('cellSpDrop').value = String(sp.drop || 'generator');
+    if (need('cellSpMode')) need('cellSpMode').value = String(sp.mode || 'random');
+    renderSequence(need('spSeqList'), need('spSeqAdd'), genSeqList(), String(sp.mode || 'random'));
+    const clr = need('clearCell'); if (clr) clr.style.display = 'none';
+    updateCellPreview();
+    return;
+  }
+  const kindEl = need('cellKind'); if (kindEl) kindEl.disabled = false;
+  const clr2 = need('clearCell'); if (clr2) clr2.style.display = '';
+  if (need('rowSpCount')) need('rowSpCount').style.display = 'none';
+  ['rowSpDrop','rowSpMode','spSeqBox','genSeqBox'].forEach(id => { const el = need(id); if (el) el.style.display = 'none'; });
+  if (need('cellEntity')) { need('cellEntity').disabled = false; need('cellEntity').title = ''; }
   const has = !!selCell;
   $('cellInfo').textContent = has ? ('(' + selCell.x + ', ' + selCell.y + ')') : '点棋盘选一格';
   // 没选格子时，整块编辑控件都不显示（只留一句提示），不再摆一排空下拉
-  ['rowKind','rowEntity','rowLevel','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
+  ['rowKind','rowEntity','rowLevel','rowIcon','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
     .forEach(id => { const el = $(id); if (el) el.style.display = has ? '' : 'none'; });
   ['cellKind','cellEntity','cellLevel','cellObstacle','cellSeconds','cellChipEntity','cellChipLevel','safeSize','safeX','safeY','safeCharges','safeLevel','clearCell']
     .forEach(id => { const el = $(id); if (el) el.disabled = !has; });
@@ -1801,6 +2039,7 @@ function syncCellPanel(){
 }
 
 function toggleCellRows(){
+  if (isStockpileSel()) return;   // 库存生成器由 syncCellPanel 的固定布局接管
   const k = $('cellKind').value;
   const chip = (k === 'chip');
   const gen = (k === 'generator');
@@ -1811,10 +2050,70 @@ function toggleCellRows(){
   $('rowSafeNum').style.display = safe ? '' : 'none';
   $('rowSafeActions').style.display = safe ? '' : 'none';
   $('rowEntity').style.display = (chip || gen) ? '' : 'none';
-  $('rowLevel').style.display = (chip || gen) ? '' : 'none';
+  $('rowLevel').style.display = chip ? '' : 'none';
+  // 图标覆盖只对棋子/生成器有意义；值从这一格的 slot 上取（2026-11-12 修：以前写在
+  // safebox 分支里，导致选普通格子时行不出现/值是上一次的）
+  const sNow = (selCell && selCell.x !== undefined) ? slotAt(selCell.x, selCell.y) : null;
+  if (need('rowIcon')) {
+    // 2026-11-12（操作者）：图标覆盖只属于生成器；棋子有自己系列的图，不要给它加这一行。
+    const showIcon = !!sNow && gen;
+    need('rowIcon').style.display = showIcon ? '' : 'none';
+    if (showIcon) {
+      fillIconSelect(need('cellIcon'), String(sNow.icon || ''), !gen);
+      if (need('cellIconLevel')) need('cellIconLevel').value = Number(sNow.iconLevel || 1);
+    }
+    // 2026-11-12：生成器产出模式 + 每台自己的顺序队列
+    if (need('rowGenMode')) need('rowGenMode').style.display = gen ? '' : 'none';
+    if (need('genSeqBox')) need('genSeqBox').style.display = gen ? '' : 'none';
+    // 空格子还没建 slot（sNow 为 null）：不能直接读 .mode，否则点空白+切生成器会抛
+    // TypeError: Cannot read properties of undefined (reading 'mode')
+    // 2026-11-13（操作者）：棋盘上的生成器固定是「普通生成器」，实体锁死；
+    // 等级对生成器已无意义（产出级别来自随机池/顺序队列），这一行也收起来。
+    if (need('cellEntity')) {
+      const entSel = need('cellEntity');
+      const fixedGen = 'CleanBox_C';
+      if (![...entSel.options].some(o => o.value === fixedGen)) {
+        const o = document.createElement('option');
+        o.value = fixedGen; o.textContent = entityLabel(fixedGen);
+        entSel.appendChild(o);
+      }
+      entSel.value = fixedGen;
+      entSel.disabled = true;
+      entSel.title = '棋盘生成器固定使用普通生成器（不可修改）';
+    }
+    if (need('rowLevel')) need('rowLevel').style.display = 'none';
+    const genModeNow = (sNow && sNow.mode) ? String(sNow.mode) : 'random';
+    if (gen && need('cellGenMode')) need('cellGenMode').value = genModeNow;
+    if (gen) renderSequence(need('genSeqList'), need('genSeqAdd'), genSeqList(), genModeNow);
+  }
   $('rowObstacle').style.display = obs ? '' : 'none';
   $('rowSeconds').style.display = (obs && $('cellObstacle').value === 'ice') ? '' : 'none';
   $('rowTrapped').style.display = (obs && ['web','ice'].includes($('cellObstacle').value)) ? '' : 'none';
+  // 2026-11-13：最后统一归一化一次。前面各分支/上一个格子的残留（实体被锁死、
+  // 等级行被藏、下拉列表被换成生成器）在这里按当前类型一次纠正，避免"改A坏了B"。
+  const entEl = need('cellEntity');
+  if (entEl) {
+    if (gen) {
+      const fixedGen = 'CleanBox_C';
+      if (![...entEl.options].some(o => o.value === fixedGen)) {
+        const o = document.createElement('option');
+        o.value = fixedGen; o.textContent = entityLabel(fixedGen);
+        entEl.appendChild(o);
+      }
+      entEl.value = fixedGen;
+      entEl.disabled = true;
+      entEl.title = '棋盘生成器固定使用普通生成器（不可修改）';
+      if (need('rowLevel')) need('rowLevel').style.display = 'none';
+    } else if (chip) {
+      const target = (sNow && sNow.entity) ? String(sNow.entity) : '';
+      // 始终重建：清掉生成器那套残留选项（之前补进去的 CleanBox_C 就靠这一步去掉）
+      fillEntitySelect(entEl, target);
+      if (target) entEl.value = target;
+      entEl.disabled = false;
+      entEl.title = '';
+      if (need('rowLevel')) need('rowLevel').style.display = '';
+    }
+  }
   updateCellPreview();
 }
 
@@ -1902,8 +2201,41 @@ function applySafebox(x, y){
 }
 
 function applyCell(x, y){
+  if (isStockpileSel()) {
+    const lvS = level();
+    lvS.stockpile = lvS.stockpile || {};
+    lvS.stockpile.enabled = true;   // 操作者：库存面板固定启用，不做开关
+    if (need('cellIcon')) {
+      let pick = String(need('cellIcon').value || '');
+      if (!pick) {
+        pick = Object.keys(project.entities || {}).filter(id => entityKind(id) === 'chip').sort()[0] || '';
+        if (pick && need('cellIcon')) need('cellIcon').value = pick;
+      }
+      if (pick) {
+        lvS.stockpile.icon = pick;
+        lvS.stockpile.iconLevel = Math.max(1, Math.min(10, Number(need('cellIconLevel') ? need('cellIconLevel').value : 1) || 1));
+      } else { delete lvS.stockpile.icon; delete lvS.stockpile.iconLevel; }
+    }
+    lvS.stockpile.count = Number(need('cellSpCount') ? need('cellSpCount').value : 9) || 0;
+    // 实体固定死：忽略下拉（它被 disable 了，读到的可能是别的格子的残留）
+    lvS.stockpile.generator = String((lvS.stockpile && lvS.stockpile.generator) || 'CleanBox_P');
+    if (need('cellSpDrop')) lvS.stockpile.drop = String(need('cellSpDrop').value || 'generator');
+    if (need('cellSpMode')) lvS.stockpile.mode = String(need('cellSpMode').value || 'random');
+    if (lvS.stockpile.mode === 'sequence'
+        && (!Array.isArray(lvS.stockpile.sequence) || lvS.stockpile.sequence.length === 0)) {
+      lvS.stockpile.sequence = [{ entity: chipSeriesIds()[0] || '', level: 1 }];
+    }
+    // 随机模式同样保留队列（切回「指定顺序」时原样恢复）
+    validate(); renderPreview();
+    return;
+  }
   const lv = level();
   const kind = $('cellKind').value;
+  // 2026-11-13（操作者）：改图标/等级也会走 applyCell，格子会重建 ——
+  // 先把原有的产出模式与顺序队列存下来，重建后原样带回去，不能重置。
+  const prevSlot = slotAt(x, y);
+  const keepMode = prevSlot && prevSlot.mode ? String(prevSlot.mode) : '';
+  const keepSeq = (prevSlot && Array.isArray(prevSlot.sequence)) ? JSON.parse(JSON.stringify(prevSlot.sequence)) : null;
   if (kind === 'safebox') {
     if (applySafebox(x, y)) { renderAll(); }
     return;
@@ -1919,7 +2251,11 @@ function applyCell(x, y){
     }
     lv.board.slots.push({x, y, entity: ent, level: Number($('cellLevel').value) || 1});
   } else if (kind === 'generator') {
-    lv.board.slots.push({x, y, entity: $('cellEntity').value, level: Number($('cellLevel').value) || 1});
+    // 实体固定普通生成器（下拉被 disable，不能依赖它的值）
+    const fresh = {x, y, entity: 'CleanBox_C', level: Number($('cellLevel').value) || 1};
+    if (keepMode) fresh.mode = keepMode;
+    if (keepSeq) fresh.sequence = keepSeq;
+    lv.board.slots.push(fresh);
   } else if (kind === 'obstacle') {
     const entry = {slot: [x, y], type: $('cellObstacle').value};
     const sec = $('cellSeconds').value.trim();
@@ -1937,6 +2273,34 @@ function applyCell(x, y){
       }
     }
     lv.obstacles.push(entry);
+  }
+
+  // 图标覆盖统一在最后写：生成器/棋子的 slot 是在上面分支里才建好的
+  if (kind === 'generator' && need('cellGenMode')) {
+    const sGen = slotAt(x, y);
+    if (sGen) {
+      const m = String(need('cellGenMode').value || 'random');
+      sGen.mode = m;
+      // 随机模式**不删**队列：切回来原来的行还要在（操作者 2026-11-13 要求）
+      if (m === 'sequence' && (!Array.isArray(sGen.sequence) || sGen.sequence.length === 0)) {
+        sGen.sequence = [{ entity: chipSeriesIds()[0] || '', level: 1 }];
+      }
+    }
+  }
+  if (need('cellIcon') && kind === 'generator') {
+    let pick = String(need('cellIcon').value || '');
+    if (!pick && kind === 'generator') {
+      // 生成器不再允许"用实体原图"：没选就给第一套系列，保证游戏里有图
+      pick = Object.keys(project.entities || {}).filter(id => entityKind(id) === 'chip').sort()[0] || '';
+      if (pick && need('cellIcon')) need('cellIcon').value = pick;
+    }
+    const sNow = slotAt(x, y);
+    if (sNow) {
+      if (pick) {
+        sNow.icon = pick;
+        sNow.iconLevel = Math.max(1, Math.min(10, Number(need('cellIconLevel') ? need('cellIconLevel').value : 1) || 1));
+      } else { delete sNow.icon; delete sNow.iconLevel; }
+    }
   }
 }
 
@@ -1995,7 +2359,29 @@ $('cellKind').addEventListener('change', () => {
 });
 
 // 其余字段：改完立刻写回并重画
-['cellEntity','cellLevel','cellObstacle','cellSeconds','cellChipEntity','cellChipLevel'].forEach(id => {
+// 2026-11-13：实体下拉同理 —— 通用列表里会先 toggleCellRows()，按旧 slot 回填，
+// 用户刚选的系列当场被覆盖（"下面的选不了"就是这个）。独立绑定，先写后回填。
+document.getElementById('cellEntity').addEventListener('change', () => {
+  if (!selCell || selCell.x === undefined) return;
+  const k = document.getElementById('cellKind').value;
+  if (k !== 'chip') return;   // 生成器/库存的实体是固定的，忽略
+  applyCell(selCell.x, selCell.y);
+  renderPreview();
+  validate();
+  syncCellPanel();
+});
+
+// 2026-11-12：图标/等级用独立绑定。放在通用列表里会先 toggleCellRows()，
+// 而它按 slot 里的旧值回填下拉 —— 用户刚选的新值当场被覆盖（"点完就跳回去"）。
+['cellIcon','cellIconLevel'].forEach(id => $(id).addEventListener('change', () => {
+  if (!selCell) return;
+  applyCell(selCell.x, selCell.y);   // 内部按是库存还是普通格分派
+  renderPreview();
+  validate();
+  syncCellPanel();
+}));
+
+['cellLevel','cellObstacle','cellSeconds','cellChipEntity','cellChipLevel'].forEach(id => {
   $(id).addEventListener('change', () => {
     toggleCellRows();
     if (!selCell) return;
@@ -2029,14 +2415,35 @@ $('lvNumber').onchange = () => {
   validate(); renderPreview();
 };
 
-$('lvBlast').onchange = () => { level().blast = Math.max(1, Math.min(3, Number($('lvBlast').value)||1)); validate(); };
-['spOn','spCount','spGen'].forEach(id => $(id).addEventListener('change', () => {
-  const lv = level();
-  lv.stockpile = lv.stockpile || {};
-  lv.stockpile.enabled = $('spOn').checked;
-  lv.stockpile.count = Number($('spCount').value) || 0;
-  if ($('spGen').value) lv.stockpile.generator = $('spGen').value;
-  validate(); renderPreview();
+$('lvBlast').onchange = () => { level().blast = Math.max(1, Math.min(3, Number($('lvBlast').value)||1)); markDirty(); validate(); };
+$('lvBlast').oninput = () => { level().blast = Math.max(1, Math.min(3, Number($('lvBlast').value)||1)); markDirty(); };
+
+document.getElementById('cellGenMode').addEventListener('change', () => {
+  if (!selCell || selCell.x === undefined) return;
+  applyCell(selCell.x, selCell.y);
+  renderAll(); validate();
+});
+document.getElementById('cellSpDrop').addEventListener('change', () => {
+  if (isStockpileSel()) { applyCell(selCell.x, selCell.y); renderAll(); validate(); }
+});
+document.getElementById('cellSpMode').addEventListener('change', () => {
+  if (isStockpileSel()) { applyCell(selCell.x, selCell.y); renderAll(); validate(); }
+});
+document.getElementById('genSeqAdd').addEventListener('click', () => {
+  const list = genSeqList();
+  if (!list) return;
+  list.push({ entity: chipSeriesIds()[0] || '', level: 1 });
+  renderAll(); validate();
+});
+document.getElementById('spSeqAdd').addEventListener('click', () => {
+  const list = genSeqList();
+  if (!list) return;
+  list.push({ entity: chipSeriesIds()[0] || '', level: 1 });
+  renderAll(); validate();
+});
+
+['cellSpCount','cellEntity'].forEach(id => $(id).addEventListener('change', () => {
+  if (isStockpileSel()) applyCell(selCell ? selCell.x : 0, selCell ? selCell.y : 0);
 }));
 
 ['shopTitle','shopSub','shopReward'].forEach(id => $(id).addEventListener('change', () => {
@@ -2051,9 +2458,32 @@ $('lvBlast').onchange = () => { level().blast = Math.max(1, Math.min(3, Number($
 }));
 
 $('addLevel').onclick = () => {
-  const copy = JSON.parse(JSON.stringify(level()));
-  copy.id = 'level_' + (project.levels.length + 1);
-  project.levels.push(copy); selLevel = project.levels.length-1; renderAll();
+  // 2026-11-13（操作者）：新增 = 建一个**空白关卡**，不是复制当前关（复制是「复制」按钮）。
+  const cur = level();
+  const size = (cur && cur.board) || {};
+  const chip = chipSeriesIds()[0] || Object.keys(project.entities || {})[0] || '';
+  let n = project.levels.length + 1;
+  const used = new Set((project.levels || []).map(l => String(l.id || '')));
+  let id = 'level_' + n;
+  while (used.has(id)) { n += 1; id = 'level_' + n; }
+  const fresh = {
+    id,
+    level_number: n,
+    board: { width: Number(size.width) || 7, height: Number(size.height) || 9, slots: [] },
+    obstacles: [], safes: [],
+    orders: [{
+      id: 'order_' + n, character: Object.keys(project.characters || {})[0] || '',
+      coin: 10, gem: 0, energy: 0,
+      mission: chip ? [{ entity: chip, level: 1, count: 1 }] : [],
+    }],
+    stockpile: { enabled: true, count: 5, generator: 'CleanBox_P' },
+    blast: 1,
+  };
+  project.levels.splice(selLevel + 1, 0, fresh);
+  selLevel = selLevel + 1;
+  _safeCache = null;
+  renderAll(); validate();
+  toast('已新增空白关卡 ' + id);
 };
 $('dupLevel').onclick = () => {
   const copy = JSON.parse(JSON.stringify(level()));
@@ -2193,6 +2623,11 @@ $('saveBtn').onclick = async () => {
   }
   if (!await ensureWrite()) return;
   try {
+    // 保存前物化缺省值（blast 缺省 1）：界面显示什么，JSON 里就有什么
+    (project.levels || []).forEach(lv => {
+      const b = Number(lv.blast);
+      lv.blast = Number.isFinite(b) ? Math.max(1, Math.min(3, b)) : 1;
+    });
     const mainFh = await dirHandle.getFileHandle(MAIN);
     const text = JSON.stringify(project, null, 2) + '\n';
     const w = await mainFh.createWritable(); await w.write(text); await w.close();
@@ -2305,7 +2740,7 @@ async function restoreBackup(name){
     const data = JSON.parse(await (await fh.getFile()).text());
     const mainFh = await dirHandle.getFileHandle(MAIN);
     const w = await mainFh.createWritable(); await w.write(JSON.stringify(data, null, 2) + '\n'); await w.close();
-    project = data; selLevel = 0; selCell = null;
+    project = data; normalizeBlast(); selLevel = 0; selCell = null;
     renderAll(); refreshBackups();
     setStatus('已恢复 ' + name, 'ok');
   } catch(e){ setStatus('恢复失败：' + e.message, 'err'); }
@@ -2490,6 +2925,203 @@ function editorSelfTest(){
         }
       } catch (e) { errors.push('trappeddefault: ' + e.message); }
 
+      // 2026-11-13（操作者报的）：棋子格显示成生成器实体 / 没有等级行。用断言把这条盯住。
+      try {
+        const chipSlot = (level().board.slots || []).find(sl => entityKind(sl.entity) === 'chip');
+        if (chipSlot) {
+          selCell = { x: chipSlot.x, y: chipSlot.y };
+          syncCellPanel();
+          if (document.getElementById('cellKind').value !== 'chip')
+            errors.push('棋子格类型不对：' + document.getElementById('cellKind').value);
+          if (document.getElementById('cellEntity').value !== chipSlot.entity)
+            errors.push('棋子格实体不对：' + document.getElementById('cellEntity').value + ' 期望 ' + chipSlot.entity);
+          if (document.getElementById('rowLevel').style.display === 'none')
+            errors.push('棋子格没有等级行');
+          if (document.getElementById('cellEntity').disabled) errors.push('棋子格实体下拉被锁死');
+          const chipOpts = [...document.getElementById('cellEntity').options].map(o => o.value);
+          if (chipOpts.some(v => !v.startsWith('CleanSet_'))) errors.push('棋子实体列表混进了非棋子：' + chipOpts.join(','));
+          // 换成另一个系列必须生效（不能回弹）
+          const otherChip = chipOpts.find(v => v !== level().board.slots.find(x => x.x === chipSlot.x && x.y === chipSlot.y).entity);
+          if (otherChip) {
+            const entEl2 = document.getElementById('cellEntity');
+            entEl2.value = otherChip;
+            entEl2.dispatchEvent(new Event('change'));
+            const nowSlot = level().board.slots.find(x => x.x === chipSlot.x && x.y === chipSlot.y) || {};
+            if (nowSlot.entity !== otherChip) errors.push('换系列没写回 slot：' + String(nowSlot.entity));
+            if (entEl2.value !== otherChip) errors.push('换系列被回弹：' + entEl2.value);
+            // 还原，后面的断言仍按原始系列检查
+            nowSlot.entity = chipSlot.entity;
+            entEl2.value = chipSlot.entity;
+            syncCellPanel();
+          }
+          // 再从库存切回棋子格，同样要正确
+          selectStockpile();
+          selCell = { x: chipSlot.x, y: chipSlot.y };
+          syncCellPanel();
+          if (document.getElementById('cellEntity').value !== chipSlot.entity)
+            errors.push('从库存切回棋子格实体不对：' + document.getElementById('cellEntity').value);
+          if (document.getElementById('rowLevel').style.display === 'none')
+            errors.push('从库存切回棋子格没有等级行');
+        }
+      } catch (e) { errors.push('chipcell: ' + e.message); }
+
+      // 新增关卡 = 空白关（不是复制当前关）
+      try {
+        const beforeCount = project.levels.length;
+        const beforeSlots = ((level().board || {}).slots || []).length;
+        document.getElementById('addLevel').click();
+        if (project.levels.length !== beforeCount + 1) errors.push('新增关卡没加进列表');
+        const fresh = project.levels[project.levels.length - 1] || {};
+        if ((((fresh.board || {}).slots) || []).length !== 0) errors.push('新增关不是空白：还带着棋盘');
+        if (beforeSlots === 0 && level() === fresh) errors.push('新增后没选中新关');
+        if (!fresh.stockpile || fresh.stockpile.generator !== 'CleanBox_P') errors.push('新增关没带默认库存');
+        project.levels.splice(project.levels.length - 1, 1);
+        selLevel = 0;
+        renderAll();
+      } catch (e) { errors.push('addLevel: ' + e.message); }
+
+      // 空格子直接切「生成器」不能抛异常（操作者 2026-11-13 报的 TypeError）
+      try {
+        selCell = { x: 6, y: 6 };
+        level().board.slots = (level().board.slots || []).filter(s => !(s.x === 6 && s.y === 6));
+        document.getElementById('cellKind').value = 'generator';
+        syncCellPanel();
+        if (document.getElementById('cellGenMode').value !== 'random')
+          errors.push('空格切生成器后产出模式默认不是真随机');
+      } catch (e) { errors.push('空格切生成器抛异常：' + e.message); }
+
+      // 棋子格：不能出现图标行（图标覆盖只属于生成器）
+      try {
+        let chipSlot = level().board.slots.find(s => s.x === 4 && s.y === 2);
+        if (!chipSlot) { chipSlot = { x: 4, y: 2, entity: 'CleanSet_Ca', level: 1 }; level().board.slots.push(chipSlot); }
+        chipSlot.entity = 'CleanSet_Ca'; chipSlot.level = 1;
+        selCell = { x: 4, y: 2 };
+        syncCellPanel();
+        if (document.getElementById('rowIcon').style.display !== 'none')
+          errors.push('棋子格不该显示图标行');
+      } catch (e) { errors.push('iconrow-chip: ' + e.message); }
+
+      // 选中普通生成器格：图标行必须直接出现，且值来自这一格（不用先点库存再点回来）
+      try {
+        level().board.slots = level().board.slots || [];
+        let had = level().board.slots.find(s => s.x === 3 && s.y === 4);
+        if (!had) { had = { x: 3, y: 4, entity: 'CleanBox_C', level: 1 }; level().board.slots.push(had); }
+        had.entity = 'CleanBox_C'; had.level = 1; had.icon = 'CleanSet_Ca'; had.iconLevel = 2;
+        selCell = { x: 3, y: 4 };
+        syncCellPanel();
+        const row = document.getElementById('rowIcon');
+        if (!row || row.style.display === 'none') errors.push('生成器格子没显示图标行');
+        // 生成器产出模式 + 顺序队列（2026-11-12）
+        const modeSel = document.getElementById('cellGenMode');
+        if (!modeSel) errors.push('缺少生成器产出模式下拉');
+        else {
+          modeSel.value = 'sequence';
+          modeSel.dispatchEvent(new Event('change'));
+          const slotSeq = level().board.slots.find(s => s.x === 3 && s.y === 4) || {};
+          const genEnt = document.getElementById('cellEntity');
+          if (!genEnt.disabled) errors.push('生成器实体下拉没锁死');
+          if (genEnt.value !== 'CleanBox_C') errors.push('生成器实体不是 CleanBox_C：' + genEnt.value);
+          if (document.getElementById('rowLevel').style.display !== 'none')
+            errors.push('生成器格子还显示等级行');
+          if (slotSeq.mode !== 'sequence') errors.push('切到顺序模式没写回 slot.mode：' + String(slotSeq.mode));
+          if (!Array.isArray(slotSeq.sequence) || slotSeq.sequence.length !== 1)
+            errors.push('顺序模式没自动建第一行');
+          document.getElementById('genSeqAdd').click();
+          const slotSeq2 = level().board.slots.find(s => s.x === 3 && s.y === 4) || {};
+          if ((slotSeq2.sequence || []).length !== 2) errors.push('加一行没生效');
+          // 切到左上角库存：生成器那块必须收掉，库存自己那块要出现（且至少 1 行）
+          selectStockpile();
+          if (document.getElementById('genSeqBox').style.display !== 'none')
+            errors.push('切到库存后生成器队列没隐藏');
+          const entSel = document.getElementById('cellEntity');
+          if (!entSel.disabled) errors.push('库存的实体下拉没锁死');
+          if (entSel.value !== 'CleanBox_P') errors.push('库存实体不是 CleanBox_P：' + entSel.value);
+          // 库存默认是随机；切到顺序后必须自动建一行、并且队列块出现
+          const spMode = document.getElementById('cellSpMode');
+          spMode.value = 'sequence';
+          spMode.dispatchEvent(new Event('change'));
+          if (document.getElementById('spSeqBox').style.display === 'none')
+            errors.push('库存切顺序后队列块没显示');
+          const spRows = document.querySelectorAll('#spSeqList .seqrow');
+          if (spRows.length < 1) errors.push('库存顺序模式没自动建行');
+          selCell = { x: 3, y: 4 };
+          syncCellPanel();
+
+          // 改图标不能把队列清空；切成随机再切回来，原来的行还要在
+          const seqBefore = JSON.parse(JSON.stringify((level().board.slots.find(s => s.x === 3 && s.y === 4) || {}).sequence || []));
+          document.getElementById('cellIcon').value = 'CleanSet_Cb';
+          document.getElementById('cellIcon').dispatchEvent(new Event('change'));
+          const seqAfterIcon = ((level().board.slots.find(s => s.x === 3 && s.y === 4) || {}).sequence || []);
+          if (seqAfterIcon.length !== seqBefore.length) errors.push('改图标把顺序队列重置了');
+
+          const modeSel2 = document.getElementById('cellGenMode');
+          modeSel2.value = 'random'; modeSel2.dispatchEvent(new Event('change'));
+          modeSel2.value = 'sequence'; modeSel2.dispatchEvent(new Event('change'));
+          const seqAfterToggle = ((level().board.slots.find(s => s.x === 3 && s.y === 4) || {}).sequence || []);
+          if (seqAfterToggle.length !== seqBefore.length) errors.push('切随机再切回来队列丢了');
+
+          document.getElementById('cellIcon').value = 'CleanSet_Ca';
+          document.getElementById('cellIcon').dispatchEvent(new Event('change'));
+
+          const prevImgs = document.querySelectorAll('#genSeqList img.seqprev');
+          if (prevImgs.length !== 2) errors.push('顺序行缺少图标预览：' + prevImgs.length);
+          else if (!String(prevImgs[0].getAttribute('src') || '').length) errors.push('图标预览没有 src');
+        }
+        if (document.getElementById('cellIcon').value !== 'CleanSet_Ca')
+          errors.push('图标行没读到这一格的 icon：' + document.getElementById('cellIcon').value);
+        if (Number(document.getElementById('cellIconLevel').value) !== 2)
+          errors.push('图标等级没读到这一格：' + document.getElementById('cellIconLevel').value);
+        // 走真实事件路径：下拉 dispatch change 后值必须留在 slot 里（不能"点完就回去"）
+        const iconEl = document.getElementById('cellIcon');
+        const iconLvEl = document.getElementById('cellIconLevel');
+        iconEl.value = 'CleanSet_Ca';
+        iconEl.dispatchEvent(new Event('change'));
+        iconLvEl.value = '5';
+        iconLvEl.dispatchEvent(new Event('change'));
+        const after = level().board.slots.find(s => s.x === 3 && s.y === 4) || {};
+        if ([...iconEl.options].some(o => o.value === ''))
+          errors.push('生成器图标下拉还留着「默认」空项');
+        if (after.icon !== 'CleanSet_Ca') errors.push('生成器换图标没写回 slot：' + String(after.icon));
+        if (Number(after.iconLevel) !== 5) errors.push('生成器图标等级没写回 slot：' + String(after.iconLevel));
+        if (document.getElementById('cellIcon').value !== 'CleanSet_Ca')
+          errors.push('图标选择被回弹了：' + document.getElementById('cellIcon').value);
+        if (Number(document.getElementById('cellIconLevel').value) !== 5)
+          errors.push('图标等级被回弹了：' + document.getElementById('cellIconLevel').value);
+      } catch (e) { errors.push('iconrow: ' + e.message); }
+
+      // 左上角生成器（库存）：固定格 + 固定类型，只改实体/次数/启用
+      try {
+        level().stockpile = { enabled: true, count: 5, generator: 'CleanBox_C' };
+        selectStockpile();
+        if (document.getElementById('cellInfo').textContent !== '左上角生成器（固定）')
+          errors.push('库存面板标题不对');
+        if (document.getElementById('cellKind').value !== 'generator' ||
+            !document.getElementById('cellKind').disabled)
+          errors.push('库存面板类型没固定成生成器');
+        const genSel = document.getElementById('cellEntity');
+        if (![...genSel.options].some(o => o.value === 'CleanBox_C'))
+          errors.push('库存实体下拉没有生成器');
+        document.getElementById('cellSpCount').value = '7';
+        document.getElementById('cellSpCount').dispatchEvent(new Event('change'));
+        if (level().stockpile.count !== 7) errors.push('库存次数没写回 JSON');
+        if (level().stockpile.enabled !== true) errors.push('库存必须恒为启用');
+        const iconSel = document.getElementById('cellIcon');
+        if (!iconSel || ![...iconSel.options].some(o => o.value === 'CleanSet_Ca'))
+          errors.push('图标下拉没有系列图标');
+        if ([...iconSel.options].some(o => o.value === ''))
+          errors.push('库存图标下拉还留着「默认」空项');
+        iconSel.value = 'CleanSet_Ca';
+        iconSel.dispatchEvent(new Event('change'));
+        if (level().stockpile.icon !== 'CleanSet_Ca') errors.push('库存图标没写回 JSON');
+        const iconLv = document.getElementById('cellIconLevel');
+        iconLv.value = '3';
+        iconLv.dispatchEvent(new Event('change'));
+        if (Number(level().stockpile.iconLevel) !== 3) errors.push('库存图标等级没写回 JSON');
+        selCell = { x: 0, y: 0 };
+        syncCellPanel();
+        if (document.getElementById('cellKind').disabled) errors.push('普通格子不该被固定');
+      } catch (e) { errors.push('stockpile: ' + e.message); }
+
       // 图标预览：按系列分组、每套 10 格、点别处切回
       try {
         openGallery();
@@ -2655,7 +3287,7 @@ function editorSelfTest(){
       try {
         const backupSel = selCell;
         selCell = null; syncCellPanel();
-        const hidden = ['rowKind','rowEntity','rowLevel','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
+        const hidden = ['rowKind','rowEntity','rowLevel','rowIcon','rowObstacle','rowSeconds','rowTrapped','rowSafeSize','rowSafeAnchor','rowSafeNum','rowSafeActions','rowCellActions']
           .filter(id => (document.getElementById(id) || {}).style.display !== 'none');
         if (hidden.length) errors.push('未选格子时仍显示: ' + hidden.join(','));
         selCell = backupSel; syncCellPanel();

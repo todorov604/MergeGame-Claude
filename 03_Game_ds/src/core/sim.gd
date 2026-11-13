@@ -42,6 +42,13 @@ var generator_state: Dictionary = {}
 var level_complete_pending: bool = false
 ## 2026-11-10：冰只按**自己的倒计时**融化（爆炸不再波及）。这里记每格冰出现的关卡时刻。
 var ice_since: Dictionary = {}
+## 2026-11-12：每台生成器自己的"指定顺序"游标（Vector2i -> 已吐出的条数）。
+## 按格子存，所以同一实体摆多台可以各配各的队列。
+var gen_seq_index: Dictionary = {}
+## 库存面板"飞生成器"模式：只允许点一次。
+var stockpile_used: bool = false
+## 库存面板自己的顺序游标（飞棋子模式）。
+var stockpile_seq_index: int = 0
 ## 2026-11-11：每格冰可以有自己的时长（关卡 JSON 的 `obstacle.seconds`）。
 var ice_lengths: Dictionary = {}
 ## 2026-11-11：网 / 冰下面压着的那枚棋子可以由 JSON 指定（`obstacle.chip`）。
@@ -120,6 +127,9 @@ func _load_level(index: int) -> void:
 	# 2026-11-12（操作者报的 bug）：倒计时必须从**这一关开始的那一刻**算。
 	# 以前记的是 0.0，而 `time` 是整个工程的全局时钟 —— 玩到第 2 关时冰已经
 	# 倒数了第 1 关花掉的时间（设 30 秒、进关只剩 15 秒）。
+	gen_seq_index = {}
+	stockpile_used = false
+	stockpile_seq_index = 0
 	ice_since = {}
 	for cell in board.obstacles.keys():
 		var kinds0: Array = board.obstacle_types(cell)
@@ -329,6 +339,63 @@ func _generator_slot(entity_id: String, cfg: Dictionary) -> Dictionary:
 ## Output pool for one generator. Rare entries only join the pool when an
 ## unfinished order in the CURRENT level asks for exactly that entity + level, so
 ## "rare direct-order drop" can never be a free bonus.
+## 2026-11-12（操作者口径）：真随机池 = 本关**所有订单（含已完成）**的每个子任务，
+## 该系列从 lv1 一直到子任务要求的等级，每个 (系列,等级) 只出现一次，等权。
+## 例：Ca4 + Cb3 → Ca1/Ca2/Ca3/Ca4/Cb1/Cb2/Cb3，各 1/7。
+func random_pool() -> Array:
+	var pool: Array = []
+	var seen := {}
+	if model == null:
+		return pool
+	for order in orders:
+		for m in (order as Dictionary).get("mission", []):
+			if typeof(m) != TYPE_DICTIONARY:
+				continue
+			var eid := String((m as Dictionary).get("entity", ""))
+			if eid.is_empty():
+				continue
+			var ent: Dictionary = model.entity(eid)
+			if String(ent.get("kind", "")) != "chip":
+				continue
+			var need := int((m as Dictionary).get("level", 1))
+			var cap := mini(_level_cap(eid), maxi(need, 1))
+			for lv in range(1, cap + 1):
+				var key := "%s@%d" % [eid, lv]
+				if seen.has(key):
+					continue
+				seen[key] = true
+				pool.append({"entity": eid, "level": lv, "weight": 1.0})
+	return pool
+
+
+## 一台生成器这一次该吐什么：先走它自己的顺序队列，吐完转随机池；
+## 都没有（极端空数据）再退回旧的 outputs 池，保证老夹具不至于变哑巴。
+func pick_generator_output(pos: Vector2i, item: Dictionary, entity_id: String) -> Dictionary:
+	var mode := String(item.get("mode", "random"))
+	var raw_seq = item.get("sequence", [])
+	var seq: Array = raw_seq if typeof(raw_seq) == TYPE_ARRAY else []
+	if mode == "sequence" and not seq.is_empty():
+		var idx := int(gen_seq_index.get(pos, 0))
+		if idx < seq.size():
+			var entry = seq[idx]
+			if typeof(entry) == TYPE_DICTIONARY:
+				gen_seq_index[pos] = idx + 1
+				return {"entity": String((entry as Dictionary).get("entity", "")),
+						"level": int((entry as Dictionary).get("level", 1)),
+						"source": "sequence"}
+	var pool := random_pool()
+	if pool.is_empty():
+		pool = tap_pool(entity_id)
+	if pool.is_empty():
+		return {}
+	var pick_idx: int = rng.pick_weighted(pool)
+	if pick_idx < 0 or pick_idx >= pool.size():
+		return {}
+	var picked: Dictionary = pool[pick_idx]
+	return {"entity": String(picked.get("entity", "")), "level": int(picked.get("level", 1)),
+			"source": "random"}
+
+
 func tap_pool(entity_id: String) -> Array:
 	var pool: Array = []
 	if model == null:
@@ -416,21 +483,33 @@ func stockpile_remaining() -> int:
 
 ## 面板上默认显示的那枚棋子：配置优先，否则取第一个未完成订单的低一级。
 func stockpile_preview() -> Dictionary:
-	# 2026-11-06: 进关时定死一种产物，交付后不换（它就是个固定生成器）。
+	# 2026-11-12：库存有两种投放物 —— 飞棋子 / 飞生成器。
+	# 飞棋子时预览"下一枚会飞什么"（顺序优先，否则随机池第一条）；
+	# 飞生成器时预览那台生成器（沿用旧口径：第一张未完成订单的第一行等级 - 1）。
+	var cfg := stockpile_config()
+	var drop := String(cfg.get("drop", "generator"))
+	if drop == "chip":
+		var seq: Array = cfg.get("sequence", []) if typeof(cfg.get("sequence", [])) == TYPE_ARRAY else []
+		var idx := stockpile_seq_index
+		if idx < seq.size():
+			var e = seq[idx]
+			if typeof(e) == TYPE_DICTIONARY:
+				return {"kind": "chip", "entity": String((e as Dictionary).get("entity", "")),
+						"level": int((e as Dictionary).get("level", 1))}
+		var pool := random_pool()
+		if not pool.is_empty():
+			return {"kind": "chip", "entity": String((pool[0] as Dictionary).get("entity", "")),
+					"level": int((pool[0] as Dictionary).get("level", 1))}
+		return {}
 	if not stockpile_chip.is_empty():
 		return stockpile_chip
-	var cfg := stockpile_config()
 	var want := String(cfg.get("entity", ""))
 	var lvl := int(cfg.get("level", 0))
 	if not want.is_empty() and lvl > 0:
 		stockpile_chip = {"entity": want, "level": lvl}
 		return stockpile_chip
-	# 2026-11-10：库存面板改投**高级生成器**（操作者要求）。
-	# 级别 = 本关单个子任务 clip 级别 - 1（例如任务要 lv2 → 生成器出 lv1）。
 	var gen := String(cfg.get("generator", ""))
 	if not gen.is_empty():
-		# 口径：取第一张未完成订单的**第一个子任务 clip** 的级别 - 1
-		# （与旧的面板预览同一条规则，只是产物从棋子换成了生成器）。
 		var best := 0
 		for order in orders:
 			if bool(order.get("done", false)):
@@ -444,54 +523,90 @@ func stockpile_preview() -> Dictionary:
 		stockpile_chip = {"kind": "generator", "entity": gen,
 				"level": clampi(best - 1, 1, _level_cap(gen))}
 		return stockpile_chip
-	for order in orders:
-		if bool(order.get("done", false)):
-			continue
-		for m in order.get("mission", []):
-			var entity := String((m as Dictionary).get("entity", ""))
-			if entity.is_empty():
-				continue
-			stockpile_chip = {"entity": entity,
-					"level": maxi(int((m as Dictionary).get("level", 1)) - 1, 1)}
-			return stockpile_chip
 	return {}
 
 
 ## 左侧库存：点一下少一次，棋子从面板飞到棋盘随机空位（跟生成器同一套飞行数据）。
+## 左上角面板"画谁"：配了 icon 就用 icon；飞棋子且没 icon 时固定用生成器实体，
+## 否则面板图标会跟着队列里下一枚棋子在变（操作者 2026-11-13 报的）。
+func _stockpile_panel_entity() -> String:
+	var cfg := stockpile_config()
+	if not String(cfg.get("icon", "")).is_empty():
+		return String(cfg.get("generator", ""))
+	return String(stockpile_preview().get("entity", ""))
+
+
 func _do_stockpile_tap(_payload: Dictionary) -> Dictionary:
 	last_spawn = {}
-	var cfg: Dictionary = {}
-	if model != null:
-		var lvl: Dictionary = model.level(level_index)
-		var raw = lvl.get("stockpile", {})
-		if typeof(raw) == TYPE_DICTIONARY:
-			cfg = raw
-	if stockpile_count < 0 and not cfg.is_empty():
-		stockpile_count = int(cfg.get("count", 0))
-	cfg = cfg.duplicate(true)
-	cfg["count"] = stockpile_count
+	var cfg: Dictionary = stockpile_config().duplicate(true)
 	if cfg.is_empty() or not bool(cfg.get("enabled", false)):
 		return _err("SIM_NO_STOCKPILE", "this level has no stockpile")
-	if int(cfg.get("count", 0)) <= 0:
+	var drop := String(cfg.get("drop", "generator"))
+	if stockpile_count < 0:
+		stockpile_count = int(cfg.get("count", 0))
+	if drop == "generator":
+		# 只允许飞一次：之后后台失效（画面不做提示）。
+		if stockpile_used:
+			return _err("SIM_STOCKPILE_SPENT", "the stockpile already dropped its generator")
+	elif stockpile_count <= 0:
 		return _err("SIM_STOCKPILE_EMPTY", "stockpile is empty")
 	var free_cells := _free_cells()
 	if free_cells.is_empty():
 		board_full_pending = true
 		return _err("SIM_BOARD_FULL", "board is full; stockpile kept")
 	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
-	var pick := stockpile_preview()
-	if pick.is_empty():
-		return _err("SIM_NO_STOCKPILE", "stockpile has no configured chip")
-	var spawn_entity := String(pick["entity"])
-	var spawn_level: int = clampi(int(pick["level"]), 1, _level_cap(spawn_entity))
-	board.put(free, spawn_entity, spawn_level)
-	# 2026-11-10：库存面板现在投的是**生成器**（带小闪电），不是固定棋子。
-	var spawn_kind := String(pick.get("kind", ""))
-	if spawn_kind.is_empty():
-		spawn_kind = String(model.entity(spawn_entity).get("kind", "chip"))
+	var spawn_icon := String(cfg.get("icon", ""))
+	var spawn_icon_level := int(cfg.get("iconLevel", 0))
+	var spawn_entity := ""
+	var spawn_level := 1
+	var spawn_kind := "chip"
+	var extra := {}
+	if drop == "generator":
+		var pick := stockpile_preview()
+		if pick.is_empty():
+			return _err("SIM_NO_STOCKPILE", "stockpile has no configured generator")
+		spawn_entity = String(pick.get("entity", ""))
+		spawn_level = clampi(int(pick.get("level", 1)), 1, _level_cap(spawn_entity))
+		spawn_kind = "generator"
+		# 飞出来的生成器跟库存用同一份产出配置（操作者口径）
+		extra["mode"] = String(cfg.get("mode", "random"))
+		if typeof(cfg.get("sequence", [])) == TYPE_ARRAY:
+			extra["sequence"] = cfg.get("sequence", [])
+		stockpile_used = true
+	else:
+		# 飞棋子：顺序优先，吐完转随机池；受 count 限制。
+		var seq: Array = cfg.get("sequence", []) if typeof(cfg.get("sequence", [])) == TYPE_ARRAY else []
+		var mode := String(cfg.get("mode", "random"))
+		var picked := {}
+		if mode == "sequence" and stockpile_seq_index < seq.size():
+			var e = seq[stockpile_seq_index]
+			if typeof(e) == TYPE_DICTIONARY:
+				picked = {"entity": String((e as Dictionary).get("entity", "")),
+						"level": int((e as Dictionary).get("level", 1))}
+				stockpile_seq_index += 1
+		if picked.is_empty():
+			var pool := random_pool()
+			if pool.is_empty():
+				pool = tap_pool(String(cfg.get("generator", "")))
+			if pool.is_empty():
+				return _err("SIM_NO_STOCKPILE", "stockpile has no configured output")
+			var idx: int = rng.pick_weighted(pool)
+			if idx < 0 or idx >= pool.size():
+				return _err("SIM_NO_STOCKPILE", "weighted output pick failed")
+			picked = {"entity": String((pool[idx] as Dictionary).get("entity", "")),
+					"level": int((pool[idx] as Dictionary).get("level", 1))}
+		spawn_entity = String(picked.get("entity", ""))
+		spawn_level = clampi(int(picked.get("level", 1)), 1, _level_cap(spawn_entity))
+	# 2026-11-13（操作者报的 bug）：库存的 icon/iconLevel 是给**飞出去的那台生成器**用的；
+	# 飞棋子模式下必须让棋子用它自己的系列图，否则 5 次点击全是同一个"生成器样子"的 clip。
+	if drop != "generator":
+		spawn_icon = ""
+		spawn_icon_level = 0
+	board.put(free, spawn_entity, spawn_level, spawn_icon, spawn_icon_level, extra)
 	last_spawn = {"from": [-1, -1], "to": [free.x, free.y],
-			"entity": spawn_entity, "level": spawn_level, "kind": spawn_kind}
-	stockpile_count = int(cfg.get("count", 0)) - 1
+			"entity": spawn_entity, "level": spawn_level, "kind": spawn_kind,
+			"icon": spawn_icon, "icon_level": spawn_icon_level}
+	stockpile_count = maxi(stockpile_count - 1, 0)
 	return _ok("stockpile spawned " + spawn_entity + " lv" + str(spawn_level) + " at " + str(free))
 
 
@@ -528,26 +643,13 @@ func _do_tap(payload: Dictionary) -> Dictionary:
 		board_full_pending = true
 		return _err("SIM_BOARD_FULL", "board is full; charge kept")
 	var free: Vector2i = free_cells[rng.next_int(free_cells.size())]
-	# 2026-11-10：高级生成器按**本关任务**出东西（`missionPool`）：
-	# 每张未完成订单的每个子任务都进池子，产出 entity = 任务要的系列，
-	# level = 该子任务级别 - 1（"更好一级"但不越级）。这样连点也不会只出一种。
-	var pool: Array = []
-	if bool(cfg.get("missionPool", false)):
-		pool = _mission_pool()
-	if pool.is_empty():
-		pool = tap_pool(entity_id)
-	if pool.is_empty():
+	# 2026-11-12（操作者口径）：每台生成器自己的 mode/sequence；顺序吐完转随机池，
+	# 随机池 = 本关所有订单子任务 lv1..需求等级，等权。旧 outputs/missionPool 不再参与。
+	var picked: Dictionary = pick_generator_output(pos, item, entity_id)
+	if picked.is_empty():
 		return _err("SIM_TAP_NO_GENERATOR", "\"" + entity_id + "\" has no usable output")
-	var idx: int = rng.pick_weighted(pool)
-	if idx < 0 or idx >= pool.size():
-		return _err("SIM_TAP_NO_GENERATOR", "weighted output pick failed")
-	var picked: Dictionary = pool[idx]
 	var spawn_entity := String(picked["entity"])
 	var spawn_level: int = int(picked["level"])
-	# 2026-11-10：高级生成器的产出级别由**它自己的 level** 决定
-	# （库存面板投放时按"任务 clip 级别 - 1"定死），棋盘上的老生成器不受影响。
-	if bool(cfg.get("levelFromItem", false)) and not bool(cfg.get("missionPool", false)):
-		spawn_level = int(item.get("level", spawn_level))
 	spawn_level = clampi(spawn_level, 1, _level_cap(spawn_entity))
 	board.put(free, spawn_entity, spawn_level)
 	last_spawn = {"from": [pos.x, pos.y], "to": [free.x, free.y],
@@ -779,8 +881,17 @@ func _do_move(payload: Dictionary) -> Dictionary:
 	if not board.has_item(from):
 		return _err("SIM_NO_ITEM", "move source is empty")
 	var item: Dictionary = board.item(from)
+	var extra := {}
+	if item.has("mode"):
+		extra["mode"] = String(item.get("mode", ""))
+	if item.has("sequence"):
+		extra["sequence"] = item.get("sequence", [])
 	board.take(from)
-	board.put(to, String(item.get("entity", "")), int(item.get("level", 1)))
+	board.put(to, String(item.get("entity", "")), int(item.get("level", 1)),
+			String(item.get("icon", "")), int(item.get("icon_level", 0)), extra)
+	if gen_seq_index.has(from):
+		gen_seq_index[to] = int(gen_seq_index[from])
+		gen_seq_index.erase(from)
 	last_spawn = {}
 	return _ok("moved to " + str(to))
 
@@ -1043,9 +1154,16 @@ func snapshot() -> Dictionary:
 		"stockpile": {
 			"enabled": not stockpile_config().is_empty() and bool(stockpile_config().get("enabled", false)),
 			"count": stockpile_remaining(),
-			"entity": String(stockpile_preview().get("entity", "")),
+			# 面板外观要固定：飞棋子且没配 icon 时，实体用**生成器**（不能跟着下一枚棋子变）
+			"entity": _stockpile_panel_entity(),
 			"level": int(stockpile_preview().get("level", 1)),
 			"kind": String(stockpile_preview().get("kind", "chip")),
+			# 2026-11-13（操作者）：左上角面板的图标必须**固定**，不能跟着下一枚棋子在变。
+			# 配了 icon 就一直是它；没配就走生成器图。飞出去的棋子用自己的图（见 _do_stockpile_tap）。
+			"icon": String(stockpile_config().get("icon", "")),
+			"iconLevel": int(stockpile_config().get("iconLevel", 0)),
+			"drop": String(stockpile_config().get("drop", "generator")),
+			"used": stockpile_used,
 		},
 		"level_id": current_level_id(),
 		"hud": hud_snap,

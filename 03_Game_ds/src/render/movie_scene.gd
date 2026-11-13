@@ -227,6 +227,8 @@ var _energy_ticks: Array = []
 var _energy_display: float = -1.0
 var _energy_pop_at: float = -1000.0
 var _board_level := -1
+## 订单带自己的"已换到第几关"（与棋盘分开，别互相覆盖）。
+var _band_level := -1
 var _band_dx := 0.0
 var _guard_blocked: Array = []
 var _rejected: Array = []
@@ -1260,7 +1262,12 @@ func _item_at_cell(cell: Vector2i) -> Dictionary:
 		if typeof(raw) != TYPE_ARRAY or (raw as Array).size() < 4:
 			continue
 		if int((raw as Array)[0]) == cell.x and int((raw as Array)[1]) == cell.y:
-			return {"entity": String((raw as Array)[2]), "level": int((raw as Array)[3])}
+			var it := {"entity": String((raw as Array)[2]), "level": int((raw as Array)[3])}
+			if (raw as Array).size() > 4 and not String((raw as Array)[4]).is_empty():
+				it["icon"] = String((raw as Array)[4])
+			if (raw as Array).size() > 5 and int((raw as Array)[5]) > 0:
+				it["icon_level"] = int((raw as Array)[5])
+			return it
 	return {}
 
 
@@ -1629,8 +1636,8 @@ func _sync_live_band() -> void:
 	if _live_band == null or _snap.is_empty():
 		return
 	var idx := int(_snap.get("level_index", 0))
-	if idx != _board_level:
-		_board_level = idx
+	if idx != _band_level:
+		_band_level = idx
 		var level: Dictionary = _model.level(idx)
 		if not level.is_empty():
 			_live_band.build_from_level(level)
@@ -1647,7 +1654,10 @@ func _sync_live_band() -> void:
 	if typeof(stock) == TYPE_DICTIONARY and bool((stock as Dictionary).get("enabled", false)):
 		_live_band.set_stockpile(int((stock as Dictionary).get("count", 0)),
 				String((stock as Dictionary).get("entity", "")),
-				int((stock as Dictionary).get("level", 1)))
+				int((stock as Dictionary).get("level", 1)),
+				String((stock as Dictionary).get("kind", "chip")),
+				String((stock as Dictionary).get("icon", "")),
+				int((stock as Dictionary).get("iconLevel", 0)))
 	else:
 		_live_band.clear_stockpile()
 

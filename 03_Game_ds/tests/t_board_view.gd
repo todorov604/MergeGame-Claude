@@ -306,6 +306,49 @@ func _ui_theme(t) -> void:
 	t.ok(not summary.contains("= "), "ui_summary prints no empty id", summary)
 	t.ok(v.chip_icon_count() > 0, "set_asset_theme also wires the chip icons",
 			str(v.chip_icon_count()))
+
+	# 2026-11-12：图标覆盖 —— item_texture(..., icon) 必须取 icon 那张图，
+	# 而不是 entity 那张（编辑器里「图标」选别的系列就靠这条生效）。
+	var base_tex: Texture2D = v.item_texture("chip", "CleanSet_Ca", 1)
+	var over_tex: Texture2D = v.item_texture("chip", "CleanSet_Ca", 1, "CleanSet_Cc")
+	var cc_tex: Texture2D = v.item_texture("chip", "CleanSet_Cc", 1)
+	t.ok(base_tex != null and over_tex != null and cc_tex != null, "三种取图都拿得到")
+	if base_tex != null and over_tex != null and cc_tex != null:
+		t.ok(base_tex.get_image().get_data() != over_tex.get_image().get_data(),
+				"覆盖图标和 entity 原图不是同一张")
+		t.eq(over_tex.get_image().get_data(), cc_tex.get_image().get_data(),
+				"覆盖图标就是被选中的那一套系列")
+	# 图标也能指定等级：选 Cc 的第 6 级
+	var lv6: Texture2D = v.item_texture("chip", "CleanSet_Ca", 1, "CleanSet_Cc", 6)
+	var cc6: Texture2D = v.item_texture("chip", "CleanSet_Cc", 6)
+	t.ok(lv6 != null and cc6 != null, "带等级的覆盖图拿得到")
+	if lv6 != null and cc6 != null:
+		t.eq(lv6.get_image().get_data(), cc6.get_image().get_data(),
+				"iconLevel 生效：取的是被选系列第 6 级的图")
+	# 生成器同样吃图标覆盖（棋盘上那种 + 飞行的生成器）
+	var gen_tex = v._chip_texture({"entity": "CleanBox_C", "level": 1, "icon": "CleanSet_Cc"})
+	var gen_ref: Texture2D = v.item_texture("chip", "CleanSet_Cc", 1)
+	t.ok(gen_tex != null and gen_ref != null, "生成器的图标覆盖拿得到")
+	if gen_tex != null and gen_ref != null:
+		t.eq(gen_tex.get_image().get_data(), gen_ref.get_image().get_data(),
+				"生成器图标覆盖 = 被选系列那张图")
+	# 端到端：把带 icon 的格子交给 build_from_level_data，视图内部的 item 必须保留 icon，
+	# 否则"飞的时候对、落格后变回原样"（2026-11-12 真踩过）。
+	var lvl := {"id": "icon_case", "board": {"width": 4, "height": 4, "slots": [
+			{"x": 1, "y": 1, "entity": "CleanBox_C", "level": 1, "icon": "CleanSet_Cc", "iconLevel": 4}]}}
+	v.build_from_level_data(lvl, project.get("entities", {}), project.get("generators", {}))
+	var ping: Dictionary = (v._items as Dictionary).get(Vector2i(1, 1), {})
+	t.eq(String(ping.get("icon", "")), "CleanSet_Cc", "落格后的 item 仍带 icon")
+	t.eq(int(ping.get("icon_level", 0)), 4, "落格后的 item 仍带 icon_level")
+	# 成片每帧用 set_chips() 把快照盖到棋盘上：第 5/6 位同样不能丢
+	# （2026-11-12 成片 00109 帧"实机对、成片全默认图"就是这个漏的）。
+	v.set_chips([[1, 1, "CleanBox_C", 1, "CleanSet_Ca", 5]])
+	var film_item: Dictionary = (v._items as Dictionary).get(Vector2i(1, 1), {})
+	t.eq(String(film_item.get("icon", "")), "CleanSet_Ca", "set_chips 保留 icon")
+	t.eq(int(film_item.get("icon_level", 0)), 5, "set_chips 保留 icon_level")
+	v.set_chips([[1, 1, "CleanBox_C", 1]])
+	var plain_item: Dictionary = (v._items as Dictionary).get(Vector2i(1, 1), {})
+	t.eq(String(plain_item.get("icon", "")), "", "没有 icon 的旧快照仍然不带 icon")
 	v.free()
 
 
@@ -421,7 +464,9 @@ func _level_chips() -> int:
 	model.load_file(SAMPLE)
 	for s in slots:
 		var ent := String((s as Dictionary).get("entity", ""))
-		if String(model.entity(ent).get("kind", "chip")) == "chip":
+		var has_icon := not String((s as Dictionary).get("icon", "")).is_empty()
+		# 棋子有图；生成器只有写了 icon 覆盖才有图（_chip_texture 只认这个）
+		if String(model.entity(ent).get("kind", "chip")) == "chip" or has_icon:
 			n += 1
 	return n
 

@@ -37,7 +37,13 @@ func load_level(level_data: Dictionary) -> void:
 			var pos := _pos_from(s)
 			if pos.x < 0 or not in_bounds(pos):
 				continue
-			put(pos, String(s.get("entity", "")), int(s.get("level", 1)))
+			var extra := {}
+			if (s as Dictionary).has("mode"):
+				extra["mode"] = String(s.get("mode", ""))
+			if (s as Dictionary).has("sequence"):
+				extra["sequence"] = s.get("sequence", [])
+			put(pos, String(s.get("entity", "")), int(s.get("level", 1)),
+					String(s.get("icon", "")), int(s.get("iconLevel", 0)), extra)
 
 	var obs = level_data.get("obstacles", null)
 	if typeof(obs) == TYPE_ARRAY:
@@ -96,8 +102,21 @@ func item(pos: Vector2i) -> Dictionary:
 	return v
 
 
-func put(pos: Vector2i, entity: String, level: int) -> void:
-	cells[pos] = {"entity": entity, "level": level}
+## 2026-11-12：`icon` 是编辑器的图标覆盖（JSON 的 slot.icon），空 = 跟 entity。
+## `extra` 带上这一格的生成器产出配置（mode / sequence），移动时要原样带走。
+func put(pos: Vector2i, entity: String, level: int, icon: String = "", icon_level: int = 0,
+		extra: Dictionary = {}) -> void:
+	var item := {"entity": entity, "level": level}
+	if not icon.is_empty():
+		item["icon"] = icon
+		# icon_level 只对"图标覆盖"有意义：空/0 = 用这一格自己的 level
+		if icon_level > 0:
+			item["icon_level"] = icon_level
+	if extra.has("mode"):
+		item["mode"] = String(extra.get("mode", ""))
+	if extra.has("sequence"):
+		item["sequence"] = (extra.get("sequence", []) as Array).duplicate(true)
+	cells[pos] = item
 
 
 func take(pos: Vector2i) -> Dictionary:
@@ -174,7 +193,9 @@ func snapshot() -> Dictionary:
 	var cell_rows: Array = []
 	for pos in sorted_cells():
 		var it: Dictionary = cells[pos]
-		cell_rows.append([pos.x, pos.y, String(it["entity"]), int(it["level"])])
+		# 第 5 位是图标覆盖（没有就是空串），旧读者只用前 4 位，兼容
+		cell_rows.append([pos.x, pos.y, String(it["entity"]), int(it["level"]),
+				String(it.get("icon", "")), int(it.get("icon_level", 0))])
 
 	var obs_rows: Array = []
 	var okeys: Array = obstacles.keys()

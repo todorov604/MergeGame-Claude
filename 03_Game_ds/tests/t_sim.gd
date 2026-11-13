@@ -45,6 +45,7 @@ func run(t) -> void:
 	_test_flow_run(t)
 	_test_ice_per_cell(t)
 	_test_ice_restarts_each_level(t)
+	_test_icon_override_flows_through(t)
 	_test_determinism(t)
 	_test_parity(t)
 
@@ -409,7 +410,9 @@ func _test_board(t) -> void:
 	t.eq(int(snap.get("width", 0)), 7, "snapshot carries width")
 	t.eq((snap.get("cells", []) as Array).size(), 8, "snapshot lists every cell")
 	var first: Array = (snap.get("cells", []) as Array)[0]
-	t.eq(first, [0, 0, "A", 1], "snapshot rows are [x, y, entity, level], sorted")
+	# 2026-11-12：第 5 位是图标覆盖（空串 = 跟 entity），旧读者只用前 4 位
+	t.eq(first.slice(0, 4), [0, 0, "A", 1], "snapshot rows are [x, y, entity, level, icon], sorted")
+	t.eq(String(first[4]) if first.size() > 4 else "", "", "没有覆盖时第 5 位是空串")
 	t.eq((snap.get("obstacles", []) as Array).size(), 1, "snapshot lists obstacles")
 
 
@@ -976,6 +979,38 @@ func _test_ice_restarts_each_level(t) -> void:
 			"第 2 关的冰必须重新从 30 秒开始（不能扣掉第 1 关的时间）")
 	sim.tick_to(50.0)
 	t.eq(sim.ice_remaining(Vector2i(2, 2)), 25, "进关后再走 5 秒 → 25 秒")
+
+
+## 2026-11-12：编辑器的图标覆盖（slot.icon / stockpile.icon）必须原样进快照，
+## 否则实机与成片拿不到，改了图标却看不到变化。
+func _test_icon_override_flows_through(t) -> void:
+	var project := {
+		"version": 2, "hud": _hud(0, 10), "entities": _entities(), "generators": {},
+		"characters": {"CH": {"display": "T"}},
+		"levels": [{
+			"id": "ic1", "board": {"width": 4, "height": 4, "slots": [
+				{"x": 1, "y": 1, "entity": "B", "level": 2, "icon": "A", "iconLevel": 3},
+				{"x": 2, "y": 2, "entity": "B", "level": 1},
+			]},
+			"obstacles": [],
+			"stockpile": {"enabled": true, "count": 3, "generator": "GEN", "icon": "A", "iconLevel": 4},
+			"orders": [{"id": "o1", "character": "CH", "coin": 1,
+				"mission": [{"entity": "B", "level": 1, "count": 1}]}],
+		}],
+	}
+	var sim = _new_sim(project, 5)
+	t.ok(sim != null, "带图标覆盖的工程能加载")
+	var cells: Array = (sim.snapshot().get("board", {}) as Dictionary).get("cells", [])
+	var by_pos := {}
+	for row in cells:
+		by_pos["%d,%d" % [int(row[0]), int(row[1])]] = row
+	t.eq(String(by_pos["1,1"][4]), "A", "slot.icon 进了快照")
+	t.eq(int(by_pos["1,1"][5]), 3, "slot.iconLevel 进了快照")
+	t.eq(String(by_pos["2,2"][4]), "", "没写 icon 的格子第 5 位是空串")
+	t.eq(String((sim.snapshot().get("stockpile", {}) as Dictionary).get("icon", "")), "A",
+			"stockpile.icon 进了快照")
+	t.eq(int((sim.snapshot().get("stockpile", {}) as Dictionary).get("iconLevel", 0)), 4,
+			"stockpile.iconLevel 进了快照")
 
 
 func _test_determinism(t) -> void:

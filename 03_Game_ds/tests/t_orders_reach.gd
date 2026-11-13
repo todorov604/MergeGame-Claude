@@ -46,7 +46,24 @@ func _project() -> Dictionary:
 	var root = j.data
 	if typeof(root) != TYPE_DICTIONARY:
 		return {}
-	return (root as Dictionary).duplicate(true)
+	var out: Dictionary = (root as Dictionary).duplicate(true)
+	# 2026-11-12：这些用例测的是**旧 outputs 判据**。样例工程的库存启用后，
+	# 新口径（随机池覆盖 lv1..需求）会让所有任务都可达，负例就不成立了 ——
+	# 这里把库存关掉，让它们回到"只看棋盘上的生成器"的老路径。
+	for lv in (out.get("levels", []) as Array):
+		if typeof(lv) != TYPE_DICTIONARY:
+			continue
+		var sp = (lv as Dictionary).get("stockpile", {})
+		if typeof(sp) == TYPE_DICTIONARY:
+			(sp as Dictionary)["enabled"] = false
+		# 生成器格子上的新产出模式（mode/sequence）也要去掉，否则会走"随机池全可达"的新口径
+		var board = (lv as Dictionary).get("board", {})
+		if typeof(board) == TYPE_DICTIONARY:
+			for sl in ((board as Dictionary).get("slots", []) as Array):
+				if typeof(sl) == TYPE_DICTIONARY:
+					(sl as Dictionary).erase("mode")
+					(sl as Dictionary).erase("sequence")
+	return out
 
 
 func _validate(project: Dictionary):

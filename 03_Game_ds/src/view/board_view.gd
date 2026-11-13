@@ -323,6 +323,12 @@ func set_chips(cells: Array) -> void:
 			"entity": String((raw as Array)[2]),
 			"level": int((raw as Array)[3]),
 		}
+		# 2026-11-12：快照第 5/6 位是图标覆盖。成片每帧都用这份覆盖棋盘，
+		# 漏了它们 = "实机对、成片全是默认图"（操作者 00109 帧报的就是这个）。
+		if (raw as Array).size() > 4 and not String((raw as Array)[4]).is_empty():
+			slot["icon"] = String((raw as Array)[4])
+		if (raw as Array).size() > 5 and int((raw as Array)[5]) > 0:
+			slot["iconLevel"] = int((raw as Array)[5])
 		var key := Vector2i(int(slot["x"]), int(slot["y"]))
 		if not _in_bounds(key):
 			continue
@@ -733,6 +739,10 @@ func _draw_fly(fly: Dictionary) -> void:
 	var base := cell_rect(b.x, b.y).grow(-float(CELL_GAP) * 0.5)
 	var half := base.size * 0.5
 	var item := {"entity": String(spawn.get("entity", "")), "level": int(spawn.get("level", 1))}
+	if not String(spawn.get("icon", "")).is_empty():
+		item["icon"] = String(spawn.get("icon", ""))
+	if int(spawn.get("icon_level", 0)) > 0:
+		item["icon_level"] = int(spawn.get("icon_level", 0))
 	# 2026-11-10：飞下去的若是生成器，图标要用它自己的（和低级生成器区分开）。
 	var eid := String(item["entity"])
 	var kind := String(spawn.get("kind", ""))
@@ -740,7 +750,11 @@ func _draw_fly(fly: Dictionary) -> void:
 		kind = String(_as_dict(_entities.get(eid, {})).get("kind", "chip"))
 	var texture: Texture2D = null
 	if kind == "generator":
-		texture = _generator_texture(eid)
+		# 有图标覆盖就飞那一套棋子的图，和落格后保持一致
+		if not String(item.get("icon", "")).is_empty():
+			texture = _chip_texture(item)
+		if texture == null:
+			texture = _generator_texture(eid)
 	else:
 		texture = _chip_texture(item)
 	draw_set_transform(at, 0.0, Vector2.ONE)
@@ -911,8 +925,10 @@ func chip_texture(entity_id: String, level: int) -> Texture2D:
 
 ## 2026-11-10：这一格的贴图 —— 生成器用生成器图，棋子用棋子图。
 ## 成片拖拽 ghost 以前只认 chip，拖生成器时查不到贴图 → 没有 ghost（操作者报"直接就移过去了"）。
-func item_texture(kind: String, entity_id: String, level: int) -> Texture2D:
-	var chip := chip_texture(entity_id, level)
+func item_texture(kind: String, entity_id: String, level: int, icon: String = "",
+		icon_level: int = 0) -> Texture2D:
+	var chip := chip_texture(icon if not icon.is_empty() else entity_id,
+			icon_level if (not icon.is_empty() and icon_level > 0) else level)
 	if chip != null:
 		return chip
 	# 生成器（名字不一定在 generators 表里）兜底用生成器图，别让 ghost 直接消失
@@ -928,11 +944,15 @@ func is_generator_entity(entity_id: String) -> bool:
 func _chip_texture(item: Dictionary) -> Texture2D:
 	if _asset_loader == null or not _asset_loader.has_method("chip_texture"):
 		return null
-	var entity_id := String(item.get("entity", ""))
+	# 图标覆盖优先：JSON 的 slot.icon（编辑器里「图标」选的那一套系列）
+	var override := String(item.get("icon", ""))
+	var entity_id := override if not override.is_empty() else String(item.get("entity", ""))
 	if entity_id.is_empty():
 		return null
-	var texture = _asset_loader.chip_texture(entity_id, int(item.get("level", 1)),
-			_asset_project)
+	var lv := int(item.get("level", 1))
+	if not override.is_empty() and int(item.get("icon_level", 0)) > 0:
+		lv = int(item.get("icon_level", 0))
+	var texture = _asset_loader.chip_texture(entity_id, lv, _asset_project)
 	return texture if texture is Texture2D else null
 
 
@@ -992,7 +1012,12 @@ func _generator_texture(entity_id: String) -> Texture2D:
 
 
 func _draw_generator(r: Rect2, item: Dictionary) -> void:
-	var icon := _generator_texture(String(item.get("entity", "")))
+	# 2026-11-12：编辑器给生成器选了「图标」时，画那一套棋子的图，而不是通用生成器图。
+	var icon: Texture2D = null
+	if not String(item.get("icon", "")).is_empty():
+		icon = _chip_texture(item)
+	if icon == null:
+		icon = _generator_texture(String(item.get("entity", "")))
 	if icon != null:
 		_draw_chip_texture(r, icon)
 		_draw_stamina_badge(r)
@@ -1641,7 +1666,7 @@ func _make_item(slot: Dictionary, entities: Dictionary, generators: Dictionary) 
 	var behavior := _as_dict(generators.get(entity, {}))
 	if not behavior.is_empty():
 		charges = int(behavior.get("charges", 0))
-	return {
+	var item := {
 		"kind": kind,
 		"entity": entity,
 		"level": int(slot.get("level", 1)),
@@ -1649,6 +1674,13 @@ func _make_item(slot: Dictionary, entities: Dictionary, generators: Dictionary) 
 		"label": label,
 		"charges": charges,
 	}
+	# 2026-11-12：图标覆盖要跟着 item 走（棋盘格与飞行都用 _chip_texture(item)）。
+	# 漏掉这两个字段 = "编辑器里换了图，落格后又变回原样"。
+	if not String(slot.get("icon", "")).is_empty():
+		item["icon"] = String(slot.get("icon", ""))
+	if int(slot.get("iconLevel", 0)) > 0:
+		item["icon_level"] = int(slot.get("iconLevel", 0))
+	return item
 
 
 func _in_bounds(cell: Vector2i) -> bool:

@@ -47,6 +47,12 @@ func _project() -> Dictionary:
 	if typeof(root) != TYPE_DICTIONARY:
 		return {}
 	var out: Dictionary = (root as Dictionary).duplicate(true)
+	# 2026-11-13：这个套件只测"第 1 关的订单可达性"，操作者新加的关卡（空棋盘）
+	# 天然不可达，会把断言搅乱 —— 把它们清空。
+	var all_levels: Array = out.get("levels", [])
+	for li in range(1, all_levels.size()):
+		if typeof(all_levels[li]) == TYPE_DICTIONARY:
+			(all_levels[li] as Dictionary)["orders"] = []
 	# 2026-11-12：这些用例测的是**旧 outputs 判据**。样例工程的库存启用后，
 	# 新口径（随机池覆盖 lv1..需求）会让所有任务都可达，负例就不成立了 ——
 	# 这里把库存关掉，让它们回到"只看棋盘上的生成器"的老路径。

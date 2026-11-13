@@ -330,67 +330,6 @@
   },
   "levels": [
     {
-      "id": "level_4",
-      "level_number": 4,
-      "board": {
-        "width": 7,
-        "height": 9,
-        "slots": [
-          {
-            "x": 2,
-            "y": 1,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          },
-          {
-            "x": 3,
-            "y": 1,
-            "entity": "CleanSet_Ca",
-            "level": 1
-          }
-        ]
-      },
-      "obstacles": [
-        {
-          "slot": [
-            4,
-            1
-          ],
-          "type": "lock"
-        },
-        {
-          "slot": [
-            5,
-            1
-          ],
-          "type": "lock"
-        }
-      ],
-      "safes": [],
-      "orders": [
-        {
-          "id": "order_4",
-          "character": "char_01",
-          "coin": 10,
-          "gem": 0,
-          "energy": 0,
-          "mission": [
-            {
-              "entity": "CleanSet_Ca",
-              "level": 1,
-              "count": 1
-            }
-          ]
-        }
-      ],
-      "stockpile": {
-        "enabled": true,
-        "count": 5,
-        "generator": "CleanBox_P"
-      },
-      "blast": 2
-    },
-    {
       "id": "level_3",
       "level_number": 4,
       "board": {
@@ -574,7 +513,7 @@
           "mission": [
             {
               "entity": "CleanSet_Cl",
-              "level": 1,
+              "level": 3,
               "count": 1
             }
           ]
@@ -589,6 +528,67 @@
         "iconLevel": 10,
         "drop": "generator",
         "mode": "random"
+      },
+      "blast": 2
+    },
+    {
+      "id": "level_4",
+      "level_number": 4,
+      "board": {
+        "width": 7,
+        "height": 9,
+        "slots": [
+          {
+            "x": 3,
+            "y": 1,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          },
+          {
+            "x": 0,
+            "y": 4,
+            "entity": "CleanSet_Ca",
+            "level": 1
+          }
+        ]
+      },
+      "obstacles": [
+        {
+          "slot": [
+            4,
+            1
+          ],
+          "type": "lock"
+        },
+        {
+          "slot": [
+            5,
+            1
+          ],
+          "type": "lock"
+        }
+      ],
+      "safes": [],
+      "orders": [
+        {
+          "id": "order_4",
+          "character": "char_01",
+          "coin": 10,
+          "gem": 0,
+          "energy": 0,
+          "mission": [
+            {
+              "entity": "CleanSet_Ca",
+              "level": 1,
+              "count": 1
+            }
+          ]
+        }
+      ],
+      "stockpile": {
+        "enabled": true,
+        "count": 5,
+        "generator": "CleanBox_P"
       },
       "blast": 2
     },

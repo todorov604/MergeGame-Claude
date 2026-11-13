@@ -190,6 +190,8 @@ static func check(ctx) -> void:
 
 ## 顺序队列：必须是数组，每项 {entity, level}；entity 要是已登记的棋子，level 1..该系列 maxLevel。
 static func _validate_sequence(ctx, raw, path: String, ents: Dictionary) -> void:
+	if typeof(ents) != TYPE_DICTIONARY:
+		return   # 上层已报 SCHEMA/ENTITY 错误，这里不要再崩一次
 	if typeof(raw) != TYPE_ARRAY:
 		ctx.err("SEQUENCE_TYPE", path, "sequence must be an array")
 		return

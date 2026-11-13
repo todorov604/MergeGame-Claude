@@ -44,7 +44,12 @@ func _test_good_projects(t) -> void:
 
 func _test_sample_stats(t) -> void:
 	var r = ProjectValidator.validate_file(SAMPLE, _guard(false), false)
-	t.eq(int(r.stats.get("levels", -1)), 2, "sample declares 2 levels")
+	# 2026-11-13：关卡数跟数据走
+	var jv := JSON.new()
+	var expect_levels2 := 0
+	if jv.parse(FileAccess.get_file_as_string("res://data/sample_project.json")) == OK 			and typeof(jv.data) == TYPE_DICTIONARY:
+		expect_levels2 = ((jv.data as Dictionary).get("levels", []) as Array).size()
+	t.eq(int(r.stats.get("levels", -1)), expect_levels2, "level count follows the data")
 	t.eq(int(r.stats.get("events", -1)), 21, "sample declares 21 events")
 	t.ok(is_equal_approx(float(r.stats.get("end_time", -1.0)), 30.0), "sample timeline ends at 30.0s", str(r.stats.get("end_time")))
 	# 2026-11-12：实体数与主题引用数随数据变（棋子 12 套 × 10 级），只断言"算出来的跟数据一致"。

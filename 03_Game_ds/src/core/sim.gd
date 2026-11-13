@@ -806,10 +806,17 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 						# 2026-11-11：盒子变出来的网**也要压一枚棋子**（和关卡自带的网一致），
 						# 否则玩家拖"同款"过来没有比较对象 —— `_do_merge` 只会报目标为空。
 						if not board.has_item(cell):
-							var webbed_chip := _trapped_chip(cell)
+							# 甲：忽略 JSON 里指定的 chip，一律走新的订单随机池
+							var webbed_chip := random_pool_pick()
+							if webbed_chip.is_empty():
+								# 乙：池子为空 → 退回坐标确定性那一枚
+								webbed_chip = IceCell.chip(model.project, cell)
 							if not webbed_chip.is_empty():
-								board.put(cell, String(webbed_chip.get("entity", "")),
-										int(webbed_chip.get("level", 1)))
+								var wce := String(webbed_chip.get("entity", ""))
+								var wcl := int(webbed_chip.get("level", 1))
+								board.put(cell, wce, wcl)
+								# 视图靠这份表画"网/冰下面压着的那一枚"，不写会画成另一枚
+								trapped_chips[cell] = {"entity": wce, "level": wcl}
 						out.append({"cell": [cell.x, cell.y], "kind": "box", "became": "web"})
 					continue
 				if board.remove_obstacle(cell, k):
@@ -819,11 +826,29 @@ func _unlock_neighbours(centre: Vector2i) -> Array:
 							board.put(cell, String(frozen.get("entity", "CleanSet_Ca")),
 									int(frozen.get("level", 1)))
 					elif not board.has_item(cell):
-						var picked := _sample_generator_output()
+						var picked := random_pool_pick()
+						if picked.is_empty():
+							picked = IceCell.chip(model.project, cell)
 						if not picked.is_empty():
 							board.put(cell, String(picked["entity"]), int(picked["level"]))
 					out.append({"cell": [cell.x, cell.y], "kind": k})
 	return out
+
+
+## 2026-11-13（操作者口径，1=甲 / 2=乙）：锁盒与问号袋炸开时，
+## 里面的 clip 走**和普通生成器「真随机」完全一样**的池子：
+## 本关所有订单（含已完成）子任务的系列 lv1..需求，去重等权。
+## 池子为空时返回 {}（调用方再退回坐标确定性那一枚）。
+func random_pool_pick() -> Dictionary:
+	var pool := random_pool()
+	if pool.is_empty():
+		return {}
+	var idx: int = rng.pick_weighted(pool)
+	if idx < 0 or idx >= pool.size():
+		return {}
+	var picked: Dictionary = pool[idx]
+	return {"entity": String(picked.get("entity", "")),
+			"level": clampi(int(picked.get("level", 1)), 1, _level_cap(String(picked.get("entity", ""))))}
 
 
 ## 高级生成器的产出池：本关未完成订单的子任务行（entity 跟任务，level = 任务级别 - 1）。

@@ -822,6 +822,22 @@ take 里的 `project` 字段不参与。自造关卡必须显式传
 截图：`output/render/sheet_case*.png`、`output/render/full_case4_stockpile_chip_crop.png`、
 `output/render/full_case5_stockpile_generator_crop.png`。
 
+**2026-11-13 追加：锁盒 / 问号袋炸开改走订单随机池（操作者口径 1=甲 / 2=乙）**
+
+- 甲：忽略 `obstacles[].chip`，锁盒与袋子里的 clip **一律**用订单随机池（= 普通生成器真随机）
+- 乙：池子为空（没有订单）时按坐标兜底 `IceCell.chip()`
+- 实现：`_pick_unlock_chip(cell)`；锁盒变 web 后把棋子写进 `trapped_chips[cell]`（视图画"网下那枚"要用）
+- 旧的 `_sample_generator_output()`（按 outputs 权重）不再被锁盒/袋子调用
+
+**证据**：`output/probe/case8_unlock_pool.json`（订单 Cb3 + Ce2 → 池 Cb1..3 + Ce1..2；
+(2,5) 锁盒、(2,3)/(4,4) 问号袋，merge (2,4)→(3,4)）
+→ `output/render/gen_case8_unlock_pool.mp4`（same=YES），`sheet_case8_unlock_pool.png`：
+炸开前是 2 袋 + 1 盒，炸开后网下压 Ce lv2、两个袋子变成 Ce lv2 / Ce lv1 —— 全部来自池子。
+文字轨迹 `tools/probe_unlock.gd`：`(2,5) web + CleanSet_Ce@2`、`(2,3) CleanSet_Ce@2`、`(4,4) CleanSet_Ce@1`。
+
+**测试**：`t_generator_modes` 新增 `_test_unlock_uses_order_pool` / `_test_unlock_fallback_when_pool_empty`；
+全量 **3758 checks / 0 failures**。
+
 **2026-11-13 追加：库存飞棋子把"生成器图标"盖到棋子上（操作者报的）**
 
 现象：库存选「飞棋子 + 指定顺序 Ca/Cb/Cc/Cd」并配了图标 C_G lv9，结果飞出来的 5 枚 clip **全是同一个

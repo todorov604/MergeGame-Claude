@@ -936,7 +936,7 @@ func _advance_to(t: float) -> void:
 						"merge" if String(r.get("type", "")) == "merge" else "settle",
 						float(r.get("at", t)))
 		if channel == "sim" and bool(r.get("ok", false)) \
-				and String(r.get("type", "")) == "merge" and _live_board != null:
+				and String(r.get("type", "")) in ["merge", "drag"] and _live_board != null:
 			for row in _evaluator.sim.last_unlocks:
 				if typeof(row) != TYPE_DICTIONARY:
 					continue

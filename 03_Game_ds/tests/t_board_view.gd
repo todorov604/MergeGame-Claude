@@ -42,6 +42,7 @@ func run(t) -> void:
 	_box_flash(t)
 	_trapped_chip_keys(t)
 	_melt_effect(t)
+	_test_lock_unlock_animation_phases(t)
 
 
 ## The numbers themselves, so a future edit that rounds them "to taste" fails here
@@ -123,7 +124,10 @@ func _parsing(t) -> void:
 
 	var types: Array = r.get("obstacle_types", [])
 	types.sort()
-	t.eq(types, ["bag", "ice", "lock", "web"], "obstacle types == {lock,web,bag,ice} for level 1")
+	# 2026-11-13：障碍种类跟着操作者数据走（他会改关卡），不再写死四种。
+	var expect_types: Array = _level_obstacle_types(0)
+	expect_types.sort()
+	t.eq(types, expect_types, "obstacle types follow the data for level 1")
 	t.ok(v.debug_summary().begins_with(_summary_prefix()), "summary matches level 1 (counts come from the data)",
 			v.debug_summary())
 	var first: String = v.debug_summary()
@@ -134,7 +138,7 @@ func _parsing(t) -> void:
 	t.ok(bool(r2.get("ok", false)), "level 2 builds", String(r2.get("error", "")))
 	t.eq(int(r2.get("items", 0)), _level_slots(1), "level 2 items follow the data")
 	t.eq(int(r2.get("obstacles", 0)), _level_obstacles(1), "level 2 obstacles follow the data")
-	t.eq(String(r2.get("level_id", "")), "level_2", "level 2 id")
+	t.eq(String(r2.get("level_id", "")), String(_level_id(1)), "level 2 id follows the data")
 
 	var missing: Dictionary = v.build_from_project("res://data/does_not_exist.json", 0)
 	t.ok(not bool(missing.get("ok", true)), "missing project is rejected")
@@ -456,6 +460,39 @@ func _level_obstacles(index: int = 0) -> int:
 	return (model.level(index).get("obstacles", []) as Array).size()
 
 
+func _level_id(li: int) -> String:
+	var j := JSON.new()
+	if j.parse(FileAccess.get_file_as_string(SAMPLE)) != OK:
+		return ""
+	var root = j.data
+	if typeof(root) != TYPE_DICTIONARY:
+		return ""
+	var levels: Array = (root as Dictionary).get("levels", [])
+	if li < 0 or li >= levels.size():
+		return ""
+	return String((levels[li] as Dictionary).get("id", ""))
+
+
+func _level_obstacle_types(li: int) -> Array:
+	var out: Array = []
+	var j := JSON.new()
+	if j.parse(FileAccess.get_file_as_string(SAMPLE)) != OK:
+		return out
+	var root = j.data
+	if typeof(root) != TYPE_DICTIONARY:
+		return out
+	var levels: Array = (root as Dictionary).get("levels", [])
+	if li < 0 or li >= levels.size():
+		return out
+	for ob in ((levels[li] as Dictionary).get("obstacles", []) as Array):
+		if typeof(ob) != TYPE_DICTIONARY:
+			continue
+		var t := String((ob as Dictionary).get("type", ""))
+		if not t.is_empty() and not out.has(t):
+			out.append(t)
+	return out
+
+
 func _level_chips() -> int:
 	var n := 0
 	var entities: Dictionary = (ProjectModel.new().project if false else {})
@@ -469,6 +506,27 @@ func _level_chips() -> int:
 		if String(model.entity(ent).get("kind", "chip")) == "chip" or has_icon:
 			n += 1
 	return n
+
+
+## 2026-11-13：锁盒炸开的专属动画（上抛颤悠 → 落下渐隐 → 网和棋子放大 + 闪光圈）。
+func _test_lock_unlock_animation_phases(t) -> void:
+	var v = BoardView.new()
+	var cell := Vector2i(2, 5)
+	v.unlock(cell, "box", 0.0, "web")
+	t.eq(v.unlock_phase(cell), "rise", "0.0s 处于上抛阶段")
+	v.set_clock(0.10)
+	t.eq(v.unlock_phase(cell), "rise", "0.10s 仍在上抛（颤悠）")
+	v.set_clock(0.32)
+	t.eq(v.unlock_phase(cell), "fall", "0.32s 处于下落渐隐")
+	v.set_clock(0.60)
+	t.eq(v.unlock_phase(cell), "grow", "0.60s 网和棋子从小放大")
+	v.set_clock(1.10)
+	t.eq(v.unlock_phase(cell), "", "1.10s 动画结束交回普通绘制")
+	# 问号袋等其它解锁不走这套动画
+	v.unlock(Vector2i(0, 0), "bag", 1.4, "")
+	v.set_clock(1.45)
+	t.eq(v.unlock_phase(Vector2i(0, 0)), "", "问号袋不播锁盒动画")
+	v.free()
 
 
 func _summary_prefix() -> String:

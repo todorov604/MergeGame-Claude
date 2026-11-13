@@ -357,7 +357,12 @@ func _test_rng(t) -> void:
 func _test_model(t) -> void:
 	var m = ProjectModel.new()
 	t.ok(m.load_file(SAMPLE), "sample_project.json loads into the model", m.load_error)
-	t.eq(m.level_count(), 2, "sample has 2 levels")
+	# 2026-11-13：关卡数跟数据走（操作者会加关）
+	var j := JSON.new()
+	var expect_levels := 0
+	if j.parse(FileAccess.get_file_as_string(SAMPLE)) == OK and typeof(j.data) == TYPE_DICTIONARY:
+		expect_levels = ((j.data as Dictionary).get("levels", []) as Array).size()
+	t.eq(m.level_count(), expect_levels, "level count follows the data")
 	t.ok(not String(m.level(0).get("id", "")).is_empty(), "level order follows the array", String(m.level(0).get("id", "")))
 	t.eq(String(m.level(9).get("id", "")), "", "out-of-range level -> empty dict")
 	t.eq(String(m.entity("CleanBox_C").get("kind", "")), "generator", "entity kind is readable")

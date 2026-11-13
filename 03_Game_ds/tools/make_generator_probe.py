@@ -149,14 +149,43 @@ CASES['case6b_level2_sequence'] = {
     "taps": [("level_next", 0, 0), ("tap", 4, 1), ("tap", 4, 1)],
 }
 
+# ---------------- case8: 锁盒 / 问号袋炸开后的 clip 走订单随机池
+CASES['case8_unlock_pool'] = {
+    "project": base([{
+        "id": "unlock_pool", "level_number": 1, "blast": 3,
+        "board": {"width": 7, "height": 9, "slots": [
+            {"x": 2, "y": 4, "entity": "CleanSet_Ca", "level": 1},
+            {"x": 3, "y": 4, "entity": "CleanSet_Ca", "level": 1},
+        ]},
+        "obstacles": [
+            {"slot": [2, 5], "type": "lock"},
+            {"slot": [2, 3], "type": "bag"},
+            {"slot": [4, 4], "type": "bag"},
+        ],
+        "safes": [],
+        # 有库存即视为"新池子口径"，校验不会把这两张单判成不可达
+        "stockpile": {"enabled": True, "count": 0, "generator": "CleanBox_P"},
+        "orders": [
+            order("o1", CH, [("CleanSet_Cb", 3)]),
+            order("o2", CH, [("CleanSet_Ce", 2)]),
+        ],
+    }]),
+    "taps": [("merge", 2, 4, 3, 4)],
+}
+
 for name, spec in CASES.items():
     proj_path = OUT / f"{name}.json"
     proj_path.write_text(json.dumps(spec["project"], ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
 
     timeline = []
-    for i, (kind, cx, cy) in enumerate(spec["taps"]):
+    for i, entry in enumerate(spec["taps"]):
+        kind, cx, cy = entry[0], entry[1], entry[2]
+        spec["to"] = (entry[3], entry[4]) if len(entry) > 4 else None
         at = round(0.7 + i * 0.7, 3)
-        if kind == "tap":
+        if kind == "merge":
+            timeline.append({"id": f"e{i}", "channel": "sim", "type": "merge", "at": at,
+                             "payload": {"from": [cx, cy], "to": [spec["to"][0], spec["to"][1]]}})
+        elif kind == "tap":
             timeline.append({"id": f"e{i}", "channel": "sim", "type": "tap", "at": at,
                              "payload": {"target": {"slot": [cx, cy]}}})
         elif kind == "stockpile":

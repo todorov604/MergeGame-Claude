@@ -1809,6 +1809,10 @@ func _process(delta: float) -> void:
 	# The clock always runs: free mode needs it for the toast/fly animation, and the
 	# sim needs a real `at` for cooldowns. Only `--demo` drains the timeline.
 	_clock += delta
+	# 2026-11-13：锁盒解锁动画（上抛/下落/缩小放大）需要每帧推进棋盘时钟；
+	# 以前只有事件到来时才 set_clock，动画会卡在第一帧。
+	if board != null and board.has_method("set_clock"):
+		board.set_clock(_clock)
 	if board != null and board.has_method("set_ice_elapsed"):
 		board.set_ice_elapsed(_clock)
 	# 2026-11-10：冰到点自己化掉（唯一的解锁方式）。先推进 sim，再播"扩大消失"。

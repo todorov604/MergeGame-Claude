@@ -176,6 +176,11 @@ var _font_display: Font = null
 var ice_elapsed: float = 0.0
 ## 2026-11-11：JSON 指定的"网/冰下面那枚棋子"，键是 "x,y"。
 var _trapped: Dictionary = {}
+## 2026-11-13（操作者）：锁盒炸开的专属动画时间轴（秒）
+const BOX_RISE_END := 0.26    # 先向上抛起 + 颤悠
+const BOX_FADE_END := 0.42    # 再落下 + 渐隐
+const BOX_WEB_GROW := 0.38    # 网 + 棋子从小放大（含闪光圈）
+const BOX_ANIM_END := BOX_FADE_END + BOX_WEB_GROW + 0.15
 ## 2026-11-10：每格冰剩余秒数由 **sim** 算好推进来（`ice_seconds` 可配成 45 秒）。
 var _ice_left: Dictionary = {}
 ## Spawn flight: {"spawn": sim.last_spawn, "started": level time}. While it runs the
@@ -381,10 +386,12 @@ func start_fly(spawn: Dictionary, started_at: float) -> void:
 
 
 func _process(_delta: float) -> void:
-	if _flys.is_empty():
+	if _flys.is_empty() and _unlocks.is_empty():
 		set_process(false)
 		return
 	queue_redraw()
+	if _flys.is_empty():
+		return
 	var alive: Array = []
 	for fly in _flys:
 		if FlyPath.progress(float(fly.get("started", 0.0)), _clock) < 1.0:
@@ -791,17 +798,127 @@ func unlock(cell: Vector2i, kind: String, started_at: float = -1.0, became: Stri
 	queue_redraw()
 
 
+## 锁盒动画当前处在哪个阶段：rise / fall / grow / ""（不在动画里）。
+func unlock_phase(cell: Vector2i) -> String:
+	for row in _unlocks:
+		if String((row as Dictionary).get("kind", "")) != "box":
+			continue
+		if Vector2i((row as Dictionary).get("cell", Vector2i(-1, -1))) != cell:
+			continue
+		var a := _clock - float((row as Dictionary).get("started", 0.0))
+		if a < 0.0 or a >= BOX_ANIM_END:
+			return ""
+		if a < BOX_RISE_END:
+			return "rise"
+		if a < BOX_FADE_END:
+			return "fall"
+		return "grow"
+	return ""
+
+
 ## 正在播放的解锁动画行（测试用；只读副本）。
 func unlock_rows() -> Array:
 	return _unlocks.duplicate(true)
+
+
+func _ease_out_back(p: float) -> float:
+	var c1 := 1.70158
+	var c3 := c1 + 1.0
+	var q := p - 1.0
+	return 1.0 + c3 * q * q * q + c1 * q * q
+
+
+## 锁盒：向上抛起 + Q 弹颤悠（挤压/拉伸），再落下渐隐。
+func _draw_box_rise(base: Rect2, a: float) -> void:
+	var tex := _ui_texture(UI_LOCK)
+	if tex == null:
+		return
+	var t_rise := clampf(a / BOX_RISE_END, 0.0, 1.0)
+	var offset := 0.0
+	var squash := 1.0
+	var alpha := 1.0
+	var wobble := 0.0
+	if a < BOX_RISE_END:
+		offset = -36.0 * sin(t_rise * PI * 0.5)
+		# 2026-11-13（操作者）：再快一点、少颤几次 —— 频率更高、衰减更快（damp²）
+		var damp := (1.0 - t_rise) * (1.0 - t_rise)
+		squash = 1.0 + 0.24 * sin(a * 70.0) * damp
+		wobble = 0.08 * sin(a * 62.0) * damp
+	elif a < BOX_FADE_END:
+		var p := clampf((a - BOX_RISE_END) / (BOX_FADE_END - BOX_RISE_END), 0.0, 1.0)
+		offset = -36.0 + 42.0 * p
+		# 边落边淡：从这一段的 35% 就开始透明，肉眼能看清"消失"
+		alpha = clampf(1.0 - (p - 0.35) / 0.65, 0.0, 1.0)
+		squash = 1.0 + 0.14 * (1.0 - p) * sin(a * 40.0)
+		wobble = 0.06 * (1.0 - p) * sin(a * 40.0)
+	var centre := base.get_center() + Vector2(0.0, offset)
+	draw_set_transform(centre, wobble, Vector2(1.0 / maxf(squash, 0.2), maxf(squash, 0.2)))
+	draw_texture_rect(tex, Rect2(-base.size * 0.5, base.size), false, Color(1, 1, 1, alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## 一圈闪光：8 个四角星从内向外扩散并淡出。
+func _draw_sparkle_ring(centre: Vector2, radius: float, alpha: float) -> void:
+	if alpha <= 0.01:
+		return
+	for i in 8:
+		var ang := TAU * float(i) / 8.0 + radius * 0.01
+		var pos := centre + Vector2(cos(ang), sin(ang)) * radius
+		var size := 6.0 + 7.0 * alpha
+		var col := Color(1.0, 0.97, 0.70, minf(1.0, alpha * 1.35))
+		draw_set_transform(pos, ang, Vector2.ONE)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(0, -size), Vector2(size * 0.28, 0), Vector2(0, size), Vector2(-size * 0.28, 0),
+		]), col)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## 网 + 棋子在锁盒消失后从小放大，同时一圈闪光。
+func _draw_box_grow(base: Rect2, cell: Vector2i, a: float) -> void:
+	var p := clampf((a - BOX_FADE_END) / BOX_WEB_GROW, 0.0, 1.0)
+	var s_scale: float = lerpf(0.15, 1.0, _ease_out_back(p))
+	var alpha := clampf(p * 4.0, 0.0, 1.0)
+	var centre := base.get_center()
+	draw_set_transform(centre, 0.0, Vector2(s_scale, s_scale))
+	var local := Rect2(-base.size * 0.5, base.size)
+	var chip := _trapped_chip_for(cell)
+	if not chip.is_empty():
+		var chip_tex := _chip_texture(chip)
+		if chip_tex != null:
+			draw_texture_rect(chip_tex, local, false, Color(1, 1, 1, alpha))
+	var web_tex := _ui_texture(UI_WEB)
+	if web_tex != null:
+		draw_texture_rect(web_tex, local, false, Color(1, 1, 1, alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var sparkle_t := clampf(p, 0.0, 1.0)
+	_draw_sparkle_ring(centre, lerpf(base.size.x * 0.18, base.size.x * 0.72, sparkle_t),
+			pow(1.0 - sparkle_t, 1.2))
+
+
+## 这一格正在播锁盒动画 → 正常图层先别画（否则会提前露出网和棋子）。
+func _box_anim_active(cell: Vector2i) -> bool:
+	return unlock_phase(cell) != ""
 
 
 func _draw_unlocks() -> void:
 	var alive: Array = []
 	for row in _unlocks:
 		var started := float((row as Dictionary).get("started", 0.0))
+		var is_box := String((row as Dictionary).get("kind", "")) == "box"
 		var dur := 0.45 if bool((row as Dictionary).get("melt", false)) else 0.35
-		var t := (_clock - started) / dur
+		var elapsed := _clock - started
+		var t := elapsed / dur
+		if is_box:
+			if elapsed >= BOX_ANIM_END:
+				continue
+			alive.append(row)
+			var bcell: Vector2i = (row as Dictionary).get("cell", Vector2i(-1, -1))
+			var brect := cell_rect(bcell.x, bcell.y).grow(-float(CELL_GAP) * 0.5)
+			if elapsed < BOX_FADE_END:
+				_draw_box_rise(brect, elapsed)
+			else:
+				_draw_box_grow(brect, bcell, elapsed)
+			continue
 		if t >= 1.0:
 			continue
 		alive.append(row)
@@ -1105,9 +1222,13 @@ func _draw_obstacle(key: Vector2i, type: String) -> void:
 		"safe":
 			return  # one multi-cell group, drawn by _draw_safeboxes()
 		"lock":
+			if _box_anim_active(key):
+				return
 			if not _draw_ui_art(UI_LOCK, r):
 				_draw_lock(r)
 		"web":
+			if _box_anim_active(key):
+				return
 			# 2026-11-05: same treatment as ice — a deterministic chip sits under the
 			# web so the cell is never empty behind the lines.
 			var webbed := _trapped_chip_for(key)

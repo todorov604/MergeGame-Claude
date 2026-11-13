@@ -6,6 +6,7 @@ extends RefCounted
 
 const Sim := preload("res://src/core/sim.gd")
 const ProjectModel := preload("res://src/core/project_model.gd")
+const IceCell := preload("res://src/core/ice_cell.gd")
 
 
 func run(t) -> void:
@@ -16,6 +17,8 @@ func run(t) -> void:
 	_test_stockpile_chip_mode(t)
 	_test_stockpile_generator_once(t)
 	_test_stockpile_chip_ignores_stockpile_icon(t)
+	_test_unlock_uses_order_pool(t)
+	_test_unlock_fallback_when_pool_empty(t)
 	_test_move_carries_generator_config(t)
 
 
@@ -197,6 +200,63 @@ func _test_stockpile_chip_ignores_stockpile_icon(t) -> void:
 	var snap2: Dictionary = sim.snapshot()
 	t.eq(String((snap2.get("stockpile", {}) as Dictionary).get("icon", "")), "Cc",
 			"点过之后面板图标仍然不变")
+
+
+## 锁盒 / 问号袋炸开：里面的 clip 必须来自"订单随机池"（2026-11-13 操作者口径 1=甲）。
+func _test_unlock_uses_order_pool(t) -> void:
+	var lv := {
+		"blast": 2,
+		"board": {"width": 5, "height": 5, "slots": [
+			{"x": 2, "y": 2, "entity": "Ca", "level": 1},
+			{"x": 3, "y": 2, "entity": "Ca", "level": 1},
+		]},
+		"obstacles": [
+			{"slot": [2, 3], "type": "lock"},
+			{"slot": [2, 1], "type": "bag"},
+		],
+	}
+	var sim = _sim(_project(lv))
+	var r: Dictionary = sim.apply({"type": "merge", "payload": {"from": [2, 2], "to": [3, 2]}})
+	t.ok(bool(r.get("ok", false)), "合并成功", str(r))
+	# 池子 = Ca1..4 + Cb1..3
+	var allowed := {}
+	for e in sim.random_pool():
+		allowed["%s@%d" % [String((e as Dictionary)["entity"]), int((e as Dictionary)["level"])]] = true
+	var lock_cell := Vector2i(2, 3)
+	var bag_cell := Vector2i(2, 1)
+	t.ok(sim.board.obstacle_types(lock_cell).has("web"), "蓝盒子变成蜘蛛网")
+	var lock_item: Dictionary = sim.board.item(lock_cell)
+	var lock_key := "%s@%d" % [String(lock_item.get("entity", "")), int(lock_item.get("level", 1))]
+	t.ok(allowed.has(lock_key), "锁盒里的 clip 来自订单随机池：" + lock_key)
+	t.ok(not sim.board.obstacle_types(bag_cell).has("bag"), "问号袋被炸掉")
+	var bag_item: Dictionary = sim.board.item(bag_cell)
+	var bag_key := "%s@%d" % [String(bag_item.get("entity", "")), int(bag_item.get("level", 1))]
+	t.ok(allowed.has(bag_key), "问号袋里的 clip 来自订单随机池：" + bag_key)
+
+
+## 池子为空（没有订单）时：锁盒/袋子按坐标兜底一枚，不会空着（口径 2=乙）。
+func _test_unlock_fallback_when_pool_empty(t) -> void:
+	var lv := {
+		"blast": 2,
+		"orders": [],
+		"board": {"width": 5, "height": 5, "slots": [
+			{"x": 2, "y": 2, "entity": "Ca", "level": 1},
+			{"x": 3, "y": 2, "entity": "Ca", "level": 1},
+		]},
+		"obstacles": [
+			{"slot": [2, 3], "type": "lock"},
+			{"slot": [2, 1], "type": "bag"},
+		],
+	}
+	var sim = _sim(_project(lv))
+	sim.apply({"type": "merge", "payload": {"from": [2, 2], "to": [3, 2]}})
+	for cell in [Vector2i(2, 3), Vector2i(2, 1)]:
+		var item: Dictionary = sim.board.item(cell)
+		var expect = IceCell.chip(sim.model.project, cell)
+		t.ok(not item.is_empty(), "池子空时也有一枚兜底棋子 " + str(cell))
+		if not item.is_empty():
+			t.eq(String(item.get("entity", "")), String(expect.get("entity", "")),
+					"兜底棋子按坐标确定 " + str(cell))
 
 
 ## 移动生成器：配方与游标一起走（含图标覆盖）。
